@@ -1,4 +1,4 @@
-`include "imem.sv"
+`include "fetch_stage.sv"
 `include "rbank.sv"
 `include "dmem.sv"
 `include "alu.sv"
@@ -25,7 +25,7 @@ module cpu (
   logic branch_taken;
 
   // Instruction wires
-  instruction_t instruction;
+  instruction_t instruction_d, instruction_q;
   logic [DATA_WIDTH-1:0] offset_sign_extend;
   logic is_load, is_store, is_jump;
 
@@ -41,14 +41,14 @@ module cpu (
   
   logic reg_wr_en;
 
-  assign pc_offset = branch_taken ? {instruction.free, instruction.rd} : {{ADDR_WIDTH-1{1'b0}}, 1'b1};
-  assign pc_added = (pc_q + pc_offset) % MEM_SIZE;
-  assign pc_d = is_jump ? reg_a_data : pc_added;
+  //assign pc_offset = branch_taken ? {instruction.free, instruction.rd} : {{ADDR_WIDTH-1{1'b0}}, 1'b1};
+  //assign pc_added = (pc_q + pc_offset) % MEM_SIZE;
+  //assign pc_d = is_jump ? reg_a_data : pc_added;
 
   // Data a from register bank must be rd data for stores
-  assign reg_a = is_store ? instruction.rd : instruction.ra;
+  assign reg_a = is_store ? instruction_q.rd : instruction_q.ra;
 
-  assign offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){instruction[INSTR_WIDTH-1]}}, instruction[INSTR_WIDTH-1:14]};
+  assign offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){instruction_q[INSTR_WIDTH-1]}}, instruction_q[INSTR_WIDTH-1:14]};
  
   // Data a for the ALU is the offset sign extended for both load and store instructions
   assign data_a_to_alu = (is_load | is_store) ? offset_sign_extend : reg_a_data;
@@ -56,19 +56,20 @@ module cpu (
   // Only loads write data from memory into the register bank
   assign data_to_reg = is_load ? data_from_mem : result_alu;
 
-  imem #(
-    .MEM_SIZE      (MEM_SIZE   ),
-    .ADDR_WIDTH    (ADDR_WIDTH ),
-    .DATA_WIDTH    (INSTR_WIDTH)
-  ) imem (
-    .address_i     (pc_q       ),
-    .instruction_o (instruction)
+  fetch_stage #(
+    .ADDR_WIDTH (ADDR_WIDTH),
+    .DATA_WIDTH (DATA_WIDTH),
+    .MEM_SIZE   (MEM_SIZE)
+  ) fetch_stage (
+    .pc_i           (pc_q),
+    .next_pc_o      (pc_d),
+    .instruction_o  (instruction_d)
   );
 
   control #(
     .OPCODE_WIDTH (OPCODE_WIDTH)
   ) control (
-    .opcode_i       (instruction.opcode),
+    .opcode_i       (instruction_q.opcode),
     .is_zero_i      (is_zero),
     .is_less_i      (is_less),
     .is_load_o      (is_load),
@@ -86,8 +87,8 @@ module cpu (
     .rst_i        (rst_i),
     .wr_en_i      (reg_wr_en),
     .rd_reg_a_i   (reg_a),
-    .rd_reg_b_i   (instruction.rb),
-    .wr_reg_i     (instruction.rd),
+    .rd_reg_b_i   (instruction_q.rb),
+    .wr_reg_i     (instruction_q.rd),
     .wr_data_i    (data_to_reg),
     .reg_a_data_o (reg_a_data),
     .reg_b_data_o (reg_b_data),
@@ -116,7 +117,7 @@ module cpu (
     .OPCODE_WIDTH (OPCODE_WIDTH),
     .DATA_WIDTH   (DATA_WIDTH  )
   ) alu (
-    .op_i      (instruction.opcode),
+    .op_i      (instruction_q.opcode),
     .a_i       (data_a_to_alu),
     .b_i       (reg_b_data),
     .is_zero_o (is_zero),
@@ -128,11 +129,12 @@ module cpu (
     if (!rst_i) begin
       pc_q <= 0;
     end else begin
-      pc_q <= pc_d;
+      pc_q          <= pc_d;
+      instruction_q <= instruction_d;
 `ifndef SYNTHESIS
       debug_pc_committed_o       <= pc_q;
       debug_instr_is_committed_o <= 1'b1;
-      debug_instr_committed_o    <= instruction;
+      debug_instr_committed_o    <= instruction_q;
 `endif
     end
   end
