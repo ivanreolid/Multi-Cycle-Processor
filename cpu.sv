@@ -11,16 +11,20 @@ module cpu (
   input logic clk_i,
   input logic rst_i,
 `ifndef SYNTHESIS
+  output logic debug_store_is_completed_o,
+  output logic debug_non_store_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_dmem_o [0:MEM_SIZE-1],
   output logic [DATA_WIDTH-1:0] debug_regs_o [0:31],
-  output logic [ADDR_WIDTH-1:0] debug_pc_committed_o,
-  output instruction_t debug_instr_committed_o,
-  output logic debug_instr_is_committed_o
+  output logic [ADDR_WIDTH-1:0] debug_mem_pc_o,
+  output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
+  output instruction_t debug_mem_instr_o,
+  output instruction_t debug_wb_instr_o
 `endif
 );
 
   // Fetch stage wires
   logic [ADDR_WIDTH-1:0] pc_d, pc_q;
+  logic fetch_valid;
   instruction_t instruction_d;
 
   // Decode stage wires
@@ -32,6 +36,7 @@ module cpu (
   logic [ADDR_WIDTH-1:0] dec_branch_offset;
   logic [DATA_WIDTH-1:0] dec_reg_a_data, dec_reg_b_data;
   logic dec_reg_wr_en;
+  logic dec_valid;
   instruction_t instruction_q;
 
   // ALU stage wires
@@ -47,6 +52,10 @@ module cpu (
   logic alu_reg_wr_en;
   logic alu_is_load, alu_is_store, is_jump;
   logic alu_branch_taken;
+  logic alu_valid;
+`ifndef SYNTHESIS
+  instruction_t debug_alu_instr;
+`endif
 
   // Mem stage wires
   logic [DATA_WIDTH-1:0] mem_alu_result;
@@ -57,6 +66,12 @@ module cpu (
   logic mem_reg_wr_en;
   logic mem_is_load, mem_is_store;
   logic mem_branch_taken;
+  logic mem_valid;
+`ifndef SYNTHESIS
+  logic [ADDR_WIDTH-1:0] debug_mem_pc;
+  logic debug_store_is_completed;
+  instruction_t debug_mem_instr;
+`endif
 
   // WB stage wires
   logic [DATA_WIDTH-1:0] wb_alu_result;
@@ -65,6 +80,13 @@ module cpu (
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
   logic wb_is_load;
   logic wb_reg_wr_en;
+  logic wb_valid;
+`ifndef SYNTHESIS
+  logic [ADDR_WIDTH-1:0] debug_wb_pc;
+  logic debug_non_store_is_completed;
+  logic wb_is_store;
+  instruction_t debug_wb_instr;
+`endif
   
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
@@ -115,25 +137,35 @@ module cpu (
   );
 
   mem_stage #(
-    .MEM_SIZE        (MEM_SIZE),
-    .ADDR_WIDTH      (ADDR_WIDTH),
-    .DATA_WIDTH      (DATA_WIDTH)
+    .MEM_SIZE                   (MEM_SIZE),
+    .ADDR_WIDTH                 (ADDR_WIDTH),
+    .DATA_WIDTH                 (DATA_WIDTH)
   ) mem_stage (
-    .clk_i           (clk_i),
-    .rst_i           (rst_i),
-    .alu_result_i    (mem_alu_result),
-    .reg_a_data_i    (mem_reg_a_data),
-    .is_store_i      (mem_is_store),
-    .data_from_mem_o (mem_data_from_mem)
+    .clk_i                      (clk_i),
+    .rst_i                      (rst_i),
+    .alu_result_i               (mem_alu_result),
+    .reg_a_data_i               (mem_reg_a_data),
+    .valid_i                    (mem_valid),
+    .is_store_i                 (mem_is_store),
+    .data_from_mem_o            (mem_data_from_mem),
+`ifndef SYNTHESIS
+    .debug_store_is_completed_o (debug_store_is_completed),
+    .debug_dmem_o               (debug_dmem_o)
+`endif
   );
 
   wb_stage #(
-    .DATA_WIDTH      (DATA_WIDTH)
+    .DATA_WIDTH                     (DATA_WIDTH)
   ) wb_stage (
-    .alu_result_i    (wb_alu_result),
-    .data_from_mem_i (wb_data_from_mem),
-    .is_load_i       (wb_is_load),
-    .data_to_reg_o   (data_to_reg) 
+    .alu_result_i                   (wb_alu_result),
+    .data_from_mem_i                (wb_data_from_mem),
+    .is_load_i                      (wb_is_load),
+    .data_to_reg_o                  (data_to_reg),
+`ifndef SYNTHESIS
+    .debug_valid_i                  (wb_valid),
+    .debug_is_store_i               (wb_is_store),
+    .debug_non_store_is_completed_o (debug_non_store_is_completed)
+`endif
   );
 
   rbank #(
@@ -142,7 +174,7 @@ module cpu (
    ) rbank (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
-    .wr_en_i      (wb_reg_wr_en),
+    .wr_en_i      (wb_reg_wr_en & wb_valid),
     .rd_reg_a_i   (reg_a),
     .rd_reg_b_i   (instruction_q.rb),
     .wr_reg_i     (wb_wr_reg),
@@ -157,6 +189,7 @@ module cpu (
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       pc_q              <= 0;
+      fetch_valid       <= 1'b0;
       is_jump           <= 1'b0;
       alu_branch_taken  <= 1'b0;
       alu_branch_offset <= 0;
@@ -167,9 +200,12 @@ module cpu (
       mem_is_load       <= 1'b0;
       mem_is_store      <= 1'b0;
     end else begin
+      fetch_valid            <= ~is_jump & ~alu_branch_taken;
       pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
+      dec_valid              <= fetch_valid & ~is_jump & ~alu_branch_taken;
       dec_pc                 <= pc_q;
+      alu_valid              <= dec_valid;
       alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
       alu_wr_reg             <= dec_wr_reg;
@@ -178,6 +214,7 @@ module cpu (
       alu_offset_sign_extend <= dec_offset_sign_extend;
       alu_instr_opcode       <= dec_instr_opcode;
       alu_branch_offset      <= dec_branch_offset;
+      mem_valid              <= alu_valid;
       mem_pc_branch_offset   <= alu_pc_branch_offset;
       mem_branch_taken       <= alu_branch_taken;
       mem_reg_wr_en          <= alu_reg_wr_en;
@@ -186,15 +223,25 @@ module cpu (
       mem_is_load            <= alu_is_load;
       mem_is_store           <= alu_is_store;
       mem_alu_result         <= alu_alu_result;
+      wb_valid               <= mem_valid;
       wb_reg_wr_en           <= mem_reg_wr_en;
       wb_wr_reg              <= mem_wr_reg;
       wb_is_load             <= mem_is_load;
       wb_alu_result          <= mem_alu_result;
       wb_data_from_mem       <= mem_data_from_mem;
 `ifndef SYNTHESIS
-      debug_pc_committed_o       <= pc_q;
-      debug_instr_is_committed_o <= 1'b1;
-      debug_instr_committed_o    <= instruction_q;
+      debug_alu_instr        <= instruction_q;
+      debug_mem_instr        <= debug_alu_instr;
+      debug_mem_pc           <= alu_pc;
+      debug_mem_pc_o         <= debug_mem_pc;
+      debug_mem_instr_o      <= debug_mem_instr;
+      debug_non_store_is_completed_o <= debug_non_store_is_completed;
+      debug_store_is_completed_o <= debug_store_is_completed;
+      debug_wb_instr         <= debug_mem_instr;
+      debug_wb_pc            <= debug_mem_pc;
+      debug_wb_pc_o          <= debug_wb_pc;
+      debug_wb_instr_o       <= debug_wb_instr;
+      wb_is_store            <= mem_is_store;
 `endif
     end
   end
