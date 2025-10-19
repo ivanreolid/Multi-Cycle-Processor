@@ -1,8 +1,8 @@
 `include "fetch_stage.sv"
 `include "decode_stage.sv"
 `include "alu_stage.sv"
+`include "mem_stage.sv"
 `include "rbank.sv"
-`include "dmem.sv"
 `include "control.sv"
 
 import params_pkg::*;
@@ -29,7 +29,7 @@ module cpu (
   instruction_t instruction_d, instruction_q;
   logic [DATA_WIDTH-1:0] dec_offset_sign_extend, alu_offset_sign_extend;
   logic is_jump;
-  logic alu_is_load, mem_is_load;
+  logic alu_is_load, mem_is_load, wb_is_load;
   logic alu_is_store, mem_is_store;
 
   logic [OPCODE_WIDTH-1:0] dec_instr_opcode, alu_instr_opcode;
@@ -38,15 +38,15 @@ module cpu (
   logic [DATA_WIDTH-1:0] dec_reg_a_data, alu_reg_a_data, mem_reg_a_data;
   logic [DATA_WIDTH-1:0] dec_reg_b_data, alu_reg_b_data;
   logic [DATA_WIDTH-1:0] data_a_to_alu;
-  logic [DATA_WIDTH-1:0] alu_alu_result, mem_alu_result;
+  logic [DATA_WIDTH-1:0] alu_alu_result, mem_alu_result, wb_alu_result;
 
-  logic [DATA_WIDTH-1:0] data_from_mem;
+  logic [DATA_WIDTH-1:0] mem_data_from_mem, wb_data_from_mem;
   logic [DATA_WIDTH-1:0] data_to_reg;
 
   logic [REGISTER_WIDTH-1:0] reg_a;
   
-  logic dec_reg_wr_en, alu_reg_wr_en;
-  logic [REGISTER_WIDTH-1:0] dec_wr_reg, alu_wr_reg;
+  logic dec_reg_wr_en, alu_reg_wr_en, mem_reg_wr_en, wb_reg_wr_en;
+  logic [REGISTER_WIDTH-1:0] dec_wr_reg, alu_wr_reg, mem_wr_reg, wb_wr_reg;
 
   //assign pc_offset = branch_taken ? {instruction.free, instruction.rd} : {{ADDR_WIDTH-1{1'b0}}, 1'b1};
   //assign pc_added = (pc_q + pc_offset) % MEM_SIZE;
@@ -93,6 +93,19 @@ module cpu (
     .is_less_o            (is_less)
   );
 
+  mem_stage #(
+    .MEM_SIZE        (MEM_SIZE),
+    .ADDR_WIDTH      (ADDR_WIDTH),
+    .DATA_WIDTH      (DATA_WIDTH)
+  ) mem_stage (
+    .clk_i           (clk_i),
+    .rst_i           (rst_i),
+    .alu_result_i    (mem_alu_result),
+    .reg_a_data_i    (mem_reg_a_data),
+    .is_store_i      (mem_is_store),
+    .data_from_mem_o (mem_data_from_mem)
+  );
+
   control #(
     .OPCODE_WIDTH (OPCODE_WIDTH)
   ) control (
@@ -124,22 +137,6 @@ module cpu (
 `endif
   );
 
-  dmem #(
-    .MEM_SIZE   (MEM_SIZE  ),
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) dmem (
-    .clk_i     (clk_i),
-    .rst_i     (rst_i),
-    .wr_en_i   (is_store),
-    .addr_i    (result_alu),
-    .wr_data_i (reg_a_data),
-    .rd_data_o (data_from_mem),
-`ifndef SYNTHESIS
-    .debug_dmem_o (debug_dmem_o)
-`endif
-  );
-
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       pc_q          <= 0;
@@ -157,10 +154,17 @@ module cpu (
       alu_reg_b_data         <= dec_reg_b_data;
       alu_offset_sign_extend <= dec_offset_sign_extend;
       alu_instr_opcode       <= dec_instr_opcode;
+      mem_reg_wr_en          <= alu_reg_wr_en;
+      mem_wr_reg             <= alu_wr_reg;
       mem_reg_a_data         <= alu_reg_a_data;
       mem_is_load            <= alu_is_load;
       mem_is_store           <= alu_is_store;
       mem_alu_result         <= alu_alu_result;
+      wb_reg_wr_en           <= mem_reg_wr_en;
+      wb_wr_reg              <= mem_wr_reg;
+      wb_is_load             <= mem_is_load;
+      wb_alu_result          <= mem_alu_result;
+      wb_data_from_mem       <= mem_data_from_mem;
 `ifndef SYNTHESIS
       debug_pc_committed_o       <= pc_q;
       debug_instr_is_committed_o <= 1'b1;

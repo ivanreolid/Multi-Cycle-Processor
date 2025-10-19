@@ -10,10 +10,10 @@ module dmem #(
   input  logic wr_en_i,
   input  logic [ADDR_WIDTH-1:0] addr_i,
   input  logic [DATA_WIDTH-1:0] wr_data_i,
-  output logic [DATA_WIDTH-1:0] rd_data_o,
-`ifndef SYNTHESIS
+  output logic [DATA_WIDTH-1:0] rd_data_o
+/*`ifndef SYNTHESIS
   output logic [DATA_WIDTH-1:0] debug_dmem_o [0:MEM_SIZE-1]
-`endif
+`endif*/
 );
 
   logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
@@ -30,13 +30,13 @@ module dmem #(
 
   assign rd_data_o = mem[addr_i];
 
-`ifndef SYNTHESIS
+/*`ifndef SYNTHESIS
   genvar i;
   generate
     for (i = 0; i < MEM_SIZE; ++i) begin
       assign debug_dmem_o[i] = mem[i];
     end
   endgenerate
-`endif
+`endif*/
   
 endmodule
