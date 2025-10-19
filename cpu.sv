@@ -2,6 +2,7 @@
 `include "decode_stage.sv"
 `include "alu_stage.sv"
 `include "mem_stage.sv"
+`include "wb_stage.sv"
 `include "rbank.sv"
 `include "control.sv"
 
@@ -106,6 +107,15 @@ module cpu (
     .data_from_mem_o (mem_data_from_mem)
   );
 
+  wb_stage #(
+    .DATA_WIDTH      (DATA_WIDTH)
+  ) wb_stage (
+    .alu_result_i    (wb_alu_result),
+    .data_from_mem_i (wb_data_from_mem),
+    .is_load_i       (wb_is_load),
+    .data_to_reg_o   (data_to_reg) 
+  );
+
   control #(
     .OPCODE_WIDTH (OPCODE_WIDTH)
   ) control (
@@ -125,10 +135,10 @@ module cpu (
    ) rbank (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
-    .wr_en_i      (reg_wr_en),
+    .wr_en_i      (wb_reg_wr_en),
     .rd_reg_a_i   (reg_a),
     .rd_reg_b_i   (instruction_q.rb),
-    .wr_reg_i     (instruction_q.rd),
+    .wr_reg_i     (wb_wr_reg),
     .wr_data_i    (data_to_reg),
     .reg_a_data_o (dec_reg_a_data),
     .reg_b_data_o (dec_reg_b_data),
