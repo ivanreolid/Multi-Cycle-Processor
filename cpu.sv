@@ -1,4 +1,5 @@
 `include "fetch_stage.sv"
+`include "decode_stage.sv"
 `include "rbank.sv"
 `include "dmem.sv"
 `include "alu.sv"
@@ -26,11 +27,16 @@ module cpu (
 
   // Instruction wires
   instruction_t instruction_d, instruction_q;
-  logic [DATA_WIDTH-1:0] offset_sign_extend;
-  logic is_load, is_store, is_jump;
+  logic [DATA_WIDTH-1:0] dec_offset_sign_extend, alu_offset_sign_extend;
+  logic is_jump;
+  logic dec_is_load, alu_is_load;
+  logic dec_is_store, alu_is_store;
+
+  logic [OPCODE_WIDTH-1:0] dec_instr_opcode, alu_instr_opcode;
 
   // ALU wires
-  logic [DATA_WIDTH-1:0] reg_a_data, reg_b_data;
+  logic [DATA_WIDTH-1:0] dec_reg_a_data, alu_reg_a_data;
+  logic [DATA_WIDTH-1:0] dec_reg_b_data, alu_reg_b_data;
   logic [DATA_WIDTH-1:0] data_a_to_alu;
   logic [DATA_WIDTH-1:0] result_alu;
 
@@ -39,22 +45,18 @@ module cpu (
 
   logic [REGISTER_WIDTH-1:0] reg_a;
   
-  logic reg_wr_en;
+  logic dec_reg_wr_en, alu_reg_wr_en;
+  logic [REGISTER_WIDTH-1:0] dec_wr_reg, alu_wr_reg;
 
   //assign pc_offset = branch_taken ? {instruction.free, instruction.rd} : {{ADDR_WIDTH-1{1'b0}}, 1'b1};
   //assign pc_added = (pc_q + pc_offset) % MEM_SIZE;
   //assign pc_d = is_jump ? reg_a_data : pc_added;
 
-  // Data a from register bank must be rd data for stores
-  assign reg_a = is_store ? instruction_q.rd : instruction_q.ra;
-
-  assign offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){instruction_q[INSTR_WIDTH-1]}}, instruction_q[INSTR_WIDTH-1:14]};
- 
   // Data a for the ALU is the offset sign extended for both load and store instructions
-  assign data_a_to_alu = (is_load | is_store) ? offset_sign_extend : reg_a_data;
+  // assign data_a_to_alu = (is_load | is_store) ? offset_sign_extend : reg_a_data;
 
   // Only loads write data from memory into the register bank
-  assign data_to_reg = is_load ? data_from_mem : result_alu;
+  // assign data_to_reg = is_load ? data_from_mem : result_alu;
 
   fetch_stage #(
     .ADDR_WIDTH (ADDR_WIDTH),
@@ -64,6 +66,21 @@ module cpu (
     .pc_i           (pc_q),
     .next_pc_o      (pc_d),
     .instruction_o  (instruction_d)
+  );
+
+  decode_stage #(
+    .DATA_WIDTH           (DATA_WIDTH),
+    .REGISTER_WIDTH       (REGISTER_WIDTH),
+    .OPCODE_WIDTH         (OPCODE_WIDTH)
+  ) decode_stage (
+    .instruction_i        (instruction_q),
+    .offset_sign_extend_o (dec_offset_sign_extend),
+    .reg_a_o              (reg_a),
+    .is_load_o            (dec_is_load),
+    .is_store_o           (dec_is_store),
+    .reg_wr_en_o          (dec_reg_wr_en),
+    .wr_reg_o             (dec_wr_reg),
+    .instr_opcode_o       (dec_instr_opcode)
   );
 
   control #(
@@ -90,8 +107,8 @@ module cpu (
     .rd_reg_b_i   (instruction_q.rb),
     .wr_reg_i     (instruction_q.rd),
     .wr_data_i    (data_to_reg),
-    .reg_a_data_o (reg_a_data),
-    .reg_b_data_o (reg_b_data),
+    .reg_a_data_o (dec_reg_a_data),
+    .reg_b_data_o (dec_reg_b_data),
 `ifndef SYNTHESIS
     .debug_regs_o (debug_regs_o)
 `endif
@@ -127,10 +144,21 @@ module cpu (
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pc_q <= 0;
+      pc_q          <= 0;
+      alu_is_load   <= 1'b0;
+      alu_is_store  <= 1'b0;
+      alu_reg_wr_en <= 1'b0;
     end else begin
-      pc_q          <= pc_d;
-      instruction_q <= instruction_d;
+      pc_q                   <= pc_d;
+      instruction_q          <= instruction_d;
+      alu_is_load            <= dec_is_load;
+      alu_is_store           <= dec_is_store;
+      alu_reg_wr_en          <= dec_reg_wr_en;
+      alu_wr_reg             <= dec_wr_reg;
+      alu_reg_a_data         <= dec_reg_a_data;
+      alu_reg_b_data         <= dec_reg_b_data;
+      alu_offset_sign_extend <= dec_offset_sign_extend;
+      alu_instr_opcode       <= dec_instr_opcode;
 `ifndef SYNTHESIS
       debug_pc_committed_o       <= pc_q;
       debug_instr_is_committed_o <= 1'b1;
