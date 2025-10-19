@@ -19,36 +19,53 @@ module cpu (
 `endif
 );
 
-  // PC wires
-  logic [ADDR_WIDTH-1:0] pc_d, pc_q, dec_pc, alu_pc;
-  logic alu_branch_taken, mem_branch_taken;
+  // Fetch stage wires
+  logic [ADDR_WIDTH-1:0] pc_d, pc_q;
+  instruction_t instruction_d;
 
-  // Instruction wires
-  instruction_t instruction_d, instruction_q;
-  logic [DATA_WIDTH-1:0] dec_offset_sign_extend, alu_offset_sign_extend;
-  logic is_jump;
-  logic alu_is_load, mem_is_load, wb_is_load;
-  logic alu_is_store, mem_is_store;
-
-  logic [OPCODE_WIDTH-1:0] dec_instr_opcode, alu_instr_opcode;
-
-  // ALU wires
-  logic [DATA_WIDTH-1:0] dec_reg_a_data, alu_reg_a_data, mem_reg_a_data;
-  logic [DATA_WIDTH-1:0] dec_reg_b_data, alu_reg_b_data;
-  logic [DATA_WIDTH-1:0] data_a_to_alu;
-  logic [DATA_WIDTH-1:0] alu_alu_result, mem_alu_result, wb_alu_result;
-  logic [ADDR_WIDTH-1:0] dec_branch_offset, alu_branch_offset;
-  logic [ADDR_WIDTH-1:0] alu_pc_branch_offset, mem_pc_branch_offset;
-  logic [ADDR_WIDTH-1:0] jump_address;
-
-  logic [DATA_WIDTH-1:0] mem_data_from_mem, wb_data_from_mem;
-  logic [DATA_WIDTH-1:0] data_to_reg;
-
+  // Decode stage wires
+  logic [ADDR_WIDTH-1:0] dec_pc;
+  logic [DATA_WIDTH-1:0] dec_offset_sign_extend;
   logic [REGISTER_WIDTH-1:0] reg_a;
-  
-  logic dec_reg_wr_en, alu_reg_wr_en, mem_reg_wr_en, wb_reg_wr_en;
-  logic [REGISTER_WIDTH-1:0] dec_wr_reg, alu_wr_reg, mem_wr_reg, wb_wr_reg;
+  logic [REGISTER_WIDTH-1:0] dec_wr_reg;
+  logic [OPCODE_WIDTH-1:0] dec_instr_opcode;
+  logic [ADDR_WIDTH-1:0] dec_branch_offset;
+  logic [DATA_WIDTH-1:0] dec_reg_a_data, dec_reg_b_data;
+  logic dec_reg_wr_en;
+  instruction_t instruction_q;
 
+  // ALU stage wires
+  logic [ADDR_WIDTH-1:0] alu_pc;
+  logic [DATA_WIDTH-1:0] alu_reg_a_data, alu_reg_b_data;
+  logic [ADDR_WIDTH-1:0] alu_branch_offset;
+  logic [DATA_WIDTH-1:0] alu_offset_sign_extend;
+  logic [OPCODE_WIDTH-1:0] alu_instr_opcode;
+  logic [ADDR_WIDTH-1:0] alu_pc_branch_offset;
+  logic [DATA_WIDTH-1:0] alu_alu_result;
+  logic [ADDR_WIDTH-1:0] jump_address;
+  logic [REGISTER_WIDTH-1:0] alu_wr_reg;
+  logic alu_reg_wr_en;
+  logic alu_is_load, alu_is_store, is_jump;
+  logic alu_branch_taken;
+
+  // Mem stage wires
+  logic [DATA_WIDTH-1:0] mem_alu_result;
+  logic [DATA_WIDTH-1:0] mem_reg_a_data;
+  logic [DATA_WIDTH-1:0] mem_data_from_mem;
+  logic [ADDR_WIDTH-1:0] mem_pc_branch_offset;
+  logic [REGISTER_WIDTH-1:0] mem_wr_reg;
+  logic mem_reg_wr_en;
+  logic mem_is_load, mem_is_store;
+  logic mem_branch_taken;
+
+  // WB stage wires
+  logic [DATA_WIDTH-1:0] wb_alu_result;
+  logic [DATA_WIDTH-1:0] wb_data_from_mem;
+  logic [DATA_WIDTH-1:0] data_to_reg;
+  logic [REGISTER_WIDTH-1:0] wb_wr_reg;
+  logic wb_is_load;
+  logic wb_reg_wr_en;
+  
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
     .DATA_WIDTH         (DATA_WIDTH),
