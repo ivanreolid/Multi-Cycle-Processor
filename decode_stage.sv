@@ -2,6 +2,7 @@ import params_pkg::*;
 
 module decode_stage #(
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
+  parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH
 )(
@@ -10,7 +11,8 @@ module decode_stage #(
   output logic [REGISTER_WIDTH-1:0] reg_a_o,
   output logic reg_wr_en_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
-  output logic [OPCODE_WIDTH-1:0] instr_opcode_o
+  output logic [OPCODE_WIDTH-1:0] instr_opcode_o,
+  output logic [ADDR_WIDTH-1:0] branch_offset_o
 );
 
   logic is_branch, is_store;
@@ -26,5 +28,7 @@ module decode_stage #(
   assign wr_reg_o = instruction_i.rd;
 
   assign instr_opcode_o = instruction_i.opcode;
+
+  assign branch_offset_o = {instruction_i.free, instruction_i.rd};
 
 endmodule : decode_stage

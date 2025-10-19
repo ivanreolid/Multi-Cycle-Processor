@@ -4,7 +4,6 @@
 `include "mem_stage.sv"
 `include "wb_stage.sv"
 `include "rbank.sv"
-`include "control.sv"
 
 import params_pkg::*;
 
@@ -21,10 +20,8 @@ module cpu (
 );
 
   // PC wires
-  logic [ADDR_WIDTH-1:0] pc_d, pc_q;
-  logic [ADDR_WIDTH-1:0] pc_offset, pc_added;
-  logic is_zero, is_less;
-  logic branch_taken;
+  logic [ADDR_WIDTH-1:0] pc_d, pc_q, dec_pc, alu_pc;
+  logic alu_branch_taken, mem_branch_taken;
 
   // Instruction wires
   instruction_t instruction_d, instruction_q;
@@ -40,6 +37,9 @@ module cpu (
   logic [DATA_WIDTH-1:0] dec_reg_b_data, alu_reg_b_data;
   logic [DATA_WIDTH-1:0] data_a_to_alu;
   logic [DATA_WIDTH-1:0] alu_alu_result, mem_alu_result, wb_alu_result;
+  logic [ADDR_WIDTH-1:0] dec_branch_offset, alu_branch_offset;
+  logic [ADDR_WIDTH-1:0] alu_pc_branch_offset, mem_pc_branch_offset;
+  logic [ADDR_WIDTH-1:0] jump_address;
 
   logic [DATA_WIDTH-1:0] mem_data_from_mem, wb_data_from_mem;
   logic [DATA_WIDTH-1:0] data_to_reg;
@@ -49,25 +49,23 @@ module cpu (
   logic dec_reg_wr_en, alu_reg_wr_en, mem_reg_wr_en, wb_reg_wr_en;
   logic [REGISTER_WIDTH-1:0] dec_wr_reg, alu_wr_reg, mem_wr_reg, wb_wr_reg;
 
-  //assign pc_offset = branch_taken ? {instruction.free, instruction.rd} : {{ADDR_WIDTH-1{1'b0}}, 1'b1};
-  //assign pc_added = (pc_q + pc_offset) % MEM_SIZE;
-  //assign pc_d = is_jump ? reg_a_data : pc_added;
-
-  // Only loads write data from memory into the register bank
-  // assign data_to_reg = is_load ? data_from_mem : result_alu;
-
   fetch_stage #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH),
-    .MEM_SIZE   (MEM_SIZE)
+    .ADDR_WIDTH         (ADDR_WIDTH),
+    .DATA_WIDTH         (DATA_WIDTH),
+    .MEM_SIZE           (MEM_SIZE)
   ) fetch_stage (
-    .pc_i           (pc_q),
-    .next_pc_o      (pc_d),
-    .instruction_o  (instruction_d)
+    .pc_i               (pc_q),
+    .jump_address_i     (jump_address),
+    .pc_branch_offset_i (mem_pc_branch_offset),
+    .branch_taken_i     (mem_branch_taken),
+    .is_jump_i          (is_jump),
+    .next_pc_o          (pc_d),
+    .instruction_o      (instruction_d)
   );
 
   decode_stage #(
     .DATA_WIDTH           (DATA_WIDTH),
+    .ADDR_WIDTH           (ADDR_WIDTH),
     .REGISTER_WIDTH       (REGISTER_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) decode_stage (
@@ -76,7 +74,8 @@ module cpu (
     .reg_a_o              (reg_a),
     .reg_wr_en_o          (dec_reg_wr_en),
     .wr_reg_o             (dec_wr_reg),
-    .instr_opcode_o       (dec_instr_opcode)
+    .instr_opcode_o       (dec_instr_opcode),
+    .branch_offset_o      (dec_branch_offset)
   );
 
   alu_stage #(
@@ -85,13 +84,17 @@ module cpu (
   ) alu_stage (
     .data_a_i             (alu_reg_a_data),
     .data_b_i             (alu_reg_b_data),
+    .pc_i                 (alu_pc),
+    .branch_offset_i      (alu_branch_offset),
     .offset_sign_extend_i (alu_offset_sign_extend),
     .instr_opcode_i       (alu_instr_opcode),
+    .pc_branch_offset_o   (alu_pc_branch_offset),
+    .jump_address_o       (jump_address),
     .alu_result_o         (alu_alu_result),
     .is_load_o            (alu_is_load),
     .is_store_o           (alu_is_store),
-    .is_zero_o            (is_zero),
-    .is_less_o            (is_less)
+    .branch_taken_o       (alu_branch_taken),
+    .is_jump_o            (is_jump)
   );
 
   mem_stage #(
@@ -116,19 +119,6 @@ module cpu (
     .data_to_reg_o   (data_to_reg) 
   );
 
-  control #(
-    .OPCODE_WIDTH (OPCODE_WIDTH)
-  ) control (
-    .opcode_i       (instruction_q.opcode),
-    .is_zero_i      (is_zero),
-    .is_less_i      (is_less),
-    .is_load_o      (is_load),
-    .is_store_o     (is_store),
-    .is_jump_o      (is_jump),
-    .branch_taken_o (branch_taken),
-    .reg_wr_en_o    (reg_wr_en)
-  );
-
   rbank #(
     .REGISTER_WIDTH (REGISTER_WIDTH),
     .DATA_WIDTH     (DATA_WIDTH)
@@ -149,21 +139,30 @@ module cpu (
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pc_q          <= 0;
-      alu_is_load   <= 1'b0;
-      alu_is_store  <= 1'b0;
-      alu_reg_wr_en <= 1'b0;
-      mem_is_load   <= 1'b0;
-      mem_is_store  <= 1'b0;
+      pc_q              <= 0;
+      is_jump           <= 1'b0;
+      alu_branch_taken  <= 1'b0;
+      alu_branch_offset <= 0;
+      alu_is_load       <= 1'b0;
+      alu_is_store      <= 1'b0;
+      alu_reg_wr_en     <= 1'b0;
+      mem_branch_taken  <= 1'b0;
+      mem_is_load       <= 1'b0;
+      mem_is_store      <= 1'b0;
     end else begin
       pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
+      dec_pc                 <= pc_q;
+      alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
       alu_wr_reg             <= dec_wr_reg;
       alu_reg_a_data         <= dec_reg_a_data;
       alu_reg_b_data         <= dec_reg_b_data;
       alu_offset_sign_extend <= dec_offset_sign_extend;
       alu_instr_opcode       <= dec_instr_opcode;
+      alu_branch_offset      <= dec_branch_offset;
+      mem_pc_branch_offset   <= alu_pc_branch_offset;
+      mem_branch_taken       <= alu_branch_taken;
       mem_reg_wr_en          <= alu_reg_wr_en;
       mem_wr_reg             <= alu_wr_reg;
       mem_reg_a_data         <= alu_reg_a_data;
