@@ -17,9 +17,9 @@ module tb;
   logic [DATA_WIDTH-1:0] model_imem [0:MEM_SIZE-1];
   logic [DATA_WIDTH-1:0] model_dmem [0:MEM_SIZE-1];
 
-  logic cpu_instr_is_committed;
-  instruction_t model_instr, cpu_instr_committed;
-  logic [ADDR_WIDTH-1:0] cpu_pc_committed;
+  logic cpu_store_is_completed, cpu_non_store_is_completed;
+  instruction_t model_instr, cpu_mem_instr, cpu_wb_instr;
+  logic [ADDR_WIDTH-1:0] cpu_mem_pc, cpu_wb_pc;
 
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -29,20 +29,33 @@ module tb;
   string error_msg;
 
   cpu i_cpu (
-    .clk_i                      (clk),
-    .rst_i                      (rst),
-    .debug_dmem_o               (cpu_dmem),
-    .debug_regs_o               (cpu_regs),
-    .debug_pc_committed_o       (cpu_pc_committed),
-    .debug_instr_committed_o    (cpu_instr_committed),
-    .debug_instr_is_committed_o (cpu_instr_is_committed)
+    .clk_i                          (clk),
+    .rst_i                          (rst),
+    .debug_store_is_completed_o     (cpu_store_is_completed),
+    .debug_non_store_is_completed_o (cpu_non_store_is_completed),
+    .debug_dmem_o                   (cpu_dmem),
+    .debug_regs_o                   (cpu_regs),
+    .debug_mem_pc_o                 (cpu_mem_pc),
+    .debug_wb_pc_o                  (cpu_wb_pc),
+    .debug_mem_instr_o              (cpu_mem_instr),
+    .debug_wb_instr_o               (cpu_wb_instr)
   );
+
+  always_ff @(posedge clk) begin : check
+    if (!rst) begin
+      model_pc = 1;
+    end else begin
+      if (cpu_non_store_is_completed)
+        execute_and_compare(1'b1);
+      if (cpu_store_is_completed)
+        execute_and_compare(1'b0);
+    end
+  end
 
   initial begin
     clk = 1;
     rst = 0;
-    model_pc = 0;
-
+ 
     initialize_registers();
     initialize_memories();
 
@@ -52,21 +65,7 @@ module tb;
 
     for (int i = 0; i < 20; ++i) begin
       #5 clk = 1;
-
-      if (cpu_instr_is_committed) begin
-        model_instr = model_imem[model_pc];
-        new_model_pc = (model_pc + 1) % MEM_SIZE;
-        error_msg = "";
-        error = 1'b0;
-        execute_model_instr();
-        check_committed_instr();
-        check_registers();
-        check_data_memory();
-        print_check_result();
-      end
-
       #5 clk = 0;
-      model_pc = new_model_pc;
     end
   end
 
@@ -99,34 +98,54 @@ module tb;
     model_imem[94] = 32'h7800D;    // JMP r30
   endfunction
 
-  function void check_committed_instr();
-    if (model_instr != cpu_instr_committed) begin
+  task automatic execute_and_compare(bit non_store);
+    model_instr = model_imem[model_pc];
+    new_model_pc = (model_pc + 1) % MEM_SIZE;
+    error_msg = "";
+    error = 1'b0;
+    execute_model_instr();
+    check_completed_instr(non_store);
+
+    if (non_store)
+      check_registers();
+    else begin
+      check_data_memory();
+    end
+
+    print_check_result();
+    model_pc = new_model_pc;
+  endtask
+
+  task automatic check_completed_instr(bit non_store);
+    instruction_t cpu_instr_completed = non_store ? cpu_wb_instr : cpu_mem_instr;
+    logic [ADDR_WIDTH-1:0] cpu_pc_completed = non_store ? cpu_wb_pc : cpu_mem_pc;
+    if (model_instr != cpu_instr_completed) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s)\n",
-                  cpu_pc_committed, cpu_instr_committed, cpu_instr_committed.free, cpu_instr_committed.ra, cpu_instr_committed.rb,
-                  cpu_instr_committed.rd, opcode_to_string(cpu_instr_committed.opcode))};
+                  cpu_pc_completed, cpu_instr_completed, cpu_instr_completed.free, cpu_instr_completed.ra, cpu_instr_completed.rb,
+                  cpu_instr_completed.rd, opcode_to_string(cpu_instr_completed.opcode))};
       error = 1'b1;
     end
-  endfunction
+  endtask
 
-  function void check_registers();
+  task check_registers();
     for (int i = 0; i < 32; ++i) begin
       if (model_regs[i] != cpu_regs[i]) begin
         error_msg = {error_msg, $sformatf(" Register %0d: model=0x%0h, CPU=0x%0h\n", i, model_regs[i], cpu_regs[i])};
         error = 1'b1;
       end
     end
-  endfunction
+  endtask
 
-  function void check_data_memory();
+  task check_data_memory();
     for (int i = 0; i < MEM_SIZE; ++i) begin
       if (model_dmem[i] != cpu_dmem[i]) begin
         error_msg = {error_msg, $sformatf(" Data memory address 0x%0h: model=0x%0h, CPU=0x%0h\n", i, model_dmem[i], cpu_dmem[i])};
         error = 1'b1;
       end
     end
-  endfunction
+  endtask
 
-  function void execute_model_instr();
+  task execute_model_instr();
     offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){model_instr[INSTR_WIDTH-1]}}, model_instr[INSTR_WIDTH-1:14]};
     pc_plus_offset = (model_pc + {model_instr.free, model_instr.rd}) % MEM_SIZE;
     case (model_instr.opcode)
@@ -146,17 +165,16 @@ module tb;
       JMP: new_model_pc = model_regs[model_instr.ra];
       //default:
     endcase
-  endfunction
+  endtask
 
-  function void print_check_result();
+  task print_check_result();
     if (error) begin
-      $display("Something went wrong with PC=0x%0h and instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s):\n%s",
-               model_pc, model_instr, model_instr.free, model_instr.ra, model_instr.rb, model_instr.rd, opcode_to_string(model_instr.opcode),
+      $display("t=%0t: Something went wrong with PC=0x%0h and instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s):\n%s", $time, model_pc, model_instr, model_instr.free, model_instr.ra, model_instr.rb, model_instr.rd, opcode_to_string(model_instr.opcode),
                error_msg);
     end else begin
-      $display("PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s) executed correctly", model_pc,
+      $display("t=%0t: PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s) executed correctly", $time, model_pc,
                model_instr, model_instr.free, model_instr.ra, model_instr.rb, model_instr.rd, opcode_to_string(model_instr.opcode));
     end
-  endfunction
+  endtask
 
 endmodule
