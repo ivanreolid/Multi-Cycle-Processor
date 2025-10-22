@@ -201,7 +201,7 @@ module cpu (
       mem_is_load       <= 1'b0;
       mem_is_store      <= 1'b0;
     end else begin
-      fetch_valid            <= ~is_jump & ~alu_branch_taken;
+      fetch_valid            <= ~alu_branch_taken;
       pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
       dec_valid              <= fetch_valid & ~is_jump & ~alu_branch_taken;
