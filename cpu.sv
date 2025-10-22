@@ -127,6 +127,7 @@ module cpu (
     .branch_offset_i      (alu_branch_offset),
     .offset_sign_extend_i (alu_offset_sign_extend),
     .instr_opcode_i       (alu_instr_opcode),
+    .valid_i              (alu_valid),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
     .alu_result_o         (alu_alu_result),

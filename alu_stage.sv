@@ -12,6 +12,7 @@ module alu_stage #(
   input  logic [ADDR_WIDTH-1:0] branch_offset_i,
   input  logic [DATA_WIDTH-1:0] offset_sign_extend_i,
   input  logic [OPCODE_WIDTH-1:0] instr_opcode_i,
+  input  logic valid_i,
   output logic [ADDR_WIDTH-1:0] pc_branch_offset_o,
   output logic [ADDR_WIDTH-1:0] jump_address_o,
   output logic [DATA_WIDTH-1:0] alu_result_o,
@@ -29,7 +30,7 @@ module alu_stage #(
   assign is_store_o = instr_opcode_i == SW;
   assign is_jump_o  = instr_opcode_i == JMP;
 
-  assign branch_taken_o = ((instr_opcode_i == BEQ) & is_zero) | ((instr_opcode_i == BNE) & ~is_zero) | ((instr_opcode_i == BLT) & is_less) | ((instr_opcode_i == BGE) & ~is_less);
+  assign branch_taken_o = valid_i & (((instr_opcode_i == BEQ) & is_zero) | ((instr_opcode_i == BNE) & ~is_zero) | ((instr_opcode_i == BLT) & is_less) | ((instr_opcode_i == BGE) & ~is_less));
 
   assign pc_branch_offset_o = pc_i + branch_offset_i;
   assign jump_address_o = data_a_i;
