@@ -7,12 +7,13 @@ module mem_stage #(
   parameter int ADDR_WIDTH = params_pkg::ADDR_WIDTH,
   parameter int DATA_WIDTH = params_pkg::DATA_WIDTH
 )(
-  input logic clk_i,
-  input logic rst_i,
-  input logic [DATA_WIDTH-1:0] alu_result_i,
-  input logic [DATA_WIDTH-1:0] reg_a_data_i,
-  input logic valid_i,
-  input logic is_store_i,
+  input  logic clk_i,
+  input  logic rst_i,
+  input  logic [DATA_WIDTH-1:0] alu_result_i,
+  input  logic [DATA_WIDTH-1:0] reg_a_data_i,
+  input  logic valid_i,
+  input  logic is_store_i,
+  output logic wb_valid_o,
   output logic [DATA_WIDTH-1:0] data_from_mem_o,
 `ifndef SYNTHESIS
   output logic debug_store_is_completed_o,
@@ -23,6 +24,8 @@ module mem_stage #(
   logic wr_en;
 
   assign wr_en = is_store_i & valid_i;
+
+  assign wb_valid_o = valid_i;
 
   dmem #(
     .MEM_SIZE   (MEM_SIZE  ),
