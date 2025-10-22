@@ -127,6 +127,7 @@ module cpu (
     .branch_offset_i      (alu_branch_offset),
     .offset_sign_extend_i (alu_offset_sign_extend),
     .instr_opcode_i       (alu_instr_opcode),
+    .valid_i              (alu_valid),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
     .alu_result_o         (alu_alu_result),
@@ -200,12 +201,12 @@ module cpu (
       mem_is_load       <= 1'b0;
       mem_is_store      <= 1'b0;
     end else begin
-      fetch_valid            <= ~is_jump & ~alu_branch_taken;
+      fetch_valid            <= ~alu_branch_taken;
       pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
       dec_valid              <= fetch_valid & ~is_jump & ~alu_branch_taken;
       dec_pc                 <= pc_q;
-      alu_valid              <= dec_valid;
+      alu_valid              <= dec_valid & ~is_jump & ~alu_branch_taken;
       alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
       alu_wr_reg             <= dec_wr_reg;
