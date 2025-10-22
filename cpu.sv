@@ -206,7 +206,7 @@ module cpu (
       instruction_q          <= instruction_d;
       dec_valid              <= fetch_valid & ~is_jump & ~alu_branch_taken;
       dec_pc                 <= pc_q;
-      alu_valid              <= dec_valid;
+      alu_valid              <= dec_valid & ~is_jump & ~alu_branch_taken;
       alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
       alu_wr_reg             <= dec_wr_reg;
