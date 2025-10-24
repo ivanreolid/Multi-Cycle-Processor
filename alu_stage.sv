@@ -29,7 +29,7 @@ module alu_stage #(
 
   assign is_load_o  = instr_opcode_i == LW;
   assign is_store_o = instr_opcode_i == SW;
-  assign is_jump_o  = instr_opcode_i == JMP;
+  assign is_jump_o  = valid_i & instr_opcode_i == JMP;
 
   assign branch_taken_o = valid_i & (((instr_opcode_i == BEQ) & is_zero) | ((instr_opcode_i == BNE) & ~is_zero) | ((instr_opcode_i == BLT) & is_less) | ((instr_opcode_i == BGE) & ~is_less));
 

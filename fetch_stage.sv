@@ -13,35 +13,79 @@ module fetch_stage #(
   input  logic is_jump_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
+  input  logic instr_valid_i,
+  input  instruction_t instr_i,
+  output logic imem_req_valid_o,
   output logic dec_valid_o,
-  output logic [ADDR_WIDTH-1:0] pc_o,
+  output logic [ADDR_WIDTH-1:0] imem_req_pc_o,
+  output logic [ADDR_WIDTH-1:0] dec_pc_o,
   output instruction_t instruction_o
 );
 
-  logic [ADDR_WIDTH-1:0] pc, pc_d;
-  logic [ADDR_WIDTH-1:0] pc_added;
+  typedef enum logic [1:0] {
+    IDLE     = 2'b00,
+    MEM_REQ  = 2'b01,
+    MEM_WAIT = 2'b10,
+    FLUSH    = 2'b11
+  } state_t;
 
-  imem #(
-    .MEM_SIZE      (MEM_SIZE),
-    .ADDR_WIDTH    (ADDR_WIDTH),
-    .DATA_WIDTH    (INSTR_WIDTH)
-  ) imem (
-    .address_i     (pc),
-    .instruction_o (instruction_o)
-  );
+  logic [ADDR_WIDTH-1:0] pc, pc_d;
+  logic [ADDR_WIDTH-1:0] branch_target;
+
+  state_t state, state_d;
+
+  always_comb begin : state_update
+    imem_req_valid_o = 1'b0;
+    imem_req_pc_o    = pc;
+    dec_valid_o      = 1'b0;
+    dec_pc_o         = 1;
+    instruction_o    = '0;
+    state_d          = state;
+    pc_d             = pc;
+
+    case (state)
+      IDLE: begin
+        state_d = MEM_REQ;
+      end
+      MEM_REQ: begin
+        imem_req_valid_o = 1'b1;
+        imem_req_pc_o    = pc;
+        state_d          = MEM_WAIT;
+      end
+      MEM_WAIT: begin
+        if (alu_branch_taken_i | is_jump_i)
+          state_d = FLUSH;
+        else if (instr_valid_i) begin
+          dec_valid_o   = 1'b1;
+          instruction_o = instr_i;
+          dec_pc_o      = pc;
+          pc_d          = (pc + 1) % MEM_SIZE;
+          state_d       = MEM_REQ;
+        end
+      end
+      FLUSH: begin
+        if (instr_valid_i) begin
+          pc_d    = branch_target;
+          state_d = MEM_REQ;
+        end
+      end
+    endcase
+  end
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pc <= 1;
+      state          <= IDLE;
+      pc             <= 1;
+      branch_target  <= '0;
     end else begin
-      pc <= pc_d;
+      state          <= state_d;
+      pc             <= pc_d;
+
+      if (alu_branch_taken_i)
+        branch_target <= pc_branch_offset_i;
+      else if (is_jump_i)
+        branch_target <= jump_address_i;
     end
   end
-
-  assign pc_added = (alu_branch_taken_i ? pc_branch_offset_i : pc + 1) % MEM_SIZE;
-  assign pc_d = is_jump_i ? jump_address_i : pc_added;
-
-  assign dec_valid_o = ~is_jump_i & ~alu_branch_taken_i;
-  assign pc_o = pc;
 
 endmodule : fetch_stage

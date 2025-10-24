@@ -1,4 +1,5 @@
 `include "cpu.sv"
+`include "imem.sv"
 
 import params_pkg::*;
 
@@ -7,6 +8,12 @@ module tb;
 
   logic clk;
   logic rst;
+
+  // CPU - IMEM communication wires
+  logic imem_instr_valid;
+  instruction_t imem_instr;
+  logic imem_req_valid;
+  logic [ADDR_WIDTH-1:0] pc;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
@@ -31,6 +38,10 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
+    .imem_instr_valid_i             (imem_instr_valid),
+    .imem_instr_i                   (imem_instr),
+    .imem_req_valid_o               (imem_req_valid),
+    .pc_o                           (pc),
     .debug_store_is_completed_o     (cpu_store_is_completed),
     .debug_non_store_is_completed_o (cpu_non_store_is_completed),
     .debug_dmem_o                   (cpu_dmem),
@@ -39,6 +50,19 @@ module tb;
     .debug_wb_pc_o                  (cpu_wb_pc),
     .debug_mem_instr_o              (cpu_mem_instr),
     .debug_wb_instr_o               (cpu_wb_instr)
+  );
+
+  imem #(
+    .MEM_SIZE                       (MEM_SIZE),
+    .ADDR_WIDTH                     (ADDR_WIDTH),
+    .DATA_WIDTH                     (DATA_WIDTH)
+  ) imem (
+    .clk_i                          (clk),
+    .rst_i                          (rst),
+    .req_valid_i                    (imem_req_valid),
+    .address_i                      (pc),
+    .instruction_valid_o            (imem_instr_valid),
+    .instruction_o                  (imem_instr)
   );
 
   always_ff @(posedge clk) begin : check
@@ -63,7 +87,7 @@ module tb;
     #5 clk = 1; rst = 1;
     #5 clk = 0;
 
-    for (int i = 0; i < 20; ++i) begin
+    for (int i = 0; i < 400; ++i) begin
       #5 clk = 1;
       #5 clk = 0;
     end
@@ -95,7 +119,8 @@ module tb;
     model_imem[73] = 32'h21CAB;    // BLT r8, r14, 10
     model_imem[83] = 32'h6BEAC;    // BGE r26, r31, 10
     model_imem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    model_imem[94] = 32'h7800D;    // JMP r30
+    //model_imem[94] = 32'h7800D;    // JMP r30
+    model_imem[94] = 32'h400D;     // JMP r1
   endfunction
 
   task automatic execute_and_compare(bit non_store);

@@ -5,13 +5,71 @@ module imem #(
   parameter int ADDR_WIDTH = params_pkg::ADDR_WIDTH,
   parameter int DATA_WIDTH = params_pkg::DATA_WIDTH
 )(
+  input  logic clk_i,
+  input  logic rst_i,
+  input  logic req_valid_i,
   input  logic [ADDR_WIDTH-1:0] address_i,
+  output logic instruction_valid_o,
   output logic [DATA_WIDTH-1:0] instruction_o
 );
 
   logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
 
-  assign instruction_o = mem[address_i];
+  logic pipe1_valid_d, pipe2_valid_d, pipe3_valid_d, pipe4_valid_d, pipe5_valid_d, pipe6_valid_d, pipe7_valid_d, pipe8_valid_d, pipe9_valid_d, pipe10_valid_d;
+  logic pipe1_valid, pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid, pipe6_valid, pipe7_valid, pipe8_valid, pipe9_valid, pipe10_valid;
+
+  logic [ADDR_WIDTH-1:0] pipe1_addr_d, pipe2_addr_d, pipe3_addr_d, pipe4_addr_d, pipe5_addr_d;
+  logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
+
+  logic [ADDR_WIDTH-1:0] pipe6_instr_d, pipe7_instr_d, pipe8_instr_d, pipe9_instr_d, pipe10_instr_d;
+  logic [ADDR_WIDTH-1:0] pipe6_instr, pipe7_instr, pipe8_instr, pipe9_instr, pipe10_instr;
+
+  always_ff @(posedge clk_i) begin : pipeline
+    if (!rst_i) begin
+      pipe1_valid   <= 1'b0;
+      pipe2_valid   <= 1'b0;
+      pipe3_valid   <= 1'b0;
+      pipe4_valid   <= 1'b0;
+      pipe5_valid   <= 1'b0;
+      pipe6_valid   <= 1'b0;
+      pipe7_valid   <= 1'b0;
+      pipe8_valid   <= 1'b0;
+      pipe9_valid   <= 1'b0;
+      pipe10_valid  <= 1'b0;
+    end else begin
+      pipe1_valid   <= pipe1_valid_d;
+      pipe2_valid   <= pipe1_valid;
+      pipe3_valid   <= pipe2_valid;
+      pipe4_valid   <= pipe3_valid;
+      pipe5_valid   <= pipe4_valid;
+      pipe6_valid   <= pipe5_valid;
+      pipe7_valid   <= pipe6_valid;
+      pipe8_valid   <= pipe7_valid;
+      pipe9_valid   <= pipe8_valid;
+      pipe10_valid  <= pipe9_valid;
+      pipe1_addr    <= pipe1_addr_d;
+      pipe2_addr    <= pipe1_addr;
+      pipe3_addr    <= pipe2_addr;
+      pipe4_addr    <= pipe3_addr;
+      pipe5_addr    <= pipe4_addr;
+      pipe6_instr   <= pipe6_instr_d;
+      pipe7_instr   <= pipe6_instr;
+      pipe8_instr   <= pipe7_instr;
+      pipe9_instr   <= pipe8_instr;
+      pipe10_instr  <= pipe9_instr;
+    end
+  end
+ 
+  always_comb begin : memory_read
+    if (pipe5_valid)
+      pipe6_instr_d = mem[pipe5_addr];
+  end
+
+  assign pipe1_valid_d = req_valid_i;
+  assign pipe1_addr_d = address_i;
+
+  assign instruction_valid_o = pipe10_valid;
+  assign instruction_o = pipe10_instr;
 
   initial begin
     // TODO: Populate memory with correct instructions
@@ -33,7 +91,14 @@ module imem #(
     mem[73] = 32'h21CAB;    // BLT r8, r14, 10
     mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
     mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    mem[94] = 32'h7800D;    // JMP r30
+    //mem[94] = 32'h7800D;    // JMP r30
+    mem[94] = 32'h400D;     // JMP r1
+
+    // RAW
+    /*mem[1] = 32'h220;    // ADD r0, r1 -> r2
+    mem[2] = 32'h8650;   // ADD r2, r3 -> r5
+    mem[3] = 32'h18A70;  // ADD r6, r5 -> r7
+    mem[4] = 32'h20E90;  // ADD r8, r7 -> r9*/
   end
 
 endmodule

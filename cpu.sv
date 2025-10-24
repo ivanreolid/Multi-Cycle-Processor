@@ -8,8 +8,12 @@
 import params_pkg::*;
 
 module cpu (
-  input logic clk_i,
-  input logic rst_i,
+  input  logic clk_i,
+  input  logic rst_i,
+  input  logic imem_instr_valid_i,
+  input  instruction_t imem_instr_i,
+  output logic imem_req_valid_o,
+  output logic [ADDR_WIDTH-1:0] pc_o,
 `ifndef SYNTHESIS
   output logic debug_store_is_completed_o,
   output logic debug_non_store_is_completed_o,
@@ -24,7 +28,7 @@ module cpu (
 
   // Fetch stage wires
   logic dec_valid_d;
-  logic [ADDR_WIDTH-1:0] fetch_pc;
+  logic [ADDR_WIDTH-1:0] dec_pc_d;
   instruction_t instruction_d;
 
   // Decode stage wires
@@ -98,8 +102,12 @@ module cpu (
     .is_jump_i          (is_jump),
     .pc_branch_offset_i (alu_pc_branch_offset),
     .jump_address_i     (jump_address),
+    .instr_valid_i      (imem_instr_valid_i),
+    .instr_i            (imem_instr_i),
+    .imem_req_valid_o   (imem_req_valid_o),
     .dec_valid_o        (dec_valid_d),
-    .pc_o               (fetch_pc),
+    .imem_req_pc_o      (pc_o),
+    .dec_pc_o           (dec_pc_d),
     .instruction_o      (instruction_d)
   );
 
@@ -211,7 +219,7 @@ module cpu (
     end else begin
       instruction_q          <= instruction_d;
       dec_valid              <= dec_valid_d;
-      dec_pc                 <= fetch_pc;
+      dec_pc                 <= dec_pc_d;
       alu_valid              <= alu_valid_d;
       alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
