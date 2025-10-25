@@ -1,3 +1,4 @@
+`include "fetch_ctrl.sv"
 `include "fetch_stage.sv"
 `include "decode_stage.sv"
 `include "alu_stage.sv"
@@ -86,6 +87,18 @@ module cpu (
   logic wb_is_store;
   instruction_t debug_wb_instr;
 `endif
+
+  fetch_ctrl #(
+    .ADDR_WIDTH         (ADDR_WIDTH)
+  ) fetch_ctrl (
+    .alu_branch_taken_i (alu_branch_taken),
+    .is_jump_i          (is_jump),
+    .pc_i               (pc_q),
+    .pc_branch_offset_i (alu_pc_branch_offset),
+    .jump_address_i     (jump_address),
+    .next_valid_o       (fetch_valid_d),
+    .next_pc_o          (pc_d)
+  );
   
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
@@ -93,14 +106,10 @@ module cpu (
     .MEM_SIZE           (MEM_SIZE)
   ) fetch_stage (
     .valid_i            (fetch_valid),
-    .pc_i               (pc_q),
-    .jump_address_i     (jump_address),
-    .pc_branch_offset_i (alu_pc_branch_offset),
     .alu_branch_taken_i (alu_branch_taken),
     .is_jump_i          (is_jump),
-    .valid_o            (fetch_valid_d),
+    .pc_i               (pc_q),
     .dec_valid_o        (dec_valid_d),
-    .next_pc_o          (pc_d),
     .instruction_o      (instruction_d)
   );
 
