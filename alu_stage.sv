@@ -13,6 +13,7 @@ module alu_stage #(
   input  logic [DATA_WIDTH-1:0] offset_sign_extend_i,
   input  logic [OPCODE_WIDTH-1:0] instr_opcode_i,
   input  logic valid_i,
+  output logic mem_valid_o,
   output logic [ADDR_WIDTH-1:0] pc_branch_offset_o,
   output logic [ADDR_WIDTH-1:0] jump_address_o,
   output logic [DATA_WIDTH-1:0] alu_result_o,
@@ -36,6 +37,8 @@ module alu_stage #(
   assign jump_address_o = data_a_i;
 
   assign data_a_to_alu = (is_load_o | is_store_o) ? offset_sign_extend_i : data_a_i;
+
+  assign mem_valid_o = valid_i;
 
   alu #(
     .OPCODE_WIDTH (OPCODE_WIDTH),

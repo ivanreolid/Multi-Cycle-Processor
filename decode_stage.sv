@@ -6,7 +6,11 @@ module decode_stage #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH
 )(
-  input instruction_t instruction_i,
+  input  logic valid_i,
+  input  logic is_jump_i,
+  input  logic branch_taken_i,
+  input  instruction_t instruction_i,
+  output logic alu_valid_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] reg_a_o,
   output logic reg_wr_en_o,
@@ -30,5 +34,7 @@ module decode_stage #(
   assign instr_opcode_o = instruction_i.opcode;
 
   assign branch_offset_o = {instruction_i.free, instruction_i.rd};
+
+  assign alu_valid_o = valid_i & ~is_jump_i & ~branch_taken_i;
 
 endmodule : decode_stage
