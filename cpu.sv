@@ -24,7 +24,7 @@ module cpu (
 
   // Fetch stage wires
   logic [ADDR_WIDTH-1:0] pc_d, pc_q;
-  logic fetch_valid, dec_valid_d;
+  logic fetch_valid_d, fetch_valid, dec_valid_d;
   instruction_t instruction_d;
 
   // Decode stage wires
@@ -61,7 +61,6 @@ module cpu (
   logic [DATA_WIDTH-1:0] mem_alu_result;
   logic [DATA_WIDTH-1:0] mem_reg_a_data;
   logic [DATA_WIDTH-1:0] mem_data_from_mem;
-  logic [ADDR_WIDTH-1:0] mem_pc_branch_offset;
   logic [REGISTER_WIDTH-1:0] mem_wr_reg;
   logic mem_reg_wr_en;
   logic mem_is_load, mem_is_store;
@@ -96,10 +95,10 @@ module cpu (
     .valid_i            (fetch_valid),
     .pc_i               (pc_q),
     .jump_address_i     (jump_address),
-    .pc_branch_offset_i (mem_pc_branch_offset),
-    .mem_branch_taken_i (mem_branch_taken),
+    .pc_branch_offset_i (alu_pc_branch_offset),
     .alu_branch_taken_i (alu_branch_taken),
     .is_jump_i          (is_jump),
+    .valid_o            (fetch_valid_d),
     .dec_valid_o        (dec_valid_d),
     .next_pc_o          (pc_d),
     .instruction_o      (instruction_d)
@@ -209,12 +208,11 @@ module cpu (
       alu_is_store      <= 1'b0;
       alu_reg_wr_en     <= 1'b0;
       mem_valid         <= 1'b0;
-      mem_branch_taken  <= 1'b0;
       mem_is_load       <= 1'b0;
       mem_is_store      <= 1'b0;
       wb_valid          <= 1'b0;
     end else begin
-      fetch_valid            <= ~alu_branch_taken;
+      fetch_valid            <= fetch_valid_d;
       pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
       dec_valid              <= dec_valid_d;
@@ -229,8 +227,6 @@ module cpu (
       alu_instr_opcode       <= dec_instr_opcode;
       alu_branch_offset      <= dec_branch_offset;
       mem_valid              <= mem_valid_d;
-      mem_pc_branch_offset   <= alu_pc_branch_offset;
-      mem_branch_taken       <= alu_branch_taken;
       mem_reg_wr_en          <= alu_reg_wr_en;
       mem_wr_reg             <= alu_wr_reg;
       mem_reg_a_data         <= alu_reg_a_data;
