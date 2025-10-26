@@ -1,4 +1,3 @@
-`include "fetch_ctrl.sv"
 `include "fetch_stage.sv"
 `include "decode_stage.sv"
 `include "alu_stage.sv"
@@ -24,8 +23,8 @@ module cpu (
 );
 
   // Fetch stage wires
-  logic [ADDR_WIDTH-1:0] pc_d, pc_q;
-  logic fetch_valid_d, fetch_valid, dec_valid_d;
+  logic dec_valid_d;
+  logic [ADDR_WIDTH-1:0] fetch_pc;
   instruction_t instruction_d;
 
   // Decode stage wires
@@ -88,28 +87,19 @@ module cpu (
   instruction_t debug_wb_instr;
 `endif
 
-  fetch_ctrl #(
-    .ADDR_WIDTH         (ADDR_WIDTH)
-  ) fetch_ctrl (
-    .alu_branch_taken_i (alu_branch_taken),
-    .is_jump_i          (is_jump),
-    .pc_i               (pc_q),
-    .pc_branch_offset_i (alu_pc_branch_offset),
-    .jump_address_i     (jump_address),
-    .next_valid_o       (fetch_valid_d),
-    .next_pc_o          (pc_d)
-  );
-  
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
     .DATA_WIDTH         (DATA_WIDTH),
     .MEM_SIZE           (MEM_SIZE)
   ) fetch_stage (
-    .valid_i            (fetch_valid),
+    .clk_i              (clk_i),
+    .rst_i              (rst_i),
     .alu_branch_taken_i (alu_branch_taken),
     .is_jump_i          (is_jump),
-    .pc_i               (pc_q),
+    .pc_branch_offset_i (alu_pc_branch_offset),
+    .jump_address_i     (jump_address),
     .dec_valid_o        (dec_valid_d),
+    .pc_o               (fetch_pc),
     .instruction_o      (instruction_d)
   );
 
@@ -206,8 +196,6 @@ module cpu (
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pc_q              <= 0;
-      fetch_valid       <= 1'b0;
       dec_valid         <= 1'b0;
       is_jump           <= 1'b0;
       alu_valid         <= 1'b0;
@@ -221,11 +209,9 @@ module cpu (
       mem_is_store      <= 1'b0;
       wb_valid          <= 1'b0;
     end else begin
-      fetch_valid            <= fetch_valid_d;
-      pc_q                   <= pc_d;
       instruction_q          <= instruction_d;
       dec_valid              <= dec_valid_d;
-      dec_pc                 <= pc_q;
+      dec_pc                 <= fetch_pc;
       alu_valid              <= alu_valid_d;
       alu_pc                 <= dec_pc;
       alu_reg_wr_en          <= dec_reg_wr_en;
