@@ -33,7 +33,8 @@ module decode_stage #(
 
   assign instr_opcode_o = instruction_i.opcode;
 
-  assign branch_offset_o = {instruction_i.free, instruction_i.rd};
+  assign branch_offset_o = {{(ADDR_WIDTH-18){instruction_i.free[12]}},
+                           instruction_i.free, instruction_i.rd};
 
   assign alu_valid_o = valid_i & ~is_jump_i & ~branch_taken_i;
 
