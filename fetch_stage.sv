@@ -29,17 +29,19 @@ module fetch_stage #(
     FLUSH    = 2'b11
   } state_t;
 
-  logic [ADDR_WIDTH-1:0] pc, pc_d;
+  logic [ADDR_WIDTH-1:0] pc, pc_d, dec_pc_d;
   logic [ADDR_WIDTH-1:0] branch_target;
 
   state_t state, state_d;
 
+  logic dec_valid_d;
+
+  instruction_t dec_instr_d;
+
   always_comb begin : state_update
     imem_req_valid_o = 1'b0;
     imem_req_pc_o    = pc;
-    dec_valid_o      = 1'b0;
-    dec_pc_o         = 1;
-    instruction_o    = '0;
+    dec_valid_d      = 1'b0;
     state_d          = state;
     pc_d             = pc;
 
@@ -56,9 +58,9 @@ module fetch_stage #(
         if (alu_branch_taken_i | is_jump_i)
           state_d = FLUSH;
         else if (instr_valid_i) begin
-          dec_valid_o   = 1'b1;
-          instruction_o = instr_i;
-          dec_pc_o      = pc;
+          dec_valid_d   = 1'b1;
+          dec_instr_d   = instr_i;
+          dec_pc_d      = pc;
           pc_d          = (pc + 1) % MEM_SIZE;
           state_d       = MEM_REQ;
         end
@@ -77,9 +79,15 @@ module fetch_stage #(
       state          <= IDLE;
       pc             <= 1;
       branch_target  <= '0;
+      dec_valid_o    <= 1'b0;
+      dec_pc_o       <= '0;
+      instruction_o  <= '0;
     end else begin
       state          <= state_d;
       pc             <= pc_d;
+      dec_valid_o    <= dec_valid_d;
+      dec_pc_o       <= dec_pc_d;
+      instruction_o  <= dec_instr_d;
 
       if (alu_branch_taken_i)
         branch_target <= pc_branch_offset_i;

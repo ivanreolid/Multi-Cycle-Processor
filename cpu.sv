@@ -26,21 +26,11 @@ module cpu (
 `endif
 );
 
-  // Fetch stage wires
-  logic dec_valid_d;
-  logic [ADDR_WIDTH-1:0] dec_pc_d;
-  instruction_t instruction_d;
-
   // Decode stage wires
   logic [ADDR_WIDTH-1:0] dec_pc;
-  logic [DATA_WIDTH-1:0] dec_offset_sign_extend;
   logic [REGISTER_WIDTH-1:0] reg_a;
-  logic [REGISTER_WIDTH-1:0] dec_wr_reg;
-  logic [OPCODE_WIDTH-1:0] dec_instr_opcode;
-  logic [ADDR_WIDTH-1:0] dec_branch_offset;
   logic [DATA_WIDTH-1:0] dec_reg_a_data, dec_reg_b_data;
-  logic dec_reg_wr_en;
-  logic dec_valid, alu_valid_d;
+  logic dec_valid;
   instruction_t instruction_q;
 
   // ALU stage wires
@@ -50,13 +40,12 @@ module cpu (
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend;
   logic [OPCODE_WIDTH-1:0] alu_instr_opcode;
   logic [ADDR_WIDTH-1:0] alu_pc_branch_offset;
-  logic [DATA_WIDTH-1:0] alu_alu_result;
   logic [ADDR_WIDTH-1:0] jump_address;
   logic [REGISTER_WIDTH-1:0] alu_wr_reg;
   logic alu_reg_wr_en;
-  logic alu_is_load, alu_is_store, is_jump;
+  logic is_jump;
   logic alu_branch_taken;
-  logic alu_valid, mem_valid_d;
+  logic alu_valid;
 `ifndef SYNTHESIS
   instruction_t debug_alu_instr;
 `endif
@@ -69,7 +58,7 @@ module cpu (
   logic mem_reg_wr_en;
   logic mem_is_load, mem_is_store;
   logic mem_branch_taken;
-  logic mem_valid, wb_valid_d;
+  logic mem_valid;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc;
   logic debug_store_is_completed;
@@ -105,10 +94,10 @@ module cpu (
     .instr_valid_i      (imem_instr_valid_i),
     .instr_i            (imem_instr_i),
     .imem_req_valid_o   (imem_req_valid_o),
-    .dec_valid_o        (dec_valid_d),
+    .dec_valid_o        (dec_valid),
     .imem_req_pc_o      (pc_o),
-    .dec_pc_o           (dec_pc_d),
-    .instruction_o      (instruction_d)
+    .dec_pc_o           (dec_pc),
+    .instruction_o      (instruction_q)
   );
 
   decode_stage #(
@@ -117,36 +106,51 @@ module cpu (
     .REGISTER_WIDTH       (REGISTER_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) decode_stage (
+    .clk_i                (clk_i),
+    .rst_i                (rst_i),
     .valid_i              (dec_valid),
     .is_jump_i            (is_jump),
     .branch_taken_i       (alu_branch_taken),
+    .pc_i                 (dec_pc),
+    .reg_a_data_i         (dec_reg_a_data),
+    .reg_b_data_i         (dec_reg_b_data),
     .instruction_i        (instruction_q),
-    .alu_valid_o          (alu_valid_d),
-    .offset_sign_extend_o (dec_offset_sign_extend),
+    .alu_valid_o          (alu_valid),
+    .offset_sign_extend_o (alu_offset_sign_extend),
     .reg_a_o              (reg_a),
-    .reg_wr_en_o          (dec_reg_wr_en),
-    .wr_reg_o             (dec_wr_reg),
-    .instr_opcode_o       (dec_instr_opcode),
-    .branch_offset_o      (dec_branch_offset)
+    .reg_wr_en_o          (alu_reg_wr_en),
+    .wr_reg_o             (alu_wr_reg),
+    .instr_opcode_o       (alu_instr_opcode),
+    .branch_offset_o      (alu_branch_offset),
+    .alu_pc_o             (alu_pc),
+    .alu_reg_a_data_o     (alu_reg_a_data),
+    .alu_reg_b_data_o     (alu_reg_b_data)
   );
 
   alu_stage #(
     .DATA_WIDTH           (DATA_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) alu_stage (
+    .clk_i                (clk_i),
+    .rst_i                (rst_i),
+    .valid_i              (alu_valid),
+    .reg_wr_en_i          (alu_reg_wr_en),
     .data_a_i             (alu_reg_a_data),
     .data_b_i             (alu_reg_b_data),
     .pc_i                 (alu_pc),
     .branch_offset_i      (alu_branch_offset),
     .offset_sign_extend_i (alu_offset_sign_extend),
     .instr_opcode_i       (alu_instr_opcode),
-    .valid_i              (alu_valid),
-    .mem_valid_o          (mem_valid_d),
+    .wr_reg_i             (alu_wr_reg),
+    .mem_valid_o          (mem_valid),
+    .mem_reg_wr_en_o      (mem_reg_wr_en),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
-    .alu_result_o         (alu_alu_result),
-    .is_load_o            (alu_is_load),
-    .is_store_o           (alu_is_store),
+    .mem_alu_result_o     (mem_alu_result),
+    .mem_reg_a_data_o     (mem_reg_a_data),
+    .mem_wr_reg_o         (mem_wr_reg),
+    .mem_is_load_o        (mem_is_load),
+    .mem_is_store_o       (mem_is_store),
     .branch_taken_o       (alu_branch_taken),
     .is_jump_o            (is_jump)
   );
@@ -160,10 +164,17 @@ module cpu (
     .rst_i                      (rst_i),
     .alu_result_i               (mem_alu_result),
     .reg_a_data_i               (mem_reg_a_data),
+    .wr_reg_i                   (mem_wr_reg),
     .valid_i                    (mem_valid),
     .is_store_i                 (mem_is_store),
-    .wb_valid_o                 (wb_valid_d),
-    .data_from_mem_o            (mem_data_from_mem),
+    .is_load_i                  (mem_is_load),
+    .reg_wr_en_i                (mem_reg_wr_en),
+    .wb_valid_o                 (wb_valid),
+    .wb_reg_wr_en_o             (wb_reg_wr_en),
+    .wb_is_load_o               (wb_is_load),
+    .wb_wr_reg_o                (wb_wr_reg),
+    .wb_data_from_mem_o         (wb_data_from_mem),
+    .wb_alu_result_o            (wb_alu_result),
 `ifndef SYNTHESIS
     .debug_store_is_completed_o (debug_store_is_completed),
     .debug_dmem_o               (debug_dmem_o)
@@ -204,44 +215,10 @@ module cpu (
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      dec_valid         <= 1'b0;
       is_jump           <= 1'b0;
-      alu_valid         <= 1'b0;
       alu_branch_taken  <= 1'b0;
       alu_branch_offset <= 0;
-      alu_is_load       <= 1'b0;
-      alu_is_store      <= 1'b0;
-      alu_reg_wr_en     <= 1'b0;
-      mem_valid         <= 1'b0;
-      mem_is_load       <= 1'b0;
-      mem_is_store      <= 1'b0;
-      wb_valid          <= 1'b0;
     end else begin
-      instruction_q          <= instruction_d;
-      dec_valid              <= dec_valid_d;
-      dec_pc                 <= dec_pc_d;
-      alu_valid              <= alu_valid_d;
-      alu_pc                 <= dec_pc;
-      alu_reg_wr_en          <= dec_reg_wr_en;
-      alu_wr_reg             <= dec_wr_reg;
-      alu_reg_a_data         <= dec_reg_a_data;
-      alu_reg_b_data         <= dec_reg_b_data;
-      alu_offset_sign_extend <= dec_offset_sign_extend;
-      alu_instr_opcode       <= dec_instr_opcode;
-      alu_branch_offset      <= dec_branch_offset;
-      mem_valid              <= mem_valid_d;
-      mem_reg_wr_en          <= alu_reg_wr_en;
-      mem_wr_reg             <= alu_wr_reg;
-      mem_reg_a_data         <= alu_reg_a_data;
-      mem_is_load            <= alu_is_load;
-      mem_is_store           <= alu_is_store;
-      mem_alu_result         <= alu_alu_result;
-      wb_valid               <= wb_valid_d;
-      wb_reg_wr_en           <= mem_reg_wr_en;
-      wb_wr_reg              <= mem_wr_reg;
-      wb_is_load             <= mem_is_load;
-      wb_alu_result          <= mem_alu_result;
-      wb_data_from_mem       <= mem_data_from_mem;
 `ifndef SYNTHESIS
       debug_alu_instr        <= instruction_q;
       debug_mem_instr        <= debug_alu_instr;
