@@ -9,15 +9,16 @@ module fetch_stage #(
 )(
   input  logic clk_i,
   input  logic rst_i,
+  input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
   input  logic instr_valid_i,
   input  instruction_t instr_i,
-  output logic imem_req_valid_o,
+  output logic rd_req_valid_o,
   output logic dec_valid_o,
-  output logic [ADDR_WIDTH-1:0] imem_req_pc_o,
+  output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
   output instruction_t instruction_o
 );
@@ -39,8 +40,8 @@ module fetch_stage #(
   instruction_t dec_instr_d;
 
   always_comb begin : state_update
-    imem_req_valid_o = 1'b0;
-    imem_req_pc_o    = pc;
+    rd_req_valid_o = 1'b0;
+    mem_req_addr_o   = pc;
     dec_valid_d      = 1'b0;
     state_d          = state;
     pc_d             = pc;
@@ -50,9 +51,11 @@ module fetch_stage #(
         state_d = MEM_REQ;
       end
       MEM_REQ: begin
-        imem_req_valid_o = 1'b1;
-        imem_req_pc_o    = pc;
-        state_d          = MEM_WAIT;
+        if (!mem_req_i) begin
+          rd_req_valid_o = 1'b1;
+          mem_req_addr_o   = pc;
+          state_d          = MEM_WAIT;
+        end
       end
       MEM_WAIT: begin
         if (alu_branch_taken_i | is_jump_i)

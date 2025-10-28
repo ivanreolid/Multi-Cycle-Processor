@@ -10,18 +10,18 @@ module tb;
   logic rst;
 
   // CPU - IMEM communication wires
-  logic imem_instr_valid;
-  instruction_t imem_instr;
-  logic imem_req_valid;
-  logic [ADDR_WIDTH-1:0] pc;
+  logic mem_data_valid, mem_data_is_instr;
+  logic [DATA_WIDTH-1:0] mem_data;
+  logic rd_req_valid, wr_req_valid, req_is_instr;
+  logic [ADDR_WIDTH-1:0] req_address;
+  logic [DATA_WIDTH-1:0] wr_data;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
-  logic [DATA_WIDTH-1:0] cpu_regs [0:31];
-  
-  logic [DATA_WIDTH-1:0] model_regs [0:31];
-  logic [DATA_WIDTH-1:0] model_imem [0:MEM_SIZE-1];
-  logic [DATA_WIDTH-1:0] model_dmem [0:MEM_SIZE-1];
+  logic [DATA_WIDTH-1:0] cpu_regs [32];
+
+  logic [DATA_WIDTH-1:0] model_regs [32];
+  logic [DATA_WIDTH-1:0] model_mem [MEM_SIZE];
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
@@ -37,10 +37,14 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    .imem_instr_valid_i             (imem_instr_valid),
-    .imem_instr_i                   (imem_instr),
-    .imem_req_valid_o               (imem_req_valid),
-    .pc_o                           (pc),
+    .mem_data_valid_i               (mem_data_valid),
+    .mem_data_is_instr_i            (mem_data_is_instr),
+    .mem_data_i                     (mem_data),
+    .rd_req_valid_o                 (rd_req_valid),
+    .wr_req_valid_o                 (wr_req_valid),
+    .req_is_instr_o                 (req_is_instr),
+    .req_address_o                  (req_address),
+    .wr_data_o                      (wr_data),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
@@ -54,10 +58,14 @@ module tb;
   ) imem (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    .req_valid_i                    (imem_req_valid),
-    .address_i                      (pc),
-    .instruction_valid_o            (imem_instr_valid),
-    .instruction_o                  (imem_instr)
+    .rd_req_valid_i                 (rd_req_valid),
+    .wr_req_valid_i                 (wr_req_valid),
+    .req_is_instr_i                 (req_is_instr),
+    .address_i                      (req_address),
+    .wr_data_i                      (wr_data),
+    .data_valid_o                   (mem_data_valid),
+    .data_is_instr_o                (mem_data_is_instr),
+    .data_o                         (mem_data)
   );
 
   always_ff @(posedge clk) begin : check
@@ -72,7 +80,7 @@ module tb;
   initial begin
     clk = 1;
     rst = 0;
- 
+
     initialize_registers();
     initialize_memories();
 
@@ -94,30 +102,40 @@ module tb;
 
   function void initialize_memories();
     for (int i = 0; i < MEM_SIZE; ++i) begin
-      model_imem[i] = i * 100;
-      model_dmem[i] = i;
+      model_mem[i] = i * 100;
     end
-    model_imem[1] = 32'h4470;      // ADD r1, r2 -> r7
-    model_imem[2] = 32'h40B23;     // SUB r6, r5 -> r18
-    model_imem[3] = 32'h446F1;     // LW @17(r3) -> r15
-    model_imem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
-    model_imem[5] = 32'h36212;     // SW r1 -> @13(r17)
-    model_imem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
-    model_imem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
-    model_imem[8] = 32'h98DF9;     // BEQ r6, r6, 63
-    model_imem[61] = 32'h427A;     // BNE r1, r1, 3
-    model_imem[62] = 32'h4CAA;     // BNE r1, r6, 10
-    model_imem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
-    model_imem[72] = 32'h390AB;    // BLT r14, r8, 10
-    model_imem[73] = 32'h21CAB;    // BLT r8, r14, 10
-    model_imem[83] = 32'h6BEAC;    // BGE r26, r31, 10
-    model_imem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    //model_imem[94] = 32'h7800D;    // JMP r30
-    model_imem[94] = 32'h400D;     // JMP r1
+    /*model_mem[1] = 32'h4470;      // ADD r1, r2 -> r7
+    model_mem[2] = 32'h40B23;     // SUB r6, r5 -> r18
+    model_mem[3] = 32'h446F1;     // LW @17(r3) -> r15
+    model_mem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
+    model_mem[5] = 32'h36212;     // SW r1 -> @13(r17)
+    model_mem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
+    model_mem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
+    model_mem[8] = 32'h98DF9;     // BEQ r6, r6, 63
+    model_mem[61] = 32'h427A;     // BNE r1, r1, 3
+    model_mem[62] = 32'h4CAA;     // BNE r1, r6, 10
+    model_mem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
+    model_mem[72] = 32'h390AB;    // BLT r14, r8, 10
+    model_mem[73] = 32'h21CAB;    // BLT r8, r14, 10
+    model_mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
+    model_mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
+    model_mem[94] = 32'h400D;     // JMP r1*/
+
+    model_mem[1] = 32'h446F1;
+    model_mem[2] = 32'h4470;
+    model_mem[3] = 32'h4470;
+    model_mem[4] = 32'h4470;
+    model_mem[5] = 32'h4470;
+    model_mem[6] = 32'h4470;
+    model_mem[7] = 32'h4470;
+    model_mem[8] = 32'h4470;
+    model_mem[9] = 32'h4470;
+    model_mem[10] = 32'h4470;
+
   endfunction
 
   task automatic execute_and_compare();
-    model_instr = model_imem[model_pc];
+    model_instr = model_mem[model_pc];
     new_model_pc = (model_pc + 1) % MEM_SIZE;
     error_msg = "";
     error = 1'b0;
@@ -151,8 +169,8 @@ module tb;
     pc_plus_offset = (model_pc + {model_instr.free, model_instr.rd}) % MEM_SIZE;
     case (model_instr.opcode)
       ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb]; 
-      LW:  model_regs[model_instr.rd] = model_dmem[offset_sign_extend + model_instr.rb];
-      SW:  model_dmem[offset_sign_extend + model_instr.rb] = model_instr.rd;
+      LW:  model_regs[model_instr.rd] = model_mem[offset_sign_extend + model_instr.rb];
+      SW:  model_mem[offset_sign_extend + model_instr.rb] = model_instr.rd;
       SUB: model_regs[model_instr.rd] = model_regs[model_instr.ra] - model_regs[model_instr.rb];
       AND: model_regs[model_instr.rd] = model_regs[model_instr.ra] & model_regs[model_instr.rb];
       MUL: model_regs[model_instr.rd] = model_regs[model_instr.ra] * model_regs[model_instr.rb];

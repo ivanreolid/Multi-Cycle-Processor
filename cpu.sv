@@ -10,10 +10,14 @@ import params_pkg::*;
 module cpu (
   input  logic clk_i,
   input  logic rst_i,
-  input  logic imem_instr_valid_i,
-  input  instruction_t imem_instr_i,
-  output logic imem_req_valid_o,
-  output logic [ADDR_WIDTH-1:0] pc_o,
+  input  logic mem_data_valid_i,
+  input  logic mem_data_is_instr_i,
+  input  logic [DATA_WIDTH-1:0] mem_data_i,
+  output logic rd_req_valid_o,
+  output logic wr_req_valid_o,
+  output logic req_is_instr_o,
+  output logic [ADDR_WIDTH-1:0] req_address_o,
+  output logic [DATA_WIDTH-1:0] wr_data_o,
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -21,6 +25,10 @@ module cpu (
   output instruction_t debug_instr_o
 `endif
 );
+
+  // Fetch stage wires
+  logic fetch_rd_req_valid;
+  logic [ADDR_WIDTH-1:0] fetch_req_address;
 
   // Decode stage wires
   logic [ADDR_WIDTH-1:0] dec_pc;
@@ -55,10 +63,11 @@ module cpu (
   logic mem_reg_wr_en;
   logic mem_is_load, mem_is_store;
   logic mem_branch_taken;
-  logic mem_valid;
+  logic mem_valid, wb_valid_d;
+  logic mem_rd_req_valid, mem_wr_req_valid;
+  logic [ADDR_WIDTH-1:0] mem_req_address;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc;
-  logic debug_store_is_completed;
   instruction_t debug_mem_instr;
 `endif
 
@@ -81,19 +90,20 @@ module cpu (
     .DATA_WIDTH         (DATA_WIDTH),
     .MEM_SIZE           (MEM_SIZE)
   ) fetch_stage (
-    .clk_i              (clk_i),
-    .rst_i              (rst_i),
-    .alu_branch_taken_i (alu_branch_taken),
-    .is_jump_i          (is_jump),
-    .pc_branch_offset_i (alu_pc_branch_offset),
-    .jump_address_i     (jump_address),
-    .instr_valid_i      (imem_instr_valid_i),
-    .instr_i            (imem_instr_i),
-    .imem_req_valid_o   (imem_req_valid_o),
-    .dec_valid_o        (dec_valid),
-    .imem_req_pc_o      (pc_o),
-    .dec_pc_o           (dec_pc),
-    .instruction_o      (instruction_q)
+    .clk_i               (clk_i),
+    .rst_i               (rst_i),
+    .mem_req_i           (mem_rd_req_valid | mem_wr_req_valid),
+    .alu_branch_taken_i  (alu_branch_taken),
+    .is_jump_i           (is_jump),
+    .pc_branch_offset_i  (alu_pc_branch_offset),
+    .jump_address_i      (jump_address),
+    .instr_valid_i       (mem_data_valid_i & mem_data_is_instr_i),
+    .instr_i             (mem_data_i),
+    .rd_req_valid_o      (fetch_rd_req_valid),
+    .dec_valid_o         (dec_valid),
+    .mem_req_addr_o      (fetch_req_address),
+    .dec_pc_o            (dec_pc),
+    .instruction_o       (instruction_q)
   );
 
   decode_stage #(
@@ -173,10 +183,12 @@ module cpu (
     .alu_result_i               (mem_alu_result),
     .reg_a_data_i               (mem_reg_a_data),
     .wr_reg_i                   (mem_wr_reg),
+    .mem_data_i                 (mem_data_i),
     .valid_i                    (mem_valid),
-    .is_store_i                 (mem_is_store),
     .is_load_i                  (mem_is_load),
+    .is_store_i                 (mem_is_store),
     .reg_wr_en_i                (mem_reg_wr_en),
+    .mem_data_is_valid_i        (mem_data_valid_i & ~mem_data_is_instr_i),
 `ifndef SYNTHESIS
     .debug_pc_i                 (debug_mem_pc),
     .debug_instr_i              (debug_mem_instr),
@@ -184,11 +196,14 @@ module cpu (
     .wb_valid_o                 (wb_valid),
     .wb_reg_wr_en_o             (wb_reg_wr_en),
     .wb_is_load_o               (wb_is_load),
+    .rd_req_valid_o             (mem_rd_req_valid),
+    .wr_req_valid_o             (mem_wr_req_valid),
     .wb_wr_reg_o                (wb_wr_reg),
     .wb_data_from_mem_o         (wb_data_from_mem),
     .wb_alu_result_o            (wb_alu_result),
+    .mem_req_address_o          (mem_req_address),
+    .wr_data_o                  (wr_data_o),
 `ifndef SYNTHESIS
-    .debug_store_is_completed_o (debug_store_is_completed),
     .debug_wb_pc_o              (debug_wb_pc),
     .debug_wb_instr_o           (debug_wb_instr)
 `endif
@@ -240,5 +255,10 @@ module cpu (
       alu_branch_offset <= 0;
     end
   end
+
+  assign rd_req_valid_o = fetch_rd_req_valid | mem_rd_req_valid;
+  assign wr_req_valid_o = mem_wr_req_valid;
+  assign req_is_instr_o = fetch_rd_req_valid;
+  assign req_address_o  = fetch_rd_req_valid ? fetch_req_address : mem_req_address;
 
 endmodule

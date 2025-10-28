@@ -7,16 +7,30 @@ module imem #(
 )(
   input  logic clk_i,
   input  logic rst_i,
-  input  logic req_valid_i,
+  input  logic rd_req_valid_i,
+  input  logic wr_req_valid_i,
+  input  logic req_is_instr_i,
   input  logic [ADDR_WIDTH-1:0] address_i,
-  output logic instruction_valid_o,
-  output logic [DATA_WIDTH-1:0] instruction_o
+  input  logic [DATA_WIDTH-1:0] wr_data_i,
+  output logic data_valid_o,
+  output logic data_is_instr_o,
+  output logic [DATA_WIDTH-1:0] data_o
 );
 
-  logic [DATA_WIDTH-1:0] mem [0:MEM_SIZE-1];
+  logic [DATA_WIDTH-1:0] mem [MEM_SIZE];
 
-  logic pipe1_valid_d, pipe2_valid_d, pipe3_valid_d, pipe4_valid_d, pipe5_valid_d, pipe6_valid_d, pipe7_valid_d, pipe8_valid_d, pipe9_valid_d, pipe10_valid_d;
-  logic pipe1_valid, pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid, pipe6_valid, pipe7_valid, pipe8_valid, pipe9_valid, pipe10_valid;
+  logic pipe1_valid_d, pipe2_valid_d, pipe3_valid_d, pipe4_valid_d, pipe5_valid_d, pipe6_valid_d,
+        pipe7_valid_d, pipe8_valid_d, pipe9_valid_d, pipe10_valid_d;
+  logic pipe1_valid, pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid, pipe6_valid, pipe7_valid,
+        pipe8_valid, pipe9_valid, pipe10_valid;
+
+  logic pipe1_is_wr_d, pipe2_is_wr_d, pipe3_is_wr_d, pipe4_is_wr_d, pipe5_is_wr_d;
+  logic pipe1_is_wr, pipe2_is_wr, pipe3_is_wr, pipe4_is_wr, pipe5_is_wr;
+
+  logic pipe1_is_instr_d, pipe2_is_instr_d, pipe3_is_instr_d, pipe4_is_instr_d, pipe5_is_instr_d,
+        pipe6_is_instr_d, pipe7_is_instr_d, pipe8_is_instr_d, pipe9_is_instr_d, pipe10_is_instr_d;
+  logic pipe1_is_instr, pipe2_is_instr, pipe3_is_instr, pipe4_is_instr, pipe5_is_instr,
+        pipe6_is_instr, pipe7_is_instr, pipe8_is_instr, pipe9_is_instr, pipe10_is_instr;
 
   logic [ADDR_WIDTH-1:0] pipe1_addr_d, pipe2_addr_d, pipe3_addr_d, pipe4_addr_d, pipe5_addr_d;
   logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
@@ -24,59 +38,101 @@ module imem #(
   logic [ADDR_WIDTH-1:0] pipe6_instr_d, pipe7_instr_d, pipe8_instr_d, pipe9_instr_d, pipe10_instr_d;
   logic [ADDR_WIDTH-1:0] pipe6_instr, pipe7_instr, pipe8_instr, pipe9_instr, pipe10_instr;
 
+  logic [DATA_WIDTH-1:0] pipe1_data_d, pipe2_data_d, pipe3_data_d, pipe4_data_d, pipe5_data_d;
+  logic [DATA_WIDTH-1:0] pipe1_data, pipe2_data, pipe3_data, pipe4_data, pipe5_data;
+
   always_ff @(posedge clk_i) begin : pipeline
     if (!rst_i) begin
-      pipe1_valid   <= 1'b0;
-      pipe2_valid   <= 1'b0;
-      pipe3_valid   <= 1'b0;
-      pipe4_valid   <= 1'b0;
-      pipe5_valid   <= 1'b0;
-      pipe6_valid   <= 1'b0;
-      pipe7_valid   <= 1'b0;
-      pipe8_valid   <= 1'b0;
-      pipe9_valid   <= 1'b0;
-      pipe10_valid  <= 1'b0;
+      pipe1_valid     <= 1'b0;
+      pipe2_valid     <= 1'b0;
+      pipe3_valid     <= 1'b0;
+      pipe4_valid     <= 1'b0;
+      pipe5_valid     <= 1'b0;
+      pipe6_valid     <= 1'b0;
+      pipe7_valid     <= 1'b0;
+      pipe8_valid     <= 1'b0;
+      pipe9_valid     <= 1'b0;
+      pipe10_valid    <= 1'b0;
+      pipe1_is_instr  <= 1'b0;
+      pipe2_is_instr  <= 1'b0;
+      pipe3_is_instr  <= 1'b0;
+      pipe4_is_instr  <= 1'b0;
+      pipe5_is_instr  <= 1'b0;
+      pipe6_is_instr  <= 1'b0;
+      pipe7_is_instr  <= 1'b0;
+      pipe8_is_instr  <= 1'b0;
+      pipe9_is_instr  <= 1'b0;
+      pipe10_is_instr <= 1'b0;
+      pipe1_is_wr     <= 1'b0;
+      pipe2_is_wr     <= 1'b0;
+      pipe3_is_wr     <= 1'b0;
+      pipe4_is_wr     <= 1'b0;
+      pipe5_is_wr     <= 1'b0;
     end else begin
-      pipe1_valid   <= pipe1_valid_d;
-      pipe2_valid   <= pipe1_valid;
-      pipe3_valid   <= pipe2_valid;
-      pipe4_valid   <= pipe3_valid;
-      pipe5_valid   <= pipe4_valid;
-      pipe6_valid   <= pipe5_valid;
-      pipe7_valid   <= pipe6_valid;
-      pipe8_valid   <= pipe7_valid;
-      pipe9_valid   <= pipe8_valid;
-      pipe10_valid  <= pipe9_valid;
-      pipe1_addr    <= pipe1_addr_d;
-      pipe2_addr    <= pipe1_addr;
-      pipe3_addr    <= pipe2_addr;
-      pipe4_addr    <= pipe3_addr;
-      pipe5_addr    <= pipe4_addr;
-      pipe6_instr   <= pipe6_instr_d;
-      pipe7_instr   <= pipe6_instr;
-      pipe8_instr   <= pipe7_instr;
-      pipe9_instr   <= pipe8_instr;
-      pipe10_instr  <= pipe9_instr;
+      pipe1_valid     <= pipe1_valid_d;
+      pipe2_valid     <= pipe1_valid;
+      pipe3_valid     <= pipe2_valid;
+      pipe4_valid     <= pipe3_valid;
+      pipe5_valid     <= pipe4_valid;
+      pipe6_valid     <= pipe5_is_wr ? 1'b0 : pipe5_valid;
+      pipe7_valid     <= pipe6_valid;
+      pipe8_valid     <= pipe7_valid;
+      pipe9_valid     <= pipe8_valid;
+      pipe10_valid    <= pipe9_valid;
+      pipe1_is_instr  <= pipe1_is_instr_d;
+      pipe2_is_instr  <= pipe1_is_instr;
+      pipe3_is_instr  <= pipe2_is_instr;
+      pipe4_is_instr  <= pipe3_is_instr;
+      pipe5_is_instr  <= pipe4_is_instr;
+      pipe6_is_instr  <= pipe5_is_instr;
+      pipe7_is_instr  <= pipe6_is_instr;
+      pipe8_is_instr  <= pipe7_is_instr;
+      pipe9_is_instr  <= pipe8_is_instr;
+      pipe10_is_instr <= pipe9_is_instr;
+      pipe1_addr      <= pipe1_addr_d;
+      pipe2_addr      <= pipe1_addr;
+      pipe3_addr      <= pipe2_addr;
+      pipe4_addr      <= pipe3_addr;
+      pipe5_addr      <= pipe4_addr;
+      pipe6_instr     <= pipe6_instr_d;
+      pipe7_instr     <= pipe6_instr;
+      pipe8_instr     <= pipe7_instr;
+      pipe9_instr     <= pipe8_instr;
+      pipe10_instr    <= pipe9_instr;
+      pipe1_data      <= pipe1_data_d;
+      pipe2_data      <= pipe1_data;
+      pipe3_data      <= pipe2_data;
+      pipe4_data      <= pipe3_data;
+      pipe5_data      <= pipe4_data;
     end
   end
- 
-  always_comb begin : memory_read
-    if (pipe5_valid)
-      pipe6_instr_d = mem[pipe5_addr];
+
+  always_comb begin : memory_operation
+    if (pipe5_valid) begin
+      if (pipe5_is_wr)
+        mem[pipe5_addr] = pipe5_data;
+      else
+        pipe6_instr_d = mem[pipe5_addr];
+    end
   end
 
-  assign pipe1_valid_d = req_valid_i;
-  assign pipe1_addr_d = address_i;
+  assign pipe1_valid_d = rd_req_valid_i | wr_req_valid_i;
+  assign pipe1_is_instr_d = req_is_instr_i;
+  assign pipe1_is_wr_d = wr_req_valid_i;
 
-  assign instruction_valid_o = pipe10_valid;
-  assign instruction_o = pipe10_instr;
+  assign pipe1_addr_d = address_i;
+  assign pipe1_data_d = wr_data_i;
+
+  assign data_valid_o = pipe10_valid;
+  assign data_is_instr_o = pipe10_is_instr;
+  assign data_o = pipe10_instr;
 
   initial begin
     // TODO: Populate memory with correct instructions
     for (int i = 0; i < MEM_SIZE; ++i) begin
       mem[i] = i * 100;
     end
-    mem[1] = 32'h4470;      // ADD r1, r2 -> r7
+    /*mem[1] = 32'h4470;      // ADD r1, r2 -> r7
     mem[2] = 32'h40B23;     // SUB r16, r5 -> r18
     mem[3] = 32'h446F1;     // LW @17(r3) -> r15
     mem[4] = 32'hFFFE1981;  // LW @-8(r12) -> r24
@@ -91,14 +147,18 @@ module imem #(
     mem[73] = 32'h21CAB;    // BLT r8, r14, 10
     mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
     mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    //mem[94] = 32'h7800D;    // JMP r30
-    mem[94] = 32'h400D;     // JMP r1
-
-    // RAW
-    /*mem[1] = 32'h220;    // ADD r0, r1 -> r2
-    mem[2] = 32'h8650;   // ADD r2, r3 -> r5
-    mem[3] = 32'h18A70;  // ADD r6, r5 -> r7
-    mem[4] = 32'h20E90;  // ADD r8, r7 -> r9*/
+    mem[94] = 32'h400D;     // JMP r1*/
+    
+    mem[1] = 32'h446F1;
+    mem[2] = 32'h4470;
+    mem[3] = 32'h4470;
+    mem[4] = 32'h4470;
+    mem[5] = 32'h4470;
+    mem[6] = 32'h4470;
+    mem[7] = 32'h4470;
+    mem[8] = 32'h4470;
+    mem[9] = 32'h4470;
+    mem[10] = 32'h4470;
   end
 
 endmodule
