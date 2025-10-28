@@ -17,16 +17,15 @@ module tb;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
-  logic [DATA_WIDTH-1:0] cpu_dmem [0:MEM_SIZE-1];
   logic [DATA_WIDTH-1:0] cpu_regs [0:31];
   
   logic [DATA_WIDTH-1:0] model_regs [0:31];
   logic [DATA_WIDTH-1:0] model_imem [0:MEM_SIZE-1];
   logic [DATA_WIDTH-1:0] model_dmem [0:MEM_SIZE-1];
 
-  logic cpu_store_is_completed, cpu_non_store_is_completed;
-  instruction_t model_instr, cpu_mem_instr, cpu_wb_instr;
-  logic [ADDR_WIDTH-1:0] cpu_mem_pc, cpu_wb_pc;
+  logic cpu_instr_is_completed;
+  instruction_t model_instr, cpu_wb_instr;
+  logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -42,14 +41,10 @@ module tb;
     .imem_instr_i                   (imem_instr),
     .imem_req_valid_o               (imem_req_valid),
     .pc_o                           (pc),
-    .debug_store_is_completed_o     (cpu_store_is_completed),
-    .debug_non_store_is_completed_o (cpu_non_store_is_completed),
-    .debug_dmem_o                   (cpu_dmem),
+    .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
-    .debug_mem_pc_o                 (cpu_mem_pc),
-    .debug_wb_pc_o                  (cpu_wb_pc),
-    .debug_mem_instr_o              (cpu_mem_instr),
-    .debug_wb_instr_o               (cpu_wb_instr)
+    .debug_pc_o                     (cpu_wb_pc),
+    .debug_instr_o                  (cpu_wb_instr)
   );
 
   imem #(
@@ -69,10 +64,8 @@ module tb;
     if (!rst) begin
       model_pc = 1;
     end else begin
-      if (cpu_non_store_is_completed)
-        execute_and_compare(1'b1);
-      if (cpu_store_is_completed)
-        execute_and_compare(1'b0);
+      if (cpu_instr_is_completed)
+        execute_and_compare();
     end
   end
 
@@ -123,31 +116,23 @@ module tb;
     model_imem[94] = 32'h400D;     // JMP r1
   endfunction
 
-  task automatic execute_and_compare(bit non_store);
+  task automatic execute_and_compare();
     model_instr = model_imem[model_pc];
     new_model_pc = (model_pc + 1) % MEM_SIZE;
     error_msg = "";
     error = 1'b0;
     execute_model_instr();
-    check_completed_instr(non_store);
-
-    if (non_store)
-      check_registers();
-    else begin
-      check_data_memory();
-    end
-
+    check_completed_instr();
+    check_registers();
     print_check_result();
     model_pc = new_model_pc;
   endtask
 
-  task automatic check_completed_instr(bit non_store);
-    instruction_t cpu_instr_completed = non_store ? cpu_wb_instr : cpu_mem_instr;
-    logic [ADDR_WIDTH-1:0] cpu_pc_completed = non_store ? cpu_wb_pc : cpu_mem_pc;
-    if (model_instr != cpu_instr_completed) begin
+  task automatic check_completed_instr();
+    if (model_instr != cpu_wb_instr) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s)\n",
-                  cpu_pc_completed, cpu_instr_completed, cpu_instr_completed.free, cpu_instr_completed.ra, cpu_instr_completed.rb,
-                  cpu_instr_completed.rd, opcode_to_string(cpu_instr_completed.opcode))};
+                  cpu_wb_pc, cpu_wb_instr, cpu_wb_instr.free, cpu_wb_instr.ra, cpu_wb_instr.rb,
+                  cpu_wb_instr.rd, opcode_to_string(cpu_wb_instr.opcode))};
       error = 1'b1;
     end
   endtask
@@ -156,15 +141,6 @@ module tb;
     for (int i = 0; i < 32; ++i) begin
       if (model_regs[i] != cpu_regs[i]) begin
         error_msg = {error_msg, $sformatf(" Register %0d: model=0x%0h, CPU=0x%0h\n", i, model_regs[i], cpu_regs[i])};
-        error = 1'b1;
-      end
-    end
-  endtask
-
-  task check_data_memory();
-    for (int i = 0; i < MEM_SIZE; ++i) begin
-      if (model_dmem[i] != cpu_dmem[i]) begin
-        error_msg = {error_msg, $sformatf(" Data memory address 0x%0h: model=0x%0h, CPU=0x%0h\n", i, model_dmem[i], cpu_dmem[i])};
         error = 1'b1;
       end
     end

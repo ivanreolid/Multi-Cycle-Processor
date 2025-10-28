@@ -18,6 +18,10 @@ module alu_stage #(
   input  logic [DATA_WIDTH-1:0] offset_sign_extend_i,
   input  logic [OPCODE_WIDTH-1:0] instr_opcode_i,
   input  logic [REGISTER_WIDTH-1:0] wr_reg_i,
+`ifndef SYNTHESIS
+  input  logic [ADDR_WIDTH-1:0] debug_pc_i,
+  input  instruction_t debug_instr_i,
+`endif
   output logic mem_valid_o,
   output logic mem_reg_wr_en_o,
   output logic [ADDR_WIDTH-1:0] pc_branch_offset_o,
@@ -28,7 +32,11 @@ module alu_stage #(
   output logic mem_is_load_o,
   output logic mem_is_store_o,
   output logic branch_taken_o,
-  output logic is_jump_o
+  output logic is_jump_o,
+`ifndef SYNTHESIS
+  output logic [ADDR_WIDTH-1:0] debug_mem_pc_o,
+  output instruction_t debug_mem_instr_o
+`endif
 );
 
   logic [DATA_WIDTH-1:0] data_a_to_alu;
@@ -51,6 +59,10 @@ module alu_stage #(
       mem_reg_a_data_o <= data_a_i;
       mem_wr_reg_o     <= wr_reg_i;
       mem_alu_result_o <= mem_alu_result_d;
+`ifndef SYNTHESIS
+      debug_mem_pc_o    <= debug_pc_i;
+      debug_mem_instr_o <= debug_instr_i;
+`endif
     end
   end
 

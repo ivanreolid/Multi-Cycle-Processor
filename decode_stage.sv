@@ -24,7 +24,11 @@ module decode_stage #(
   output logic [ADDR_WIDTH-1:0] branch_offset_o,
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_reg_a_data_o,
-  output logic [DATA_WIDTH-1:0] alu_reg_b_data_o
+  output logic [DATA_WIDTH-1:0] alu_reg_b_data_o,
+`ifndef SYNTHESIS
+  output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
+  output instruction_t debug_alu_instr_o
+`endif
 );
 
   logic is_branch, is_store;
@@ -37,8 +41,8 @@ module decode_stage #(
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      alu_valid_o <= 1'b0;
-      reg_wr_en_o <= 1'b0;
+      alu_valid_o          <= 1'b0;
+      reg_wr_en_o          <= 1'b0;
     end else begin
       alu_valid_o          <= valid_i & ~is_jump_i & ~branch_taken_i;
       reg_wr_en_o          <= reg_wr_en_d;
@@ -49,6 +53,10 @@ module decode_stage #(
       alu_pc_o             <= pc_i;
       alu_reg_a_data_o     <= reg_a_data_i;
       alu_reg_b_data_o     <= reg_b_data_i;
+`ifndef SYNTHESIS
+      debug_alu_pc_o       <= pc_i;
+      debug_alu_instr_o    <= instruction_i;
+`endif
     end
   end
 

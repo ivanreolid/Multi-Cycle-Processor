@@ -17,6 +17,10 @@ module mem_stage #(
   input  logic is_store_i,
   input  logic is_load_i,
   input  logic reg_wr_en_i,
+`ifndef SYNTHESIS
+  input  logic [ADDR_WIDTH-1:0] debug_pc_i,
+  input  instruction_t debug_instr_i,
+`endif
   output logic wb_valid_o,
   output logic wb_reg_wr_en_o,
   output logic wb_is_load_o,
@@ -25,7 +29,8 @@ module mem_stage #(
   output logic [DATA_WIDTH-1:0] wb_alu_result_o,
 `ifndef SYNTHESIS
   output logic debug_store_is_completed_o,
-  output logic [DATA_WIDTH-1:0] debug_dmem_o [MEM_SIZE]
+  output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
+  output instruction_t debug_wb_instr_o
 `endif
 );
 
@@ -45,6 +50,10 @@ module mem_stage #(
       wb_wr_reg_o        <= wr_reg_i;
       wb_alu_result_o    <= alu_result_i;
       wb_data_from_mem_o <= wb_data_from_mem_d;
+`ifndef SYNTHESIS
+      debug_wb_pc_o      <= debug_pc_i;
+      debug_wb_instr_o   <= debug_instr_i;
+`endif
     end
   end
 
@@ -60,10 +69,7 @@ module mem_stage #(
     .wr_en_i   (wr_en),
     .addr_i    (alu_result_i),
     .wr_data_i (reg_a_data_i),
-    .rd_data_o (wb_data_from_mem_d),
-`ifndef SYNTHESIS
-    .debug_dmem_o (debug_dmem_o)
-`endif
+    .rd_data_o (wb_data_from_mem_d)
   );
 
 `ifndef SYNTHESIS
