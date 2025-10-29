@@ -65,6 +65,7 @@ module cpu (
   logic mem_branch_taken;
   logic mem_valid, wb_valid_d;
   logic mem_rd_req_valid, mem_wr_req_valid;
+  logic mem_stall;
   logic [ADDR_WIDTH-1:0] mem_req_address;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc;
@@ -95,6 +96,7 @@ module cpu (
     .mem_req_i           (mem_rd_req_valid | mem_wr_req_valid),
     .alu_branch_taken_i  (alu_branch_taken),
     .is_jump_i           (is_jump),
+    .mem_stall_i         (mem_stall),
     .pc_branch_offset_i  (alu_pc_branch_offset),
     .jump_address_i      (jump_address),
     .instr_valid_i       (mem_data_valid_i & mem_data_is_instr_i),
@@ -117,6 +119,7 @@ module cpu (
     .valid_i              (dec_valid),
     .is_jump_i            (is_jump),
     .branch_taken_i       (alu_branch_taken),
+    .mem_stall_i          (mem_stall),
     .pc_i                 (dec_pc),
     .reg_a_data_i         (dec_reg_a_data),
     .reg_b_data_i         (dec_reg_b_data),
@@ -145,6 +148,7 @@ module cpu (
     .rst_i                (rst_i),
     .valid_i              (alu_valid),
     .reg_wr_en_i          (alu_reg_wr_en),
+    .mem_stall_i          (mem_stall),
     .data_a_i             (alu_reg_a_data),
     .data_b_i             (alu_reg_b_data),
     .pc_i                 (alu_pc),
@@ -198,6 +202,7 @@ module cpu (
     .wb_is_load_o               (wb_is_load),
     .rd_req_valid_o             (mem_rd_req_valid),
     .wr_req_valid_o             (mem_wr_req_valid),
+    .stall_o                    (mem_stall),
     .wb_wr_reg_o                (wb_wr_reg),
     .wb_data_from_mem_o         (wb_data_from_mem),
     .wb_alu_result_o            (wb_alu_result),

@@ -11,6 +11,7 @@ module decode_stage #(
   input  logic valid_i,
   input  logic is_jump_i,
   input  logic branch_taken_i,
+  input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] reg_a_data_i,
   input  logic [DATA_WIDTH-1:0] reg_b_data_i,
@@ -43,7 +44,7 @@ module decode_stage #(
     if (!rst_i) begin
       alu_valid_o          <= 1'b0;
       reg_wr_en_o          <= 1'b0;
-    end else begin
+    end else if (!mem_stall_i) begin
       alu_valid_o          <= valid_i & ~is_jump_i & ~branch_taken_i;
       reg_wr_en_o          <= reg_wr_en_d;
       offset_sign_extend_o <= offset_sign_extend_d;

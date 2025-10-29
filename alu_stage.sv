@@ -11,6 +11,7 @@ module alu_stage #(
   input  logic rst_i,
   input  logic valid_i,
   input  logic reg_wr_en_i,
+  input  logic mem_stall_i,
   input  logic [DATA_WIDTH-1:0] data_a_i,
   input  logic [DATA_WIDTH-1:0] data_b_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
@@ -51,7 +52,7 @@ module alu_stage #(
       mem_reg_wr_en_o <= 1'b0;
       mem_is_load_o   <= 1'b0;
       mem_is_store_o  <= 1'b0;
-    end else begin
+    end else if (!mem_stall_i) begin
       mem_valid_o      <= valid_i;
       mem_reg_wr_en_o  <= reg_wr_en_i;
       mem_is_load_o    <= is_load_d;

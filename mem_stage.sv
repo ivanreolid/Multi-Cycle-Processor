@@ -28,6 +28,7 @@ module mem_stage #(
   output logic wb_is_load_o,
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
+  output logic stall_o,
   output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
   output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
   output logic [DATA_WIDTH-1:0] wb_alu_result_o,
@@ -77,11 +78,12 @@ module mem_stage #(
     rd_req_valid_o = 1'b0;
     wr_req_valid_o = 1'b0;
     wb_valid_d     = 1'b0;
+    stall_o       = 1'b0;
     state_d        = state;
 
     case(state)
       IDLE: begin
-        state_d = READY;
+        state_d            = READY;
       end
       READY: begin
         if (valid_i) begin
@@ -99,6 +101,7 @@ module mem_stage #(
         end
       end
       WAITING: begin
+        stall_o              = 1'b1;
         if (mem_data_is_valid_i) begin
           wb_data_from_mem_d = mem_data_i;
           wb_valid_d         = 1'b1;

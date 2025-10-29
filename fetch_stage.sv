@@ -12,6 +12,7 @@ module fetch_stage #(
   input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
+  input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
   input  logic instr_valid_i,
@@ -23,11 +24,12 @@ module fetch_stage #(
   output instruction_t instruction_o
 );
 
-  typedef enum logic [1:0] {
-    IDLE     = 2'b00,
-    MEM_REQ  = 2'b01,
-    MEM_WAIT = 2'b10,
-    FLUSH    = 2'b11
+  typedef enum logic [2:0] {
+    IDLE     = 2'b000,
+    MEM_REQ  = 2'b001,
+    MEM_WAIT = 2'b010,
+    FLUSH    = 2'b011,
+    STALL    = 3'b100
   } state_t;
 
   logic [ADDR_WIDTH-1:0] pc, pc_d, dec_pc_d;
@@ -61,11 +63,24 @@ module fetch_stage #(
         if (alu_branch_taken_i | is_jump_i)
           state_d = FLUSH;
         else if (instr_valid_i) begin
-          dec_valid_d   = 1'b1;
-          dec_instr_d   = instr_i;
-          dec_pc_d      = pc;
-          pc_d          = (pc + 1) % MEM_SIZE;
-          state_d       = MEM_REQ;
+          if (mem_stall_i) begin
+            dec_instr_d   = instr_i;
+            state_d       = STALL;
+          end else begin
+            dec_valid_d   = 1'b1;
+            dec_instr_d   = instr_i;
+            dec_pc_d      = pc;
+            pc_d          = (pc + 1) % MEM_SIZE;
+            state_d       = MEM_REQ;
+          end
+        end
+      end
+      STALL: begin
+        if (!mem_stall_i) begin
+          dec_valid_d = 1'b1;
+          dec_pc_d    = pc;
+          pc_d        = (pc + 1) % MEM_SIZE;
+          state_d     = MEM_REQ;
         end
       end
       FLUSH: begin
@@ -85,7 +100,7 @@ module fetch_stage #(
       dec_valid_o    <= 1'b0;
       dec_pc_o       <= '0;
       instruction_o  <= '0;
-    end else begin
+    end else if (!mem_stall_i) begin
       state          <= state_d;
       pc             <= pc_d;
       dec_valid_o    <= dec_valid_d;
@@ -96,7 +111,8 @@ module fetch_stage #(
         branch_target <= pc_branch_offset_i;
       else if (is_jump_i)
         branch_target <= jump_address_i;
-    end
+    end else
+      state           <= state_d;
   end
 
 endmodule : fetch_stage
