@@ -168,9 +168,9 @@ module tb;
     offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){model_instr[INSTR_WIDTH-1]}}, model_instr[INSTR_WIDTH-1:14]};
     pc_plus_offset = (model_pc + {model_instr.free, model_instr.rd}) % MEM_SIZE;
     case (model_instr.opcode)
-      ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb]; 
-      LW:  model_regs[model_instr.rd] = model_mem[offset_sign_extend + model_instr.rb];
-      SW:  model_mem[offset_sign_extend + model_instr.rb] = model_instr.rd;
+      ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb];
+      LW:  model_regs[model_instr.rd] = model_mem[offset_sign_extend + model_regs[model_instr.rb]];
+      SW:  model_mem[offset_sign_extend + model_regs[model_instr.rb]] = model_regs[model_instr.rd];
       SUB: model_regs[model_instr.rd] = model_regs[model_instr.ra] - model_regs[model_instr.rb];
       AND: model_regs[model_instr.rd] = model_regs[model_instr.ra] & model_regs[model_instr.rb];
       MUL: model_regs[model_instr.rd] = model_regs[model_instr.ra] * model_regs[model_instr.rb];
