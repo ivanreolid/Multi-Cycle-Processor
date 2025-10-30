@@ -14,18 +14,18 @@ module rbank #(
   output logic [DATA_WIDTH-1:0] reg_a_data_o,
   output logic [DATA_WIDTH-1:0] reg_b_data_o,
 `ifndef SYNTHESIS
-  output logic [DATA_WIDTH-1:0] debug_regs_o [0:31]
+  output logic [DATA_WIDTH-1:0] debug_regs_o [32]
 `endif
 );
 
   localparam BANK_SIZE = 32;
 
-  logic [DATA_WIDTH-1:0] regs [0:BANK_SIZE-1];
+  logic [DATA_WIDTH-1:0] regs [BANK_SIZE];
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       for (int i = 0; i < BANK_SIZE; ++i) begin
-        regs[i] <= i;
+        regs[i] <= '0;
       end
     end else if (wr_en_i) begin
       regs[wr_reg_i] <= wr_data_i;
@@ -38,9 +38,5 @@ module rbank #(
 `ifndef SYNTHESIS
   assign debug_regs_o = regs;
 `endif
-
-  initial begin
-    $readmemh("init_regs.hex", regs);
-  end
 
 endmodule

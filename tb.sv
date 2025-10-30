@@ -15,13 +15,14 @@ module tb;
   logic rd_req_valid, wr_req_valid, req_is_instr;
   logic [ADDR_WIDTH-1:0] req_address;
   logic [DATA_WIDTH-1:0] wr_data;
+  access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
   logic [DATA_WIDTH-1:0] cpu_regs [32];
 
   logic [DATA_WIDTH-1:0] model_regs [32];
-  logic [DATA_WIDTH-1:0] model_mem [MEM_SIZE];
+  logic [7:0] model_mem [MEM_SIZE];
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
@@ -34,6 +35,9 @@ module tb;
   bit error;
   string error_msg;
 
+  int total_cycles;
+  int instructions_executed;
+
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
@@ -45,6 +49,7 @@ module tb;
     .req_is_instr_o                 (req_is_instr),
     .req_address_o                  (req_address),
     .wr_data_o                      (wr_data),
+    .req_access_size_o              (req_access_size),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
@@ -63,6 +68,7 @@ module tb;
     .req_is_instr_i                 (req_is_instr),
     .address_i                      (req_address),
     .wr_data_i                      (wr_data),
+    .access_size_i                  (req_access_size),
     .data_valid_o                   (mem_data_valid),
     .data_is_instr_o                (mem_data_is_instr),
     .data_o                         (mem_data)
@@ -81,6 +87,9 @@ module tb;
     clk = 1;
     rst = 0;
 
+    total_cycles = 0;
+    instructions_executed = 0;
+
     initialize_registers();
     initialize_memories();
 
@@ -88,21 +97,22 @@ module tb;
     #5 clk = 1; rst = 1;
     #5 clk = 0;
 
-    for (int i = 0; i < 400; ++i) begin
+    for (int i = 0; i < 20000; ++i) begin
       #5 clk = 1;
       #5 clk = 0;
+      ++total_cycles;
     end
   end
 
   function void initialize_registers();
     for (int i = 0; i < 32; ++i) begin
-      model_regs[i] = i;
+      model_regs[i] = '0;
     end
   endfunction
 
   function void initialize_memories();
     for (int i = 0; i < MEM_SIZE; ++i) begin
-      model_mem[i] = i * 100;
+      model_mem[i] = 8'h0;
     end
     /*model_mem[1] = 32'h4470;      // ADD r1, r2 -> r7
     model_mem[2] = 32'h40B23;     // SUB r6, r5 -> r18
@@ -135,14 +145,26 @@ module tb;
   endfunction
 
   task automatic execute_and_compare();
-    model_instr = model_mem[model_pc];
-    new_model_pc = (model_pc + 1) % MEM_SIZE;
+    model_instr = { model_mem[model_pc + 3], model_mem[model_pc + 2], model_mem[model_pc + 1], model_mem[model_pc] };
+    new_model_pc = (model_pc + 4) % MEM_SIZE;
     error_msg = "";
     error = 1'b0;
     execute_model_instr();
     check_completed_instr();
     check_registers();
     print_check_result();
+    ++instructions_executed;
+
+    /*if (model_pc == 9)
+      $finish;*/
+
+    if (model_pc == 61) begin
+      $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
+               real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
+               instructions_executed);
+      $finish;
+    end
+
     model_pc = new_model_pc;
   endtask
 
@@ -169,8 +191,25 @@ module tb;
     pc_plus_offset = (model_pc + {model_instr.free, model_instr.rd}) % MEM_SIZE;
     case (model_instr.opcode)
       ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb];
-      LW:  model_regs[model_instr.rd] = model_mem[offset_sign_extend + model_regs[model_instr.rb]];
-      SW:  model_mem[offset_sign_extend + model_regs[model_instr.rb]] = model_regs[model_instr.rd];
+      LW: begin
+        $display("offset=%0d, %0d", offset_sign_extend, (offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3);
+        model_regs[model_instr.rd] = {
+          model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3],
+          model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 2],
+          model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 1],
+          model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2))]
+        };
+      end
+      SW: begin
+        model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2))]
+                   = model_regs[model_instr.rd][7:0];
+        model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 1]
+                   = model_regs[model_instr.rd][15:8];
+        model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 2]
+                   = model_regs[model_instr.rd][23:16];
+        model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3]
+                   = model_regs[model_instr.rd][31:24];
+      end
       SUB: model_regs[model_instr.rd] = model_regs[model_instr.ra] - model_regs[model_instr.rb];
       AND: model_regs[model_instr.rd] = model_regs[model_instr.ra] & model_regs[model_instr.rb];
       MUL: model_regs[model_instr.rd] = model_regs[model_instr.ra] * model_regs[model_instr.rb];

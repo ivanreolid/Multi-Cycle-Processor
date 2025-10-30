@@ -12,12 +12,13 @@ module imem #(
   input  logic req_is_instr_i,
   input  logic [ADDR_WIDTH-1:0] address_i,
   input  logic [DATA_WIDTH-1:0] wr_data_i,
+  input  access_size_t access_size_i,
   output logic data_valid_o,
   output logic data_is_instr_o,
   output logic [DATA_WIDTH-1:0] data_o
 );
 
-  logic [DATA_WIDTH-1:0] mem [MEM_SIZE];
+  logic [7:0] mem [MEM_SIZE];
 
   logic pipe1_valid_d, pipe2_valid_d, pipe3_valid_d, pipe4_valid_d, pipe5_valid_d, pipe6_valid_d,
         pipe7_valid_d, pipe8_valid_d, pipe9_valid_d, pipe10_valid_d;
@@ -26,6 +27,11 @@ module imem #(
 
   logic pipe1_is_wr_d, pipe2_is_wr_d, pipe3_is_wr_d, pipe4_is_wr_d, pipe5_is_wr_d;
   logic pipe1_is_wr, pipe2_is_wr, pipe3_is_wr, pipe4_is_wr, pipe5_is_wr;
+
+  access_size_t pipe1_access_size_d;
+  access_size_t pipe1_access_size, pipe2_access_size, pipe3_access_size, pipe4_access_size,
+                pipe5_access_size, pipe6_access_size, pipe7_access_size, pipe8_access_size,
+                pipe9_access_size, pipe10_access_size;
 
   logic pipe1_is_instr_d, pipe2_is_instr_d, pipe3_is_instr_d, pipe4_is_instr_d, pipe5_is_instr_d,
         pipe6_is_instr_d, pipe7_is_instr_d, pipe8_is_instr_d, pipe9_is_instr_d, pipe10_is_instr_d;
@@ -40,6 +46,22 @@ module imem #(
 
   logic [DATA_WIDTH-1:0] pipe1_data_d, pipe2_data_d, pipe3_data_d, pipe4_data_d, pipe5_data_d;
   logic [DATA_WIDTH-1:0] pipe1_data, pipe2_data, pipe3_data, pipe4_data, pipe5_data;
+
+  always_comb begin : memory_operation
+    if (pipe5_valid & ~pipe5_is_wr) begin
+      case (pipe5_access_size)
+        BYTE: pipe6_instr_d = {24'b0, mem[pipe5_addr]};
+        WORD: begin
+          pipe6_instr_d = {
+            mem[pipe5_addr + 3],
+            mem[pipe5_addr + 2],
+            mem[pipe5_addr + 1],
+            mem[pipe5_addr]
+          };
+        end
+      endcase
+    end
+  end
 
   always_ff @(posedge clk_i) begin : pipeline
     if (!rst_i) begin
@@ -104,15 +126,33 @@ module imem #(
       pipe3_data      <= pipe2_data;
       pipe4_data      <= pipe3_data;
       pipe5_data      <= pipe4_data;
-    end
-  end
+      pipe1_is_wr     <= pipe1_is_wr_d;
+      pipe2_is_wr     <= pipe1_is_wr;
+      pipe3_is_wr     <= pipe2_is_wr;
+      pipe4_is_wr     <= pipe3_is_wr;
+      pipe5_is_wr     <= pipe4_is_wr;
+      pipe1_access_size <= pipe1_access_size_d;
+      pipe2_access_size <= pipe1_access_size;
+      pipe3_access_size <= pipe2_access_size;
+      pipe4_access_size <= pipe3_access_size;
+      pipe5_access_size <= pipe4_access_size;
+      pipe6_access_size <= pipe5_access_size;
+      pipe7_access_size <= pipe6_access_size;
+      pipe8_access_size <= pipe7_access_size;
+      pipe9_access_size <= pipe8_access_size;
+      pipe10_access_size <= pipe9_access_size;
 
-  always_comb begin : memory_operation
-    if (pipe5_valid) begin
-      if (pipe5_is_wr)
-        mem[pipe5_addr] = pipe5_data;
-      else
-        pipe6_instr_d = mem[pipe5_addr];
+      if (pipe5_valid & pipe5_is_wr) begin
+        case (pipe5_access_size)
+          BYTE: mem[pipe5_addr] <= pipe5_data[7:0];
+          WORD: begin
+            mem[pipe5_addr]     <= pipe5_data[7:0];
+            mem[pipe5_addr + 1] <= pipe5_data[15:8];
+            mem[pipe5_addr + 2] <= pipe5_data[23:16];
+            mem[pipe5_addr + 3] <= pipe5_data[31:24];
+          end
+        endcase
+      end
     end
   end
 
@@ -120,6 +160,7 @@ module imem #(
   assign pipe1_is_instr_d = req_is_instr_i;
   assign pipe1_is_wr_d = wr_req_valid_i;
 
+  assign pipe1_access_size_d = access_size_i;
   assign pipe1_addr_d = address_i;
   assign pipe1_data_d = wr_data_i;
 
@@ -128,9 +169,8 @@ module imem #(
   assign data_o = pipe10_instr;
 
   initial begin
-    // TODO: Populate memory with correct instructions
     for (int i = 0; i < MEM_SIZE; ++i) begin
-      mem[i] = i * 100;
+      mem[i] = 8'h0;
     end
     /*mem[1] = 32'h4470;      // ADD r1, r2 -> r7
     mem[2] = 32'h40B23;     // SUB r16, r5 -> r18

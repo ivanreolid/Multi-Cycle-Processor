@@ -34,6 +34,7 @@ module alu_stage #(
   output logic mem_is_store_o,
   output logic branch_taken_o,
   output logic is_jump_o,
+  output access_size_t mem_access_size_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_mem_pc_o,
   output instruction_t debug_mem_instr_o
@@ -46,30 +47,49 @@ module alu_stage #(
   logic is_zero, is_less;
   logic is_load_d, is_store_d;
 
+  access_size_t access_size_d;
+
+  always_comb begin : opcode
+    is_load_d  = 1'b0;
+    is_store_d = 1'b0;
+    is_jump_o  = 1'b0;
+
+    case(instr_opcode_i)
+      LW: begin
+        is_load_d     = 1'b1;
+        access_size_d = WORD;
+      end
+      SW: begin
+        is_store_d    = 1'b1;
+        access_size_d = WORD;
+      end
+      JMP: begin
+        is_jump_o = valid_i;
+      end
+    endcase
+  end
+
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      mem_valid_o     <= 1'b0;
-      mem_reg_wr_en_o <= 1'b0;
-      mem_is_load_o   <= 1'b0;
-      mem_is_store_o  <= 1'b0;
+      mem_valid_o       <= 1'b0;
+      mem_reg_wr_en_o   <= 1'b0;
+      mem_is_load_o     <= 1'b0;
+      mem_is_store_o    <= 1'b0;
     end else if (!mem_stall_i) begin
-      mem_valid_o      <= valid_i;
-      mem_reg_wr_en_o  <= reg_wr_en_i;
-      mem_is_load_o    <= is_load_d;
-      mem_is_store_o   <= is_store_d;
-      mem_reg_a_data_o <= data_a_i;
-      mem_wr_reg_o     <= wr_reg_i;
-      mem_alu_result_o <= mem_alu_result_d;
+      mem_valid_o       <= valid_i;
+      mem_reg_wr_en_o   <= reg_wr_en_i;
+      mem_is_load_o     <= is_load_d;
+      mem_is_store_o    <= is_store_d;
+      mem_reg_a_data_o  <= data_a_i;
+      mem_wr_reg_o      <= wr_reg_i;
+      mem_alu_result_o  <= mem_alu_result_d;
+      mem_access_size_o <= access_size_d;
 `ifndef SYNTHESIS
       debug_mem_pc_o    <= debug_pc_i;
       debug_mem_instr_o <= debug_instr_i;
 `endif
     end
   end
-
-  assign is_load_d  = instr_opcode_i == LW;
-  assign is_store_d = instr_opcode_i == SW;
-  assign is_jump_o  = valid_i & instr_opcode_i == JMP;
 
   assign branch_taken_o = valid_i & (((instr_opcode_i == BEQ) & is_zero) | ((instr_opcode_i == BNE) & ~is_zero) | ((instr_opcode_i == BLT) & is_less) | ((instr_opcode_i == BGE) & ~is_less));
 

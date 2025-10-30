@@ -19,6 +19,7 @@ module mem_stage #(
   input  logic is_store_i,
   input  logic reg_wr_en_i,
   input  logic mem_data_is_valid_i,
+  input  access_size_t access_size_i,
 `ifndef SYNTHESIS
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
   input  instruction_t debug_instr_i,
@@ -34,6 +35,7 @@ module mem_stage #(
   output logic [DATA_WIDTH-1:0] wb_alu_result_o,
   output logic [ADDR_WIDTH-1:0] mem_req_address_o,
   output logic [DATA_WIDTH-1:0] wr_data_o,
+  output access_size_t req_access_size_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
   output instruction_t debug_wb_instr_o
@@ -72,13 +74,11 @@ module mem_stage #(
     end
   end
 
-  assign wr_en = is_store_i & valid_i;
-
   always_comb begin : state_update
     rd_req_valid_o = 1'b0;
     wr_req_valid_o = 1'b0;
     wb_valid_d     = 1'b0;
-    stall_o       = 1'b0;
+    stall_o        = 1'b0;
     state_d        = state;
 
     case(state)
@@ -88,6 +88,7 @@ module mem_stage #(
       READY: begin
         if (valid_i) begin
           mem_req_address_o = alu_result_i;
+          req_access_size_o = access_size_i;
           if (is_load_i) begin
             rd_req_valid_o = 1'b1;
             state_d        = WAITING;
@@ -110,5 +111,7 @@ module mem_stage #(
       end
     endcase
   end
+
+  assign wr_en = is_store_i & valid_i;
 
 endmodule : mem_stage

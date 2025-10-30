@@ -24,6 +24,12 @@ package params_pkg;
     JMP = 4'b1101
   } opcode;
 
+  typedef enum logic [1:0] {
+    BYTE  = 2'b00,
+    SHORT = 2'b01,
+    WORD  = 2'b10
+  } access_size_t;
+
   function string opcode_to_string(opcode op);
     case (op)
       ADD: opcode_to_string = "ADD";

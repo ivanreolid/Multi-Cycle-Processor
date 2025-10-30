@@ -18,6 +18,7 @@ module cpu (
   output logic req_is_instr_o,
   output logic [ADDR_WIDTH-1:0] req_address_o,
   output logic [DATA_WIDTH-1:0] wr_data_o,
+  output access_size_t req_access_size_o,
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -29,6 +30,7 @@ module cpu (
   // Fetch stage wires
   logic fetch_rd_req_valid;
   logic [ADDR_WIDTH-1:0] fetch_req_address;
+  access_size_t fetch_req_access_size;
 
   // Decode stage wires
   logic [ADDR_WIDTH-1:0] dec_pc;
@@ -67,6 +69,7 @@ module cpu (
   logic mem_rd_req_valid, mem_wr_req_valid;
   logic mem_stall;
   logic [ADDR_WIDTH-1:0] mem_req_address;
+  access_size_t mem_access_size, mem_req_access_size;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc;
   instruction_t debug_mem_instr;
@@ -105,6 +108,7 @@ module cpu (
     .dec_valid_o         (dec_valid),
     .mem_req_addr_o      (fetch_req_address),
     .dec_pc_o            (dec_pc),
+    .req_access_size_o   (fetch_req_access_size),
     .instruction_o       (instruction_q)
   );
 
@@ -171,6 +175,7 @@ module cpu (
     .mem_is_store_o       (mem_is_store),
     .branch_taken_o       (alu_branch_taken),
     .is_jump_o            (is_jump),
+    .mem_access_size_o    (mem_access_size),
 `ifndef SYNTHESIS
     .debug_mem_pc_o       (debug_mem_pc),
     .debug_mem_instr_o    (debug_mem_instr)
@@ -193,6 +198,7 @@ module cpu (
     .is_store_i                 (mem_is_store),
     .reg_wr_en_i                (mem_reg_wr_en),
     .mem_data_is_valid_i        (mem_data_valid_i & ~mem_data_is_instr_i),
+    .access_size_i              (mem_access_size),
 `ifndef SYNTHESIS
     .debug_pc_i                 (debug_mem_pc),
     .debug_instr_i              (debug_mem_instr),
@@ -208,6 +214,7 @@ module cpu (
     .wb_alu_result_o            (wb_alu_result),
     .mem_req_address_o          (mem_req_address),
     .wr_data_o                  (wr_data_o),
+    .req_access_size_o          (mem_req_access_size),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc),
     .debug_wb_instr_o           (debug_wb_instr)
@@ -261,9 +268,10 @@ module cpu (
     end
   end
 
-  assign rd_req_valid_o = fetch_rd_req_valid | mem_rd_req_valid;
-  assign wr_req_valid_o = mem_wr_req_valid;
-  assign req_is_instr_o = fetch_rd_req_valid;
-  assign req_address_o  = fetch_rd_req_valid ? fetch_req_address : mem_req_address;
+  assign rd_req_valid_o    = fetch_rd_req_valid | mem_rd_req_valid;
+  assign wr_req_valid_o    = mem_wr_req_valid;
+  assign req_is_instr_o    = fetch_rd_req_valid;
+  assign req_address_o     = fetch_rd_req_valid ? fetch_req_address : mem_req_address;
+  assign req_access_size_o = fetch_rd_req_valid ? fetch_req_access_size : mem_req_access_size;
 
 endmodule
