@@ -9,39 +9,110 @@ module fetch_stage #(
 )(
   input  logic clk_i,
   input  logic rst_i,
+  input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
+  input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
+  input  logic instr_valid_i,
+  input  instruction_t instr_i,
+  output logic rd_req_valid_o,
   output logic dec_valid_o,
-  output logic [ADDR_WIDTH-1:0] pc_o,
+  output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
+  output logic [ADDR_WIDTH-1:0] dec_pc_o,
   output instruction_t instruction_o
 );
 
-  logic [ADDR_WIDTH-1:0] pc, pc_d;
-  logic [ADDR_WIDTH-1:0] pc_added;
+  typedef enum logic [2:0] {
+    IDLE     = 2'b000,
+    MEM_REQ  = 2'b001,
+    MEM_WAIT = 2'b010,
+    FLUSH    = 2'b011,
+    STALL    = 3'b100
+  } state_t;
 
-  imem #(
-    .MEM_SIZE      (MEM_SIZE),
-    .ADDR_WIDTH    (ADDR_WIDTH),
-    .DATA_WIDTH    (INSTR_WIDTH)
-  ) imem (
-    .address_i     (pc),
-    .instruction_o (instruction_o)
-  );
+  logic [ADDR_WIDTH-1:0] pc, pc_d, dec_pc_d;
+  logic [ADDR_WIDTH-1:0] branch_target;
+
+  state_t state, state_d;
+
+  logic dec_valid_d;
+
+  instruction_t dec_instr_d;
+
+  always_comb begin : state_update
+    rd_req_valid_o = 1'b0;
+    mem_req_addr_o   = pc;
+    dec_valid_d      = 1'b0;
+    state_d          = state;
+    pc_d             = pc;
+
+    case (state)
+      IDLE: begin
+        state_d = MEM_REQ;
+      end
+      MEM_REQ: begin
+        if (!mem_req_i) begin
+          rd_req_valid_o = 1'b1;
+          mem_req_addr_o   = pc;
+          state_d          = MEM_WAIT;
+        end
+      end
+      MEM_WAIT: begin
+        if (alu_branch_taken_i | is_jump_i)
+          state_d = FLUSH;
+        else if (instr_valid_i) begin
+          if (mem_stall_i) begin
+            dec_instr_d   = instr_i;
+            state_d       = STALL;
+          end else begin
+            dec_valid_d   = 1'b1;
+            dec_instr_d   = instr_i;
+            dec_pc_d      = pc;
+            pc_d          = (pc + 1) % MEM_SIZE;
+            state_d       = MEM_REQ;
+          end
+        end
+      end
+      STALL: begin
+        if (!mem_stall_i) begin
+          dec_valid_d = 1'b1;
+          dec_pc_d    = pc;
+          pc_d        = (pc + 1) % MEM_SIZE;
+          state_d     = MEM_REQ;
+        end
+      end
+      FLUSH: begin
+        if (instr_valid_i) begin
+          pc_d    = branch_target;
+          state_d = MEM_REQ;
+        end
+      end
+    endcase
+  end
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pc <= 1;
-    end else begin
-      pc <= pc_d;
-    end
+      state          <= IDLE;
+      pc             <= 1;
+      branch_target  <= '0;
+      dec_valid_o    <= 1'b0;
+      dec_pc_o       <= '0;
+      instruction_o  <= '0;
+    end else if (!mem_stall_i) begin
+      state          <= state_d;
+      pc             <= pc_d;
+      dec_valid_o    <= dec_valid_d;
+      dec_pc_o       <= dec_pc_d;
+      instruction_o  <= dec_instr_d;
+
+      if (alu_branch_taken_i)
+        branch_target <= pc_branch_offset_i;
+      else if (is_jump_i)
+        branch_target <= jump_address_i;
+    end else
+      state           <= state_d;
   end
-
-  assign pc_added = (alu_branch_taken_i ? pc_branch_offset_i : pc + 1) % MEM_SIZE;
-  assign pc_d = is_jump_i ? jump_address_i : pc_added;
-
-  assign dec_valid_o = ~is_jump_i & ~alu_branch_taken_i;
-  assign pc_o = pc;
 
 endmodule : fetch_stage

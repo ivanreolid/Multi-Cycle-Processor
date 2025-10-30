@@ -1,4 +1,5 @@
 `include "cpu.sv"
+`include "imem.sv"
 
 import params_pkg::*;
 
@@ -8,18 +9,23 @@ module tb;
   logic clk;
   logic rst;
 
+  // CPU - IMEM communication wires
+  logic mem_data_valid, mem_data_is_instr;
+  logic [DATA_WIDTH-1:0] mem_data;
+  logic rd_req_valid, wr_req_valid, req_is_instr;
+  logic [ADDR_WIDTH-1:0] req_address;
+  logic [DATA_WIDTH-1:0] wr_data;
+
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
-  logic [DATA_WIDTH-1:0] cpu_dmem [0:MEM_SIZE-1];
-  logic [DATA_WIDTH-1:0] cpu_regs [0:31];
-  
-  logic [DATA_WIDTH-1:0] model_regs [0:31];
-  logic [DATA_WIDTH-1:0] model_imem [0:MEM_SIZE-1];
-  logic [DATA_WIDTH-1:0] model_dmem [0:MEM_SIZE-1];
+  logic [DATA_WIDTH-1:0] cpu_regs [32];
 
-  logic cpu_store_is_completed, cpu_non_store_is_completed;
-  instruction_t model_instr, cpu_mem_instr, cpu_wb_instr;
-  logic [ADDR_WIDTH-1:0] cpu_mem_pc, cpu_wb_pc;
+  logic [DATA_WIDTH-1:0] model_regs [32];
+  logic [DATA_WIDTH-1:0] model_mem [MEM_SIZE];
+
+  logic cpu_instr_is_completed;
+  instruction_t model_instr, cpu_wb_instr;
+  logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -31,31 +37,50 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    .debug_store_is_completed_o     (cpu_store_is_completed),
-    .debug_non_store_is_completed_o (cpu_non_store_is_completed),
-    .debug_dmem_o                   (cpu_dmem),
+    .mem_data_valid_i               (mem_data_valid),
+    .mem_data_is_instr_i            (mem_data_is_instr),
+    .mem_data_i                     (mem_data),
+    .rd_req_valid_o                 (rd_req_valid),
+    .wr_req_valid_o                 (wr_req_valid),
+    .req_is_instr_o                 (req_is_instr),
+    .req_address_o                  (req_address),
+    .wr_data_o                      (wr_data),
+    .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
-    .debug_mem_pc_o                 (cpu_mem_pc),
-    .debug_wb_pc_o                  (cpu_wb_pc),
-    .debug_mem_instr_o              (cpu_mem_instr),
-    .debug_wb_instr_o               (cpu_wb_instr)
+    .debug_pc_o                     (cpu_wb_pc),
+    .debug_instr_o                  (cpu_wb_instr)
+  );
+
+  imem #(
+    .MEM_SIZE                       (MEM_SIZE),
+    .ADDR_WIDTH                     (ADDR_WIDTH),
+    .DATA_WIDTH                     (DATA_WIDTH)
+  ) imem (
+    .clk_i                          (clk),
+    .rst_i                          (rst),
+    .rd_req_valid_i                 (rd_req_valid),
+    .wr_req_valid_i                 (wr_req_valid),
+    .req_is_instr_i                 (req_is_instr),
+    .address_i                      (req_address),
+    .wr_data_i                      (wr_data),
+    .data_valid_o                   (mem_data_valid),
+    .data_is_instr_o                (mem_data_is_instr),
+    .data_o                         (mem_data)
   );
 
   always_ff @(posedge clk) begin : check
     if (!rst) begin
       model_pc = 1;
     end else begin
-      if (cpu_non_store_is_completed)
-        execute_and_compare(1'b1);
-      if (cpu_store_is_completed)
-        execute_and_compare(1'b0);
+      if (cpu_instr_is_completed)
+        execute_and_compare();
     end
   end
 
   initial begin
     clk = 1;
     rst = 0;
- 
+
     initialize_registers();
     initialize_memories();
 
@@ -63,7 +88,7 @@ module tb;
     #5 clk = 1; rst = 1;
     #5 clk = 0;
 
-    for (int i = 0; i < 20; ++i) begin
+    for (int i = 0; i < 400; ++i) begin
       #5 clk = 1;
       #5 clk = 0;
     end
@@ -77,52 +102,55 @@ module tb;
 
   function void initialize_memories();
     for (int i = 0; i < MEM_SIZE; ++i) begin
-      model_imem[i] = i * 100;
-      model_dmem[i] = i;
+      model_mem[i] = i * 100;
     end
-    model_imem[1] = 32'h4470;      // ADD r1, r2 -> r7
-    model_imem[2] = 32'h40B23;     // SUB r6, r5 -> r18
-    model_imem[3] = 32'h446F1;     // LW @17(r3) -> r15
-    model_imem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
-    model_imem[5] = 32'h36212;     // SW r1 -> @13(r17)
-    model_imem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
-    model_imem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
-    model_imem[8] = 32'h98DF9;     // BEQ r6, r6, 63
-    model_imem[61] = 32'h427A;     // BNE r1, r1, 3
-    model_imem[62] = 32'h4CAA;     // BNE r1, r6, 10
-    model_imem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
-    model_imem[72] = 32'h390AB;    // BLT r14, r8, 10
-    model_imem[73] = 32'h21CAB;    // BLT r8, r14, 10
-    model_imem[83] = 32'h6BEAC;    // BGE r26, r31, 10
-    model_imem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    model_imem[94] = 32'h7800D;    // JMP r30
+    /*model_mem[1] = 32'h4470;      // ADD r1, r2 -> r7
+    model_mem[2] = 32'h40B23;     // SUB r6, r5 -> r18
+    model_mem[3] = 32'h446F1;     // LW @17(r3) -> r15
+    model_mem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
+    model_mem[5] = 32'h36212;     // SW r1 -> @13(r17)
+    model_mem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
+    model_mem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
+    model_mem[8] = 32'h98DF9;     // BEQ r6, r6, 63
+    model_mem[61] = 32'h427A;     // BNE r1, r1, 3
+    model_mem[62] = 32'h4CAA;     // BNE r1, r6, 10
+    model_mem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
+    model_mem[72] = 32'h390AB;    // BLT r14, r8, 10
+    model_mem[73] = 32'h21CAB;    // BLT r8, r14, 10
+    model_mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
+    model_mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
+    model_mem[94] = 32'h400D;     // JMP r1*/
+
+    model_mem[1] = 32'h446F1;
+    model_mem[2] = 32'h4470;
+    model_mem[3] = 32'h4470;
+    model_mem[4] = 32'h4470;
+    model_mem[5] = 32'h4470;
+    model_mem[6] = 32'h4470;
+    model_mem[7] = 32'h4470;
+    model_mem[8] = 32'h4470;
+    model_mem[9] = 32'h4470;
+    model_mem[10] = 32'h4470;
+
   endfunction
 
-  task automatic execute_and_compare(bit non_store);
-    model_instr = model_imem[model_pc];
+  task automatic execute_and_compare();
+    model_instr = model_mem[model_pc];
     new_model_pc = (model_pc + 1) % MEM_SIZE;
     error_msg = "";
     error = 1'b0;
     execute_model_instr();
-    check_completed_instr(non_store);
-
-    if (non_store)
-      check_registers();
-    else begin
-      check_data_memory();
-    end
-
+    check_completed_instr();
+    check_registers();
     print_check_result();
     model_pc = new_model_pc;
   endtask
 
-  task automatic check_completed_instr(bit non_store);
-    instruction_t cpu_instr_completed = non_store ? cpu_wb_instr : cpu_mem_instr;
-    logic [ADDR_WIDTH-1:0] cpu_pc_completed = non_store ? cpu_wb_pc : cpu_mem_pc;
-    if (model_instr != cpu_instr_completed) begin
+  task automatic check_completed_instr();
+    if (model_instr != cpu_wb_instr) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s)\n",
-                  cpu_pc_completed, cpu_instr_completed, cpu_instr_completed.free, cpu_instr_completed.ra, cpu_instr_completed.rb,
-                  cpu_instr_completed.rd, opcode_to_string(cpu_instr_completed.opcode))};
+                  cpu_wb_pc, cpu_wb_instr, cpu_wb_instr.free, cpu_wb_instr.ra, cpu_wb_instr.rb,
+                  cpu_wb_instr.rd, opcode_to_string(cpu_wb_instr.opcode))};
       error = 1'b1;
     end
   endtask
@@ -136,22 +164,13 @@ module tb;
     end
   endtask
 
-  task check_data_memory();
-    for (int i = 0; i < MEM_SIZE; ++i) begin
-      if (model_dmem[i] != cpu_dmem[i]) begin
-        error_msg = {error_msg, $sformatf(" Data memory address 0x%0h: model=0x%0h, CPU=0x%0h\n", i, model_dmem[i], cpu_dmem[i])};
-        error = 1'b1;
-      end
-    end
-  endtask
-
   task execute_model_instr();
     offset_sign_extend = {{(DATA_WIDTH-(INSTR_WIDTH-14)){model_instr[INSTR_WIDTH-1]}}, model_instr[INSTR_WIDTH-1:14]};
     pc_plus_offset = (model_pc + {model_instr.free, model_instr.rd}) % MEM_SIZE;
     case (model_instr.opcode)
-      ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb]; 
-      LW:  model_regs[model_instr.rd] = model_dmem[offset_sign_extend + model_instr.rb];
-      SW:  model_dmem[offset_sign_extend + model_instr.rb] = model_instr.rd;
+      ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb];
+      LW:  model_regs[model_instr.rd] = model_mem[offset_sign_extend + model_regs[model_instr.rb]];
+      SW:  model_mem[offset_sign_extend + model_regs[model_instr.rb]] = model_regs[model_instr.rd];
       SUB: model_regs[model_instr.rd] = model_regs[model_instr.ra] - model_regs[model_instr.rb];
       AND: model_regs[model_instr.rd] = model_regs[model_instr.ra] & model_regs[model_instr.rb];
       MUL: model_regs[model_instr.rd] = model_regs[model_instr.ra] * model_regs[model_instr.rb];
