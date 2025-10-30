@@ -76,7 +76,7 @@ module tb;
 
   always_ff @(posedge clk) begin : check
     if (!rst) begin
-      model_pc = 1;
+      model_pc <= '0;
     end else begin
       if (cpu_instr_is_completed)
         execute_and_compare();

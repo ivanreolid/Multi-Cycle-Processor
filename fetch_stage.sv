@@ -97,7 +97,7 @@ module fetch_stage #(
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       state          <= IDLE;
-      pc             <= 1;
+      pc             <= '0;
       branch_target  <= '0;
       dec_valid_o    <= 1'b0;
       dec_pc_o       <= '0;
