@@ -20,6 +20,7 @@ module tb;
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
   logic [DATA_WIDTH-1:0] cpu_regs [32];
+  logic [7:0] cpu_mem [MEM_SIZE];
 
   logic [DATA_WIDTH-1:0] model_regs [32];
   logic [7:0] model_mem [MEM_SIZE];
@@ -71,7 +72,8 @@ module tb;
     .access_size_i                  (req_access_size),
     .data_valid_o                   (mem_data_valid),
     .data_is_instr_o                (mem_data_is_instr),
-    .data_o                         (mem_data)
+    .data_o                         (mem_data),
+    .debug_mem_o                    (cpu_mem)
   );
 
   always_ff @(posedge clk) begin : check
@@ -192,7 +194,6 @@ module tb;
     case (model_instr.opcode)
       ADD: model_regs[model_instr.rd] = model_regs[model_instr.ra] + model_regs[model_instr.rb];
       LW: begin
-        $display("offset=%0d, %0d", offset_sign_extend, (offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3);
         model_regs[model_instr.rd] = {
           model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3],
           model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 2],
@@ -233,6 +234,21 @@ module tb;
       $display("t=%0t: PC=0x%0h with instruction 0x%0h (free=0x%0h ra=0x%0h rb=0x%0h rd=0x%0h opcode=%s) executed correctly", $time, model_pc,
                model_instr, model_instr.free, model_instr.ra, model_instr.rb, model_instr.rd, opcode_to_string(model_instr.opcode));
     end
+  endtask
+
+  task compare_memories();
+    error_msg = "";
+    error = 1'b0;
+    for (int i = 0; i < MEM_SIZE; i++) begin
+      if (model_mem[i] != cpu_mem[i]) begin
+        error = 1'b1;
+        error_msg = {error_msg, $sformatf("@0x%0h model=0x%0h, cpu=0x%0h", i, model_mem[i], cpu_mem[i])};
+      end
+    end
+    if (error)
+      $display("Mismatch on memories at the end of the test\n%s", error_msg);
+    else
+      $display("Memories are equal at the end of the test");
   endtask
 
 endmodule

@@ -15,7 +15,10 @@ module imem #(
   input  access_size_t access_size_i,
   output logic data_valid_o,
   output logic data_is_instr_o,
-  output logic [DATA_WIDTH-1:0] data_o
+  output logic [DATA_WIDTH-1:0] data_o,
+`ifndef SYNTHESIS
+  output [7:0] debug_mem_o [MEM_SIZE]
+`endif
 );
 
   logic [7:0] mem [MEM_SIZE];
@@ -167,6 +170,10 @@ module imem #(
   assign data_valid_o = pipe10_valid;
   assign data_is_instr_o = pipe10_is_instr;
   assign data_o = pipe10_instr;
+
+`ifndef SYNTHESIS
+  assign debug_mem_o = mem;
+`endif
 
   initial begin
     for (int i = 0; i < MEM_SIZE; ++i) begin
