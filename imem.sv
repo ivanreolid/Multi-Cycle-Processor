@@ -12,34 +12,59 @@ module imem #(
   input  logic req_is_instr_i,
   input  logic [ADDR_WIDTH-1:0] address_i,
   input  logic [DATA_WIDTH-1:0] wr_data_i,
+  input  access_size_t access_size_i,
   output logic data_valid_o,
   output logic data_is_instr_o,
-  output logic [DATA_WIDTH-1:0] data_o
+  output logic [DATA_WIDTH-1:0] data_o,
+`ifndef SYNTHESIS
+  output [7:0] debug_mem_o [MEM_SIZE]
+`endif
 );
 
-  logic [DATA_WIDTH-1:0] mem [MEM_SIZE];
+  logic [7:0] mem [MEM_SIZE];
 
-  logic pipe1_valid_d, pipe2_valid_d, pipe3_valid_d, pipe4_valid_d, pipe5_valid_d, pipe6_valid_d,
-        pipe7_valid_d, pipe8_valid_d, pipe9_valid_d, pipe10_valid_d;
+  logic pipe1_valid_d;
   logic pipe1_valid, pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid, pipe6_valid, pipe7_valid,
         pipe8_valid, pipe9_valid, pipe10_valid;
 
-  logic pipe1_is_wr_d, pipe2_is_wr_d, pipe3_is_wr_d, pipe4_is_wr_d, pipe5_is_wr_d;
+  logic pipe1_is_wr_d;
   logic pipe1_is_wr, pipe2_is_wr, pipe3_is_wr, pipe4_is_wr, pipe5_is_wr;
 
-  logic pipe1_is_instr_d, pipe2_is_instr_d, pipe3_is_instr_d, pipe4_is_instr_d, pipe5_is_instr_d,
-        pipe6_is_instr_d, pipe7_is_instr_d, pipe8_is_instr_d, pipe9_is_instr_d, pipe10_is_instr_d;
+  access_size_t pipe1_access_size_d;
+  access_size_t pipe1_access_size, pipe2_access_size, pipe3_access_size, pipe4_access_size,
+                pipe5_access_size, pipe6_access_size, pipe7_access_size, pipe8_access_size,
+                pipe9_access_size, pipe10_access_size;
+
+  logic pipe1_is_instr_d;
   logic pipe1_is_instr, pipe2_is_instr, pipe3_is_instr, pipe4_is_instr, pipe5_is_instr,
         pipe6_is_instr, pipe7_is_instr, pipe8_is_instr, pipe9_is_instr, pipe10_is_instr;
 
-  logic [ADDR_WIDTH-1:0] pipe1_addr_d, pipe2_addr_d, pipe3_addr_d, pipe4_addr_d, pipe5_addr_d;
+  logic [ADDR_WIDTH-1:0] pipe1_addr_d;
   logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
 
-  logic [ADDR_WIDTH-1:0] pipe6_instr_d, pipe7_instr_d, pipe8_instr_d, pipe9_instr_d, pipe10_instr_d;
-  logic [ADDR_WIDTH-1:0] pipe6_instr, pipe7_instr, pipe8_instr, pipe9_instr, pipe10_instr;
+  logic [ADDR_WIDTH-1:0] pipe6_read_data_d;
+  logic [ADDR_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data, pipe10_read_data;
 
-  logic [DATA_WIDTH-1:0] pipe1_data_d, pipe2_data_d, pipe3_data_d, pipe4_data_d, pipe5_data_d;
-  logic [DATA_WIDTH-1:0] pipe1_data, pipe2_data, pipe3_data, pipe4_data, pipe5_data;
+  logic [DATA_WIDTH-1:0] pipe1_write_data_d;
+  logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
+                         pipe5_write_data;
+
+  always_comb begin : memory_operation
+    if (pipe5_valid & ~pipe5_is_wr) begin
+      case (pipe5_access_size)
+        BYTE: pipe6_read_data_d = {24'b0, mem[pipe5_addr]};
+        WORD: begin
+          pipe6_read_data_d = {
+            mem[pipe5_addr + 3],
+            mem[pipe5_addr + 2],
+            mem[pipe5_addr + 1],
+            mem[pipe5_addr]
+          };
+        end
+      default: pipe6_read_data_d = '0;
+      endcase
+    end
+  end
 
   always_ff @(posedge clk_i) begin : pipeline
     if (!rst_i) begin
@@ -69,50 +94,68 @@ module imem #(
       pipe4_is_wr     <= 1'b0;
       pipe5_is_wr     <= 1'b0;
     end else begin
-      pipe1_valid     <= pipe1_valid_d;
-      pipe2_valid     <= pipe1_valid;
-      pipe3_valid     <= pipe2_valid;
-      pipe4_valid     <= pipe3_valid;
-      pipe5_valid     <= pipe4_valid;
-      pipe6_valid     <= pipe5_is_wr ? 1'b0 : pipe5_valid;
-      pipe7_valid     <= pipe6_valid;
-      pipe8_valid     <= pipe7_valid;
-      pipe9_valid     <= pipe8_valid;
-      pipe10_valid    <= pipe9_valid;
-      pipe1_is_instr  <= pipe1_is_instr_d;
-      pipe2_is_instr  <= pipe1_is_instr;
-      pipe3_is_instr  <= pipe2_is_instr;
-      pipe4_is_instr  <= pipe3_is_instr;
-      pipe5_is_instr  <= pipe4_is_instr;
-      pipe6_is_instr  <= pipe5_is_instr;
-      pipe7_is_instr  <= pipe6_is_instr;
-      pipe8_is_instr  <= pipe7_is_instr;
-      pipe9_is_instr  <= pipe8_is_instr;
-      pipe10_is_instr <= pipe9_is_instr;
-      pipe1_addr      <= pipe1_addr_d;
-      pipe2_addr      <= pipe1_addr;
-      pipe3_addr      <= pipe2_addr;
-      pipe4_addr      <= pipe3_addr;
-      pipe5_addr      <= pipe4_addr;
-      pipe6_instr     <= pipe6_instr_d;
-      pipe7_instr     <= pipe6_instr;
-      pipe8_instr     <= pipe7_instr;
-      pipe9_instr     <= pipe8_instr;
-      pipe10_instr    <= pipe9_instr;
-      pipe1_data      <= pipe1_data_d;
-      pipe2_data      <= pipe1_data;
-      pipe3_data      <= pipe2_data;
-      pipe4_data      <= pipe3_data;
-      pipe5_data      <= pipe4_data;
-    end
-  end
+      pipe1_valid       <= pipe1_valid_d;
+      pipe2_valid       <= pipe1_valid;
+      pipe3_valid       <= pipe2_valid;
+      pipe4_valid       <= pipe3_valid;
+      pipe5_valid       <= pipe4_valid;
+      pipe6_valid       <= pipe5_is_wr ? 1'b0 : pipe5_valid;
+      pipe7_valid       <= pipe6_valid;
+      pipe8_valid       <= pipe7_valid;
+      pipe9_valid       <= pipe8_valid;
+      pipe10_valid      <= pipe9_valid;
+      pipe1_is_instr    <= pipe1_is_instr_d;
+      pipe2_is_instr    <= pipe1_is_instr;
+      pipe3_is_instr    <= pipe2_is_instr;
+      pipe4_is_instr    <= pipe3_is_instr;
+      pipe5_is_instr    <= pipe4_is_instr;
+      pipe6_is_instr    <= pipe5_is_instr;
+      pipe7_is_instr    <= pipe6_is_instr;
+      pipe8_is_instr    <= pipe7_is_instr;
+      pipe9_is_instr    <= pipe8_is_instr;
+      pipe10_is_instr   <= pipe9_is_instr;
+      pipe1_addr        <= pipe1_addr_d;
+      pipe2_addr        <= pipe1_addr;
+      pipe3_addr        <= pipe2_addr;
+      pipe4_addr        <= pipe3_addr;
+      pipe5_addr        <= pipe4_addr;
+      pipe6_read_data   <= pipe6_read_data_d;
+      pipe7_read_data   <= pipe6_read_data;
+      pipe8_read_data   <= pipe7_read_data;
+      pipe9_read_data   <= pipe8_read_data;
+      pipe10_read_data  <= pipe9_read_data;
+      pipe1_write_data  <= pipe1_write_data_d;
+      pipe2_write_data  <= pipe1_write_data;
+      pipe3_write_data  <= pipe2_write_data;
+      pipe4_write_data  <= pipe3_write_data;
+      pipe5_write_data  <= pipe4_write_data;
+      pipe1_is_wr        <= pipe1_is_wr_d;
+      pipe2_is_wr        <= pipe1_is_wr;
+      pipe3_is_wr        <= pipe2_is_wr;
+      pipe4_is_wr        <= pipe3_is_wr;
+      pipe5_is_wr        <= pipe4_is_wr;
+      pipe1_access_size  <= pipe1_access_size_d;
+      pipe2_access_size  <= pipe1_access_size;
+      pipe3_access_size  <= pipe2_access_size;
+      pipe4_access_size  <= pipe3_access_size;
+      pipe5_access_size  <= pipe4_access_size;
+      pipe6_access_size  <= pipe5_access_size;
+      pipe7_access_size  <= pipe6_access_size;
+      pipe8_access_size  <= pipe7_access_size;
+      pipe9_access_size  <= pipe8_access_size;
+      pipe10_access_size <= pipe9_access_size;
 
-  always_comb begin : memory_operation
-    if (pipe5_valid) begin
-      if (pipe5_is_wr)
-        mem[pipe5_addr] = pipe5_data;
-      else
-        pipe6_instr_d = mem[pipe5_addr];
+      if (pipe5_valid & pipe5_is_wr) begin
+        case (pipe5_access_size)
+          BYTE: mem[pipe5_addr] <= pipe5_write_data[7:0];
+          WORD: begin
+            mem[pipe5_addr]     <= pipe5_write_data[7:0];
+            mem[pipe5_addr + 1] <= pipe5_write_data[15:8];
+            mem[pipe5_addr + 2] <= pipe5_write_data[23:16];
+            mem[pipe5_addr + 3] <= pipe5_write_data[31:24];
+          end
+        endcase
+      end
     end
   end
 
@@ -120,17 +163,21 @@ module imem #(
   assign pipe1_is_instr_d = req_is_instr_i;
   assign pipe1_is_wr_d = wr_req_valid_i;
 
+  assign pipe1_access_size_d = access_size_i;
   assign pipe1_addr_d = address_i;
-  assign pipe1_data_d = wr_data_i;
+  assign pipe1_write_data_d = wr_data_i;
 
   assign data_valid_o = pipe10_valid;
   assign data_is_instr_o = pipe10_is_instr;
-  assign data_o = pipe10_instr;
+  assign data_o = pipe10_read_data;
+
+`ifndef SYNTHESIS
+  assign debug_mem_o = mem;
+`endif
 
   initial begin
-    // TODO: Populate memory with correct instructions
     for (int i = 0; i < MEM_SIZE; ++i) begin
-      mem[i] = i * 100;
+      mem[i] = 8'h0;
     end
     /*mem[1] = 32'h4470;      // ADD r1, r2 -> r7
     mem[2] = 32'h40B23;     // SUB r16, r5 -> r18

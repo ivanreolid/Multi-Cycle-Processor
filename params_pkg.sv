@@ -21,14 +21,24 @@ package params_pkg;
     BNE = 4'b1010,
     BLT = 4'b1011,
     BGE = 4'b1100,
-    JMP = 4'b1101
+    JMP = 4'b1101,
+    LB  = 4'b1110,
+    SB  = 4'b1111
   } opcode;
+
+  typedef enum logic [1:0] {
+    BYTE  = 2'b00,
+    HALF  = 2'b01,
+    WORD  = 2'b10
+  } access_size_t;
 
   function string opcode_to_string(opcode op);
     case (op)
       ADD: opcode_to_string = "ADD";
       LW : opcode_to_string = "LW";
+      LB : opcode_to_string = "LB";
       SW : opcode_to_string = "SW";
+      SB : opcode_to_string = "SB";
       SUB: opcode_to_string = "SUB";
       MUL: opcode_to_string = "MUL";
       DIV: opcode_to_string = "DIV";

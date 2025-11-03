@@ -21,6 +21,7 @@ module fetch_stage #(
   output logic dec_valid_o,
   output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
+  output access_size_t req_access_size_o,
   output instruction_t instruction_o
 );
 
@@ -42,7 +43,7 @@ module fetch_stage #(
   instruction_t dec_instr_d;
 
   always_comb begin : state_update
-    rd_req_valid_o = 1'b0;
+    rd_req_valid_o   = 1'b0;
     mem_req_addr_o   = pc;
     dec_valid_d      = 1'b0;
     state_d          = state;
@@ -54,9 +55,10 @@ module fetch_stage #(
       end
       MEM_REQ: begin
         if (!mem_req_i) begin
-          rd_req_valid_o = 1'b1;
-          mem_req_addr_o   = pc;
-          state_d          = MEM_WAIT;
+          rd_req_valid_o    = 1'b1;
+          mem_req_addr_o    = pc;
+          req_access_size_o = WORD;
+          state_d           = MEM_WAIT;
         end
       end
       MEM_WAIT: begin
@@ -70,7 +72,7 @@ module fetch_stage #(
             dec_valid_d   = 1'b1;
             dec_instr_d   = instr_i;
             dec_pc_d      = pc;
-            pc_d          = (pc + 1) % MEM_SIZE;
+            pc_d          = (pc + 4) % MEM_SIZE;
             state_d       = MEM_REQ;
           end
         end
@@ -79,7 +81,7 @@ module fetch_stage #(
         if (!mem_stall_i) begin
           dec_valid_d = 1'b1;
           dec_pc_d    = pc;
-          pc_d        = (pc + 1) % MEM_SIZE;
+          pc_d        = (pc + 4) % MEM_SIZE;
           state_d     = MEM_REQ;
         end
       end
@@ -95,7 +97,7 @@ module fetch_stage #(
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       state          <= IDLE;
-      pc             <= 1;
+      pc             <= '0;
       branch_target  <= '0;
       dec_valid_o    <= 1'b0;
       dec_pc_o       <= '0;

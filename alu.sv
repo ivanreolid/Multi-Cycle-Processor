@@ -14,14 +14,15 @@ module alu #(
 
   always_comb begin : operation
     case (op_i)
-      ADD, LW, SW: result_o = a_i + b_i;
-      SUB: result_o = a_i - b_i;
-      AND: result_o = a_i & b_i;
-      MUL: result_o = a_i * b_i;
-      DIV: result_o = a_i / b_i;
-      OR:  result_o = a_i | b_i;
-      XOR: result_o = a_i ^ b_i;
-      default: result_o = 0;
+      ADD, LB, SB: result_o = a_i + b_i;
+      LW, SW:      result_o = a_i + (b_i << 2);
+      SUB:         result_o = a_i - b_i;
+      AND:         result_o = a_i & b_i;
+      MUL:         result_o = a_i * b_i;
+      DIV:         result_o = a_i / b_i;
+      OR:          result_o = a_i | b_i;
+      XOR:         result_o = a_i ^ b_i;
+      default:     result_o = 0;
     endcase
   end
 

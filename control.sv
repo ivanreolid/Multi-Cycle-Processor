@@ -15,8 +15,8 @@ module control #(
 
   logic is_branch;
 
-  assign is_load_o   = opcode_i == LW;
-  assign is_store_o  = opcode_i == SW;
+  assign is_load_o   = opcode_i == LW | opcode_i == LB;
+  assign is_store_o  = opcode_i == SW | opcode_i == SB;
   assign is_jump_o   = opcode_i == JMP;
   assign is_branch = (opcode_i == BEQ) | (opcode_i == BNE) | (opcode_i == BLT) | (opcode_i == BGE);
 
