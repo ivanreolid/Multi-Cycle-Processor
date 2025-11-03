@@ -201,6 +201,7 @@ module tb;
           model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2))]
         };
       end
+      LB: model_regs[model_instr.rd] = {24'b0, model_mem[offset_sign_extend + model_regs[model_instr.rb]]};
       SW: begin
         model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2))]
                    = model_regs[model_instr.rd][7:0];
@@ -211,6 +212,7 @@ module tb;
         model_mem[(offset_sign_extend + (model_regs[model_instr.rb] << 2)) + 3]
                    = model_regs[model_instr.rd][31:24];
       end
+      SB:  model_mem[offset_sign_extend + model_regs[model_instr.rb]] = model_regs[model_instr.rd][7:0];
       SUB: model_regs[model_instr.rd] = model_regs[model_instr.ra] - model_regs[model_instr.rb];
       AND: model_regs[model_instr.rd] = model_regs[model_instr.ra] & model_regs[model_instr.rb];
       MUL: model_regs[model_instr.rd] = model_regs[model_instr.ra] * model_regs[model_instr.rb];

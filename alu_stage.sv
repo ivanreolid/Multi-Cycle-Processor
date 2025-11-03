@@ -59,9 +59,17 @@ module alu_stage #(
         is_load_d     = 1'b1;
         access_size_d = WORD;
       end
+      LB: begin
+        is_load_d     = 1'b1;
+        access_size_d = BYTE;
+      end
       SW: begin
         is_store_d    = 1'b1;
         access_size_d = WORD;
+      end
+      SB: begin
+        is_store_d    = 1'b1;
+        access_size_d = BYTE;
       end
       JMP: begin
         is_jump_o = valid_i;

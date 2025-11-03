@@ -66,7 +66,7 @@ module decode_stage #(
 
   assign reg_a_o = is_store ? instruction_i.rd : instruction_i.ra;
 
-  assign is_store = instruction_i.opcode == SW;
+  assign is_store = instruction_i.opcode == SW | instruction_i.opcode == SB;
   assign is_branch = (instruction_i.opcode == BEQ) | (instruction_i.opcode == BNE) |
                      (instruction_i.opcode == BLT) | (instruction_i.opcode == BGE);
 
