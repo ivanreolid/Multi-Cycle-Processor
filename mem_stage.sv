@@ -112,6 +112,4 @@ module mem_stage #(
     endcase
   end
 
-  assign wr_en = is_store_i & valid_i;
-
 endmodule : mem_stage
