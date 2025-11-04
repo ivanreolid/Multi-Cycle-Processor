@@ -78,7 +78,6 @@ module cpu (
   // WB stage wires
   logic [DATA_WIDTH-1:0] wb_alu_result;
   logic [DATA_WIDTH-1:0] wb_data_from_mem;
-  logic [DATA_WIDTH-1:0] data_to_reg;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
   logic wb_is_load;
   logic wb_reg_wr_en;
@@ -88,6 +87,11 @@ module cpu (
   logic debug_non_store_is_completed;
   instruction_t debug_wb_instr;
 `endif
+
+  // Rbank wires coming from WB stage
+  logic reg_wr_en;
+  logic [REGISTER_WIDTH-1:0] wr_reg;
+  logic [DATA_WIDTH-1:0] data_to_reg;
 
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
@@ -226,14 +230,18 @@ module cpu (
   ) wb_stage (
     .clk_i                          (clk_i),
     .rst_i                          (rst_i),
+    .valid_i                        (wb_valid),
+    .reg_wr_en_i                    (wb_reg_wr_en),
+    .wr_reg_i                       (wb_wr_reg),
     .alu_result_i                   (wb_alu_result),
     .data_from_mem_i                (wb_data_from_mem),
     .is_load_i                      (wb_is_load),
 `ifndef SYNTHESIS
-    .debug_valid_i                  (wb_valid),
     .debug_pc_i                     (debug_wb_pc),
     .debug_instr_i                  (debug_wb_instr),
 `endif
+    .reg_wr_en_o                    (reg_wr_en),
+    .wr_reg_o                       (wr_reg),
     .data_to_reg_o                  (data_to_reg),
 `ifndef SYNTHESIS
     .debug_instr_is_completed_o     (debug_instr_is_completed_o),
@@ -248,10 +256,10 @@ module cpu (
    ) rbank (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
-    .wr_en_i      (wb_reg_wr_en & wb_valid),
+    .wr_en_i      (reg_wr_en),
     .rd_reg_a_i   (reg_a),
     .rd_reg_b_i   (instruction_q.rb),
-    .wr_reg_i     (wb_wr_reg),
+    .wr_reg_i     (wr_reg),
     .wr_data_i    (data_to_reg),
     .reg_a_data_o (dec_reg_a_data),
     .reg_b_data_o (dec_reg_b_data),
