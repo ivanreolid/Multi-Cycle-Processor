@@ -34,32 +34,28 @@ module cpu (
 
   // Decode stage wires
   logic [ADDR_WIDTH-1:0] dec_pc;
-  logic [REGISTER_WIDTH-1:0] reg_a;
-  logic [DATA_WIDTH-1:0] dec_reg_a_data, dec_reg_b_data;
+  logic [REGISTER_WIDTH-1:0] rs1, rs2;
+  logic [DATA_WIDTH-1:0] dec_rs1_data, dec_rs2_data;
   logic dec_valid;
   instruction_t instruction_q;
 
   // ALU stage wires
   logic [ADDR_WIDTH-1:0] alu_pc;
-  logic [DATA_WIDTH-1:0] alu_reg_a_data, alu_reg_b_data;
-  logic [ADDR_WIDTH-1:0] alu_branch_offset;
+  logic [DATA_WIDTH-1:0] alu_rs1_data, alu_rs2_data;
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend;
-  logic [OPCODE_WIDTH-1:0] alu_instr_opcode;
   logic [ADDR_WIDTH-1:0] alu_pc_branch_offset;
   logic [ADDR_WIDTH-1:0] jump_address;
-  logic [REGISTER_WIDTH-1:0] alu_wr_reg;
-  logic alu_reg_wr_en;
   logic is_jump;
   logic alu_branch_taken;
   logic alu_valid;
+  instruction_t alu_instruction;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_alu_pc;
-  instruction_t debug_alu_instr;
 `endif
 
   // Mem stage wires
   logic [DATA_WIDTH-1:0] mem_alu_result;
-  logic [DATA_WIDTH-1:0] mem_reg_a_data;
+  logic [DATA_WIDTH-1:0] mem_rs2_data;
   logic [DATA_WIDTH-1:0] mem_data_from_mem;
   logic [REGISTER_WIDTH-1:0] mem_wr_reg;
   logic mem_reg_wr_en;
@@ -129,22 +125,19 @@ module cpu (
     .branch_taken_i       (alu_branch_taken),
     .mem_stall_i          (mem_stall),
     .pc_i                 (dec_pc),
-    .reg_a_data_i         (dec_reg_a_data),
-    .reg_b_data_i         (dec_reg_b_data),
+    .rs1_data_i           (dec_rs1_data),
+    .rs2_data_i           (dec_rs2_data),
     .instruction_i        (instruction_q),
     .alu_valid_o          (alu_valid),
     .offset_sign_extend_o (alu_offset_sign_extend),
-    .reg_a_o              (reg_a),
-    .reg_wr_en_o          (alu_reg_wr_en),
-    .wr_reg_o             (alu_wr_reg),
-    .instr_opcode_o       (alu_instr_opcode),
-    .branch_offset_o      (alu_branch_offset),
+    .rs1_o                (rs1),
+    .rs2_o                (rs2),
     .alu_pc_o             (alu_pc),
-    .alu_reg_a_data_o     (alu_reg_a_data),
-    .alu_reg_b_data_o     (alu_reg_b_data),
+    .alu_rs1_data_o       (alu_rs1_data),
+    .alu_rs2_data_o       (alu_rs2_data),
+    .instruction_o        (alu_instruction),
 `ifndef SYNTHESIS
-    .debug_alu_pc_o       (debug_alu_pc),
-    .debug_alu_instr_o    (debug_alu_instr)
+    .debug_alu_pc_o       (debug_alu_pc)
 `endif
   );
 
@@ -155,25 +148,21 @@ module cpu (
     .clk_i                (clk_i),
     .rst_i                (rst_i),
     .valid_i              (alu_valid),
-    .reg_wr_en_i          (alu_reg_wr_en),
     .mem_stall_i          (mem_stall),
-    .data_a_i             (alu_reg_a_data),
-    .data_b_i             (alu_reg_b_data),
+    .data_a_i             (alu_rs1_data),
+    .data_b_i             (alu_rs2_data),
     .pc_i                 (alu_pc),
-    .branch_offset_i      (alu_branch_offset),
     .offset_sign_extend_i (alu_offset_sign_extend),
-    .instr_opcode_i       (alu_instr_opcode),
-    .wr_reg_i             (alu_wr_reg),
+    .instruction_i        (alu_instruction),
 `ifndef SYNTHESIS
     .debug_pc_i           (debug_alu_pc),
-    .debug_instr_i        (debug_alu_instr),
 `endif
     .mem_valid_o          (mem_valid),
     .mem_reg_wr_en_o      (mem_reg_wr_en),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
     .mem_alu_result_o     (mem_alu_result),
-    .mem_reg_a_data_o     (mem_reg_a_data),
+    .mem_rs2_data_o       (mem_rs2_data),
     .mem_wr_reg_o         (mem_wr_reg),
     .mem_is_load_o        (mem_is_load),
     .mem_is_store_o       (mem_is_store),
@@ -194,7 +183,7 @@ module cpu (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
     .alu_result_i               (mem_alu_result),
-    .reg_a_data_i               (mem_reg_a_data),
+    .rs2_data_i                 (mem_rs2_data),
     .wr_reg_i                   (mem_wr_reg),
     .mem_data_i                 (mem_data_i),
     .valid_i                    (mem_valid),
@@ -257,12 +246,12 @@ module cpu (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (reg_wr_en),
-    .rd_reg_a_i   (reg_a),
-    .rd_reg_b_i   (instruction_q.rb),
+    .rd_reg_a_i   (rs1),
+    .rd_reg_b_i   (rs2),
     .wr_reg_i     (wr_reg),
     .wr_data_i    (data_to_reg),
-    .reg_a_data_o (dec_reg_a_data),
-    .reg_b_data_o (dec_reg_b_data),
+    .reg_a_data_o (dec_rs1_data),
+    .reg_b_data_o (dec_rs2_data),
 `ifndef SYNTHESIS
     .debug_regs_o (debug_regs_o)
 `endif
@@ -272,7 +261,6 @@ module cpu (
     if (!rst_i) begin
       is_jump           <= 1'b0;
       alu_branch_taken  <= 1'b0;
-      alu_branch_offset <= 0;
     end
   end
 

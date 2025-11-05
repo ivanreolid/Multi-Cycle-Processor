@@ -11,7 +11,7 @@ module mem_stage #(
   input  logic clk_i,
   input  logic rst_i,
   input  logic [DATA_WIDTH-1:0] alu_result_i,
-  input  logic [DATA_WIDTH-1:0] reg_a_data_i,
+  input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [REGISTER_WIDTH-1:0] wr_reg_i,
   input  logic [DATA_WIDTH-1:0] mem_data_i,
   input  logic valid_i,
@@ -94,7 +94,7 @@ module mem_stage #(
             state_d        = WAITING;
           end else if (is_store_i) begin
             wr_req_valid_o = 1'b1;
-            wr_data_o      = reg_a_data_i;
+            wr_data_o      = rs2_data_i;
             wb_valid_d     = 1'b1;
             state_d        = READY;
           end else
