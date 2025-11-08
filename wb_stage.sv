@@ -35,7 +35,7 @@ module wb_stage #(
 `endif
   end
 
-  assign reg_wr_en_o   = reg_wr_en_i & valid_i;
+  assign reg_wr_en_o   = reg_wr_en_i;
   assign wr_reg_o      = wr_reg_i;
   assign data_to_reg_o = is_load_i ? data_from_mem_i : alu_result_i;
 
