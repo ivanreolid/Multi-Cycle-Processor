@@ -102,12 +102,12 @@ module mem_stage #(
         end
       end
       WAITING: begin
-        stall_o              = 1'b1;
         if (mem_data_is_valid_i) begin
           wb_data_from_mem_d = mem_data_i;
           wb_valid_d         = 1'b1;
           state_d            = READY;
-        end
+        end else
+          stall_o            = 1'b1;
       end
     endcase
   end
