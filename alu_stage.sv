@@ -21,11 +21,15 @@ module alu_stage #(
 `endif
   output logic mem_valid_o,
   output logic mem_reg_wr_en_o,
+  output logic is_instr_wbalu_o,
+  output logic instr_finishes_o,
+  output logic [REGISTER_WIDTH-1:0] wr_reg_o,
   output logic [ADDR_WIDTH-1:0] pc_branch_offset_o,
   output logic [ADDR_WIDTH-1:0] jump_address_o,
   output logic [DATA_WIDTH-1:0] mem_alu_result_o,
   output logic [DATA_WIDTH-1:0] mem_rs2_data_o,
   output logic [REGISTER_WIDTH-1:0] mem_wr_reg_o,
+  output logic [DATA_WIDTH-1:0] data_to_reg_o,
   output logic mem_is_load_o,
   output logic mem_is_store_o,
   output logic branch_taken_o,
@@ -42,36 +46,43 @@ module alu_stage #(
 
   logic is_zero, is_less;
   logic is_load_d, is_store_d;
-  logic mem_reg_wr_en_d;
+  logic mem_valid_d, mem_reg_wr_en_d;
 
   access_size_t access_size_d;
 
   always_comb begin : opcode
-    is_load_d       = 1'b0;
-    is_store_d      = 1'b0;
-    is_jump_o       = 1'b0;
-    mem_reg_wr_en_d = 1'b0;
-    branch_taken_o  = 1'b0;
-    alu_data_a      = data_a_i;
-    alu_data_b      = data_b_i;
+    is_load_d        = 1'b0;
+    is_store_d       = 1'b0;
+    is_jump_o        = 1'b0;
+    mem_valid_d      = 1'b0;
+    mem_reg_wr_en_d  = 1'b0;
+    branch_taken_o   = 1'b0;
+    is_instr_wbalu_o = 1'b0;
+    instr_finishes_o = 1'b0;
+    alu_data_a       = data_a_i;
+    alu_data_b       = data_b_i;
 
     case(instruction_i.opcode)
       R: begin
-        mem_reg_wr_en_d = 1'b1;
+        is_instr_wbalu_o = valid_i;
+        instr_finishes_o = valid_i;
       end
       LOAD: begin
         is_load_d        = 1'b1;
         alu_data_b       = offset_sign_extend_i;
         access_size_d    = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
+        mem_valid_d      = valid_i;
         mem_reg_wr_en_d  = 1'b1;
       end
       STORE: begin
         is_store_d       = 1'b1;
         alu_data_b       = offset_sign_extend_i;
+        mem_valid_d      = valid_i;
         access_size_d    = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
       end
       BRANCH: begin
         if (valid_i) begin
+          instr_finishes_o = 1'b1;
           if (instruction_i.funct3 == 3'b000 & is_zero)       // BEQ
             branch_taken_o = 1'b1;
           else if (instruction_i.funct3 == 3'b001 & ~is_zero) // BNE
@@ -83,10 +94,11 @@ module alu_stage #(
         end
       end
       JAL: begin
-        is_jump_o       = valid_i;
-        alu_data_a      = pc_i;
-        alu_data_b      = 4;
-        mem_reg_wr_en_d = 1'b1;
+        is_jump_o        = valid_i;
+        is_instr_wbalu_o = valid_i;
+        instr_finishes_o = valid_i;
+        alu_data_a       = pc_i;
+        alu_data_b       = 4;
       end
     endcase
   end
@@ -98,7 +110,7 @@ module alu_stage #(
       mem_is_load_o     <= 1'b0;
       mem_is_store_o    <= 1'b0;
     end else if (!mem_stall_i) begin
-      mem_valid_o       <= valid_i;
+      mem_valid_o       <= mem_valid_d;
       mem_reg_wr_en_o   <= mem_reg_wr_en_d;
       mem_is_load_o     <= is_load_d;
       mem_is_store_o    <= is_store_d;
@@ -115,6 +127,9 @@ module alu_stage #(
 
   assign pc_branch_offset_o = pc_i + offset_sign_extend_i;
   assign jump_address_o     = pc_i + offset_sign_extend_i;
+
+  assign wr_reg_o      = instruction_i.rd;
+  assign data_to_reg_o = mem_alu_result_d;  // ALU result
 
   alu #(
     .OPCODE_WIDTH (OPCODE_WIDTH),

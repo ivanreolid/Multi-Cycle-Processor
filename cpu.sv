@@ -48,6 +48,9 @@ module cpu (
   logic is_jump;
   logic alu_branch_taken;
   logic alu_valid;
+  logic alu_is_instr_wbalu, alu_instr_finishes;
+  logic [REGISTER_WIDTH-1:0] alu_wr_reg;
+  logic [DATA_WIDTH-1:0] alu_data_to_reg;
   instruction_t alu_instruction;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_alu_pc;
@@ -78,6 +81,7 @@ module cpu (
   logic wb_is_load;
   logic wb_reg_wr_en;
   logic wb_valid;
+  logic [DATA_WIDTH-1:0] wb_data_to_reg;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_wb_pc;
   logic debug_non_store_is_completed;
@@ -123,6 +127,7 @@ module cpu (
     .valid_i              (dec_valid),
     .is_jump_i            (is_jump),
     .branch_taken_i       (alu_branch_taken),
+    .alu_instr_finishes_i (alu_instr_finishes),
     .mem_stall_i          (mem_stall),
     .wb_reg_wr_en_i       (reg_wr_en),
     .wb_wr_reg_i          (wr_reg),
@@ -162,11 +167,15 @@ module cpu (
 `endif
     .mem_valid_o          (mem_valid),
     .mem_reg_wr_en_o      (mem_reg_wr_en),
+    .is_instr_wbalu_o     (alu_is_instr_wbalu),
+    .instr_finishes_o     (alu_instr_finishes),
+    .wr_reg_o             (alu_wr_reg),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
     .mem_alu_result_o     (mem_alu_result),
     .mem_rs2_data_o       (mem_rs2_data),
     .mem_wr_reg_o         (mem_wr_reg),
+    .data_to_reg_o        (alu_data_to_reg),
     .mem_is_load_o        (mem_is_load),
     .mem_is_store_o       (mem_is_store),
     .branch_taken_o       (alu_branch_taken),
@@ -228,18 +237,7 @@ module cpu (
     .alu_result_i                   (wb_alu_result),
     .data_from_mem_i                (wb_data_from_mem),
     .is_load_i                      (wb_is_load),
-`ifndef SYNTHESIS
-    .debug_pc_i                     (debug_wb_pc),
-    .debug_instr_i                  (debug_wb_instr),
-`endif
-    .reg_wr_en_o                    (reg_wr_en),
-    .wr_reg_o                       (wr_reg),
-    .data_to_reg_o                  (data_to_reg),
-`ifndef SYNTHESIS
-    .debug_instr_is_completed_o     (debug_instr_is_completed_o),
-    .debug_pc_o                     (debug_pc_o),
-    .debug_instr_o                  (debug_instr_o)
-`endif
+    .data_to_reg_o                  (wb_data_to_reg)
   );
 
   rbank #(
@@ -264,6 +262,12 @@ module cpu (
     if (!rst_i) begin
       is_jump           <= 1'b0;
       alu_branch_taken  <= 1'b0;
+    end else begin
+`ifndef SYNTHESIS
+      debug_instr_is_completed_o <= alu_instr_finishes | wb_valid;
+      debug_pc_o                 <= alu_instr_finishes ? alu_pc          : debug_wb_pc;
+      debug_instr_o              <= alu_instr_finishes ? alu_instruction : debug_wb_instr;
+`endif
     end
   end
 
@@ -272,5 +276,9 @@ module cpu (
   assign req_is_instr_o    = fetch_rd_req_valid;
   assign req_address_o     = fetch_rd_req_valid ? fetch_req_address : mem_req_address;
   assign req_access_size_o = fetch_rd_req_valid ? fetch_req_access_size : mem_req_access_size;
+
+  assign reg_wr_en   = alu_is_instr_wbalu | wb_reg_wr_en;
+  assign wr_reg      = alu_is_instr_wbalu ? alu_wr_reg : wb_wr_reg;
+  assign data_to_reg = alu_is_instr_wbalu ? alu_data_to_reg : wb_data_to_reg;
 
 endmodule

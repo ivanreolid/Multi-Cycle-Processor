@@ -11,6 +11,7 @@ module decode_stage #(
   input  logic valid_i,
   input  logic is_jump_i,
   input  logic branch_taken_i,
+  input  logic alu_instr_finishes_i,
   input  logic mem_stall_i,
   input  logic wb_reg_wr_en_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,

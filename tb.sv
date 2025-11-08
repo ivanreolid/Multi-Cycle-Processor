@@ -174,9 +174,11 @@ module tb;
   task automatic check_completed_instr();
     if (model_instr != cpu_wb_instr) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h",
-                  " (funct7=0x%0h rs2=0x%0h rs1=0x%0h funct3=0x%0h rd=0x%0h opcode=%s)\n",
-                  cpu_wb_pc, cpu_wb_instr, cpu_wb_instr.funct7, cpu_wb_instr.rs2, cpu_wb_instr.rs1,
-                  cpu_wb_instr.funct3, cpu_wb_instr.rd, opcode_to_string(cpu_wb_instr.opcode))};
+                   cpu_wb_pc, cpu_wb_instr)};
+      error_msg = {error_msg, $sformatf(" (funct7=0x%0h rs2=0x%0h rs1=0x%0h funct3=0x%0h",
+                  cpu_wb_instr.funct7, cpu_wb_instr.rs2, cpu_wb_instr.rs1, cpu_wb_instr.funct3)};
+      error_msg = {error_msg, $sformatf(" rd=0x%0h opcode=%s)\n", cpu_wb_instr.rd,
+                   opcode_to_string(cpu_wb_instr.opcode))};
       error = 1'b1;
     end
   endtask

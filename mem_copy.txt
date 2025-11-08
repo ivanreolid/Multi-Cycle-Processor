@@ -16,9 +16,9 @@ IMEM:
     TB can terminate the execution when the PC = 60
 
     Performance result
-      - Total cycles = 18803
+      - Total cycles = 18669
       - Instructions executed = 1415
-      - CPI = 13.298
+      - CPI = 13.203
 
     mem[0] = 8'h83;  // lw 2000(x0) -> x1
     mem[1] = 8'h20;
@@ -93,7 +93,12 @@ IMEM:
     mem[56] = 8'hef;
     mem[57] = 8'hf2;
     mem[58] = 8'hdf;
-    mem[59] = 8'hfe; // jmp x5, -20
+    mem[59] = 8'hfe; // jal x5, -20
+
+    mem[60] = 8'hb3;
+    mem[61] = 8'h85;
+    mem[62] = 8'hb5;
+    mem[63] = 8'h00; // add x11, x11, x11 (Just to have a valid instruction in last adddress)
 
     mem[2000] = 1;    // Increment for the i variable
     mem[2004] = 5;    // Value to be stored in the memories
