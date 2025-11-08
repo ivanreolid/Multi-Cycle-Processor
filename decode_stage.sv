@@ -12,9 +12,12 @@ module decode_stage #(
   input  logic is_jump_i,
   input  logic branch_taken_i,
   input  logic mem_stall_i,
+  input  logic wb_reg_wr_en_i,
+  input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  instruction_t instruction_i,
   output logic alu_valid_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
@@ -42,8 +45,8 @@ module decode_stage #(
     end else if (!mem_stall_i) begin
       alu_valid_o          <= valid_i & ~is_jump_i & ~branch_taken_i;
       alu_pc_o             <= pc_i;
-      alu_rs1_data_o       <= rs1_data_i;
-      alu_rs2_data_o       <= rs2_data_i;
+      alu_rs1_data_o       <= alu_rs1_data_d;
+      alu_rs2_data_o       <= alu_rs2_data_d;
       offset_sign_extend_o <= offset_sign_extend_d;
       instruction_o        <= instruction_i;
 `ifndef SYNTHESIS
@@ -65,6 +68,17 @@ module decode_stage #(
                                       1'b0};
       default: offset_sign_extend_d = '0;
     endcase
+  end
+
+  always_comb begin : bypass_computation
+    logic is_bypass_wb_rs1;
+    logic is_bypass_wb_rs2;
+
+    is_bypass_wb_rs1 = wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2 = wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+
+    alu_rs1_data_d = is_bypass_wb_rs1 ? wb_data_to_reg_i : rs1_data_i;
+    alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
   end
 
   assign rs1_o = instruction_i.rs1;
