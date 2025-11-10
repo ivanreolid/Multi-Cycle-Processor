@@ -21,19 +21,24 @@ module decode_stage #(
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  instruction_t instruction_i,
   output logic alu_valid_o,
+  output logic ex_valid_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] rs1_o,
   output logic [REGISTER_WIDTH-1:0] rs2_o,
+  output logic [REGISTER_WIDTH-1:0] ex_wr_reg_o,
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
   output instruction_t instruction_o,
 `ifndef SYNTHESIS
-  output logic [ADDR_WIDTH-1:0] debug_alu_pc_o
+  output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
+  output logic [ADDR_WIDTH-1:0] debug_ex_pc_o,
+  output instruction_t debug_ex_instr_o
 `endif
 );
 
-  logic is_branch, is_store;
+  logic valid_instruction;
+  logic is_mul;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] offset_sign_extend_d;
@@ -43,8 +48,11 @@ module decode_stage #(
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       alu_valid_o          <= 1'b0;
+      ex_valid_o           <= 1'b0;
     end else if (!mem_stall_i) begin
-      alu_valid_o          <= valid_i & ~is_jump_i & ~branch_taken_i;
+      alu_valid_o          <= ~is_mul & valid_instruction;
+      ex_valid_o           <= is_mul & valid_instruction;
+      ex_wr_reg_o          <= instruction_i.rd;
       alu_pc_o             <= pc_i;
       alu_rs1_data_o       <= alu_rs1_data_d;
       alu_rs2_data_o       <= alu_rs2_data_d;
@@ -52,6 +60,8 @@ module decode_stage #(
       instruction_o        <= instruction_i;
 `ifndef SYNTHESIS
       debug_alu_pc_o       <= pc_i;
+      debug_ex_pc_o        <= pc_i;
+      debug_ex_instr_o     <= instruction_i;
 `endif
     end
   end
@@ -81,6 +91,10 @@ module decode_stage #(
     alu_rs1_data_d = is_bypass_wb_rs1 ? wb_data_to_reg_i : rs1_data_i;
     alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
   end
+
+  assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
+  assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
+                  instruction_i.funct7 == 7'b0000001;
 
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;

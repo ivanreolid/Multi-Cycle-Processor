@@ -196,10 +196,15 @@ module tb;
   task execute_model_instr();
     case (model_instr.opcode)
       R: begin
-        if (model_instr.funct3 == 3'b000) begin //ADD or SUB
-            model_regs[model_instr.rd] = model_instr.funct7 == 0 ?
-            model_regs[model_instr.rs1] + model_regs[model_instr.rs2] :
-            model_regs[model_instr.rs1] - model_regs[model_instr.rs2];
+        if (model_instr.funct3 == 3'b000) begin //ADD, SUB or MUL
+          case (model_instr.funct7)
+            7'b0000000: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] + model_regs[model_instr.rs2];
+            7'b0100000: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] - model_regs[model_instr.rs2];
+            7'b0000001: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] * model_regs[model_instr.rs2];
+          endcase
         end
       end
       LOAD: begin
