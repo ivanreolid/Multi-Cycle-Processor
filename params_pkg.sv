@@ -8,11 +8,12 @@ package params_pkg;
   parameter int MEM_SIZE = 4096;
 
   typedef enum logic[6:0] {
-    R      = 7'b0110011,
-    LOAD   = 7'b0000011,
-    STORE  = 7'b0100011,
-    BRANCH = 7'b1100011,
-    JAL    = 7'b1101111
+    R         = 7'b0110011,
+    LOAD      = 7'b0000011,
+    STORE     = 7'b0100011,
+    BRANCH    = 7'b1100011,
+    JAL       = 7'b1101111,
+    IMMEDIATE = 7'b0010011
   } opcode;
 
   typedef enum logic [1:0] {
@@ -23,11 +24,12 @@ package params_pkg;
 
   function string opcode_to_string(opcode op);
     case (op)
-      R     : opcode_to_string = "R";
-      LOAD  : opcode_to_string = "LOAD";
-      STORE : opcode_to_string = "STORE";
-      BRANCH: opcode_to_string = "BRANCH";
-      JAL   : opcode_to_string = "JAL";
+      R         : opcode_to_string = "R";
+      LOAD      : opcode_to_string = "LOAD";
+      STORE     : opcode_to_string = "STORE";
+      BRANCH    : opcode_to_string = "BRANCH";
+      JAL       : opcode_to_string = "JAL";
+      IMMEDIATE : opcode_to_string = "IMMEDIATE";
       default: opcode_to_string = "???";
     endcase
   endfunction

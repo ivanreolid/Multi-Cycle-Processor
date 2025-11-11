@@ -33,6 +33,10 @@ module alu #(
           result_o = a_i + b_i;
       end
       JAL: result_o = a_i + b_i;
+      IMMEDIATE: begin
+        if (funct3_i == 3'b000)
+          result_o = a_i + b_i;
+      end
       default:     result_o = 0;
     endcase
   end

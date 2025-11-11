@@ -258,6 +258,13 @@ module tb;
         new_model_pc = model_pc + offset_sign_extend;
         model_regs[model_instr.rd] = model_pc + 4;
       end
+      IMMEDIATE: begin
+        offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
+        case (model_instr.funct3)
+          3'b000 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] + offset_sign_extend;
+          default: model_regs[model_instr.rd] = model_regs[model_instr.rd];
+        endcase
+      end
     endcase
   endtask
 
