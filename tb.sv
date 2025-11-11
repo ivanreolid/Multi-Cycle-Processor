@@ -99,7 +99,7 @@ module tb;
     #5 clk = 1; rst = 1;
     #5 clk = 0;
 
-    for (int i = 0; i < 20000; ++i) begin
+    for (int i = 0; i < 30000; ++i) begin
       #5 clk = 1;
       #5 clk = 0;
       ++total_cycles;
@@ -113,37 +113,8 @@ module tb;
   endfunction
 
   function void initialize_memories();
-    for (int i = 0; i < MEM_SIZE; ++i) begin
-      model_mem[i] = 8'h0;
-    end
-    /*model_mem[1] = 32'h4470;      // ADD r1, r2 -> r7
-    model_mem[2] = 32'h40B23;     // SUB r6, r5 -> r18
-    model_mem[3] = 32'h446F1;     // LW @17(r3) -> r15
-    model_mem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
-    model_mem[5] = 32'h36212;     // SW r1 -> @13(r17)
-    model_mem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
-    model_mem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
-    model_mem[8] = 32'h98DF9;     // BEQ r6, r6, 63
-    model_mem[61] = 32'h427A;     // BNE r1, r1, 3
-    model_mem[62] = 32'h4CAA;     // BNE r1, r6, 10
-    model_mem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
-    model_mem[72] = 32'h390AB;    // BLT r14, r8, 10
-    model_mem[73] = 32'h21CAB;    // BLT r8, r14, 10
-    model_mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
-    model_mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    model_mem[94] = 32'h400D;     // JMP r1*/
-
-    model_mem[1] = 32'h446F1;
-    model_mem[2] = 32'h4470;
-    model_mem[3] = 32'h4470;
-    model_mem[4] = 32'h4470;
-    model_mem[5] = 32'h4470;
-    model_mem[6] = 32'h4470;
-    model_mem[7] = 32'h4470;
-    model_mem[8] = 32'h4470;
-    model_mem[9] = 32'h4470;
-    model_mem[10] = 32'h4470;
-
+    $readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("mem_copy.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
