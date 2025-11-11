@@ -1,108 +1,166 @@
-IMEM:
+&a = 1000
+&b = 1512
 
-    @a[0] = 100
-    @b[0] = 700
-    x4 contains variable i for the first loop
-    x7 contains variable i for the second loop
-    x8 contains size offset for memory accesses
-    x9 contains offset for first loop memory accesses
-    x10 contains offset for second loop memory accesses
+main:
+    la x1, a            # x1 = &a
+    la x2, b            # x2 = &b
 
-    The program must end with each element of both vectors a and b being 5:
-      - a[0] = 5, a[1] = 0, a[2] = 0, a[3] = 0 
-      - a[4] = 5, a[5] = 0, a[6] = 0, a[7] = 0
-      - ...
+    li x3, 128          # x3 = 128 (limit)
+    li x4, 4            # x4 = 4 (bytes per element)
+    li x5, 5            # x5 = 5 (value to be stored)
 
-    TB can terminate the execution when the PC = 60
+    li x6, 0            # i = 0
 
-    Performance result
-      - Total cycles = 18669
-      - Instructions executed = 1415
-      - CPI = 13.203
+loop_a:
+    blt x6, x3, body_a    # if (i < 128) -> body
+    j   end_a
 
-    mem[0] = 8'h83;  // lw 2000(x0) -> x1
-    mem[1] = 8'h20;
-    mem[2] = 8'h00;
-    mem[3] = 8'h7d;
+body_a:
+    mul x7, x6, x4      # x7 = i * 4
+    add x7, x1, x7      # x7 = &a[i]
+    sw  x5, 0(x7)       # 5 -> &a[i]
 
-    mem[4] = 8'h03;
-    mem[5] = 8'h21;
-    mem[6] = 8'h40;
-    mem[7] = 8'h7d; // lw 2004(x0) -> x2
+    addi x6, x6, 1
+    j    loop_a
 
-    mem[8]  = 8'h83;
-    mem[9]  = 8'h21;
-    mem[10] = 8'h80;
-    mem[11] = 8'h7d; // lw 2008(x0) -> x3
+end_a:
+    li x6, 0
 
-    mem[12] = 8'h03;
-    mem[13] = 8'h24;
-    mem[14] = 8'hc0;
-    mem[15] = 8'h7d; // lw 2012(x0) -> x8
+loop_b:
+    blt x6, x3, body_b
+    j   end
 
-    mem[16] = 8'h63;
-    mem[17] = 8'h5a;
-    mem[18] = 8'h32;
-    mem[19] = 8'h00; // bge x4, x3, 20
+body_b:
+    mul x7, x6, x4       # x7 = i * 4
+    add x8, x1, x7       # x8 = &a[i]
+    add x9, x2, x7       # x9 = &b[i]
+    lw  x10, 0(x8)       # x8 = a[i]
+    sw  x10, 0(x9)       # a[i] = b[i]
 
-    mem[20] = 8'h23;
-    mem[21] = 8'ha2;
-    mem[22] = 8'h24;
-    mem[23] = 8'h06; // sw x2 -> 100(x9)
+    addi x6, x6, 1
+    j    loop_b
 
-    mem[24] = 8'h33;
-    mem[25] = 8'h02;
-    mem[26] = 8'h12;
-    mem[27] = 8'h00; // add x4, x1 -> x4
+end:
 
-    mem[28] = 8'hb3;
-    mem[29] = 8'h84;
-    mem[30] = 8'h84;
-    mem[31] = 8'h00; // add x9, x9, x8
+The program must finish with both vectors equal (each element with value 5)
 
-    mem[32] = 8'hef;
-    mem[33] = 8'hf2;
-    mem[34] = 8'h1f;
-    mem[35] = 8'hff; // jal x5, -16
+    mem[0] = 8'h93;
+    mem[1] = 8'h00;
+    mem[2] = 8'h80;
+    mem[3] = 8'h3e;  // addi x1, x0, 1000 (la x1, a)
 
-    mem[36] = 8'h63;
-    mem[37] = 8'hdc;
-    mem[38] = 8'h33;
-    mem[39] = 8'h00; // bge x7, x3, 24
+    mem[4] = 8'h13;
+    mem[5] = 8'h01;
+    mem[6] = 8'h80;
+    mem[7] = 8'h5e; // addi x2, x0, 1512 (la x2, sum)
 
-    mem[40] = 8'h03;
-    mem[41] = 8'h23;
-    mem[42] = 8'h45;
-    mem[43] = 8'h06; // lw 100(x10) -> x6
+    mem[8] = 8'h93;
+    mem[9] = 8'h01;
+    mem[10] = 8'h00;
+    mem[11] = 8'h08; // addi x3, 128
 
-    mem[44] = 8'h23;
-    mem[45] = 8'h2e;
-    mem[46] = 8'h65;
-    mem[47] = 8'h2a; // sw x6 -> 700(x10)
+    mem[12] = 8'h13;
+    mem[13] = 8'h02;
+    mem[14] = 8'h40;
+    mem[15] = 8'h00; // addi x4, x0, 4
 
-    mem[48] = 8'hb3;
-    mem[49] = 8'h83;
-    mem[50] = 8'h13;
-    mem[51] = 8'h00; // add x7, x1 -> x7
+    mem[16] = 8'h93;
+    mem[17] = 8'h02;
+    mem[18] = 8'h50;
+    mem[19] = 8'h00; // addi x5, x0, 5
 
-    mem[52] = 8'h33;
-    mem[53] = 8'h05;
-    mem[54] = 8'h85;
-    mem[55] = 8'h00; // add x10, x10, x8
+    mem[20] = 8'h13;
+    mem[21] = 8'h03;
+    mem[22] = 8'h00;
+    mem[23] = 8'h00; // addi x6, x0, x0
 
-    mem[56] = 8'hef;
-    mem[57] = 8'hf2;
-    mem[58] = 8'hdf;
-    mem[59] = 8'hfe; // jal x5, -20
+    mem[24] = 8'h63;
+    mem[25] = 8'h44;
+    mem[26] = 8'h33;
+    mem[27] = 8'h00; // blt x6, x3, 8
 
-    mem[60] = 8'hb3;
-    mem[61] = 8'h85;
-    mem[62] = 8'hb5;
-    mem[63] = 8'h00; // add x11, x11, x11 (Just to have a valid instruction in last adddress)
+    mem[28] = 8'h6f;
+    mem[29] = 8'h05;
+    mem[30] = 8'h80;
+    mem[31] = 8'h01; // jal x10, 24
 
-    mem[2000] = 1;    // Increment for the i variable
-    mem[2004] = 5;    // Value to be stored in the memories
-    mem[2008] = 128;  // Number of the for iterations (vector lenght)
-    mem[2012] = 4,    // Offset (word) for memory accesses
+    mem[32] = 8'hb3;
+    mem[33] = 8'h03;
+    mem[34] = 8'h43;
+    mem[35] = 8'h02; // mul x7, x6, x4
 
+    mem[36] = 8'hb3;
+    mem[37] = 8'h83;
+    mem[38] = 8'h70;
+    mem[39] = 8'h00; // add x7, x1, x7
+
+    mem[40] = 8'h23;
+    mem[41] = 8'ha0;
+    mem[42] = 8'h53;
+    mem[43] = 8'h00; // sw x5, 0(x7)
+
+    mem[44] = 8'h13;
+    mem[45] = 8'h03;
+    mem[46] = 8'h13;
+    mem[47] = 8'h00; // addi x6, x6, 1
+
+    mem[48] = 8'h6f;
+    mem[49] = 8'hf5;
+    mem[50] = 8'h9f;
+    mem[51] = 8'hfe; // jal x10, -24
+
+    mem[52] = 8'h13;
+    mem[53] = 8'h03;
+    mem[54] = 8'h00;
+    mem[55] = 8'h00; // addi x6, x0, 0
+
+    mem[56] = 8'h63;
+    mem[57] = 8'h44;
+    mem[58] = 8'h33;
+    mem[59] = 8'h00; // blt x6, x3, 8
+
+    mem[60] = 8'hef;
+    mem[61] = 8'h05;
+    mem[62] = 8'h00;
+    mem[63] = 8'h02; // jal x11, 32
+
+    mem[64] = 8'hb3;
+    mem[65] = 8'h03;
+    mem[66] = 8'h43;
+    mem[67] = 8'h02; // mul x7, x6, x4
+
+    mem[68] = 8'h33;
+    mem[69] = 8'h84;
+    mem[70] = 8'h70;
+    mem[71] = 8'h00; // add x8, x1, x7
+
+    mem[72] = 8'hb3;
+    mem[73] = 8'h04;
+    mem[74] = 8'h71;
+    mem[75] = 8'h00; // add x9, x2, x7
+
+    mem[76] = 8'h03;
+    mem[77] = 8'h25;
+    mem[78] = 8'h04;
+    mem[79] = 8'h00; // lw x10, 0(x8)
+
+    mem[80] = 8'h23;
+    mem[81] = 8'ha0;
+    mem[82] = 8'ha4;
+    mem[83] = 8'h00; // sw x10, 0(x9)
+
+    mem[84] = 8'h13;
+    mem[85] = 8'h03;
+    mem[86] = 8'h13;
+    mem[87] = 8'h00; // addi x6, x6, 1
+
+    mem[88] = 8'hef;
+    mem[89] = 8'hf5;
+    mem[90] = 8'h1f;
+    mem[91] = 8'hfe; // jal x11, -32
+
+    mem[92] = 8'hb3;
+    mem[93] = 8'h05;
+    mem[94] = 8'h00;
+    mem[95] = 8'h00; // add x11, x0, x0 (to have last valid instruction)
 

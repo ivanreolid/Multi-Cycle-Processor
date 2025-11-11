@@ -58,12 +58,12 @@ The program must finish with sum = 8128
     mem[8] = 8'h93;
     mem[9] = 8'h01;
     mem[10] = 8'h00;
-    mem[11] = 8'h08; // addi x3, 128
+    mem[11] = 8'h08; // addi x3, x0, 128
 
     mem[12] = 8'h13;
     mem[13] = 8'h02;
     mem[14] = 8'h40;
-    mem[15] = 8'h00; // addi x4, 4
+    mem[15] = 8'h00; // addi x4, x0, 4
 
     mem[16] = 8'h93;
     mem[17] = 8'h02;

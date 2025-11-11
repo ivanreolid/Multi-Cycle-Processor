@@ -14,3 +14,8 @@ Buffer sum
   - Total cycles = 24103
   - Instructions executed = 1677
   - CPI = 14.381
+
+Mem copy
+  - Total cycles = 25500
+  - Instructions executed = 1804
+  - CPI = 14.141
