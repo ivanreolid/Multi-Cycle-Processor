@@ -15,6 +15,7 @@ module ex_stages #(
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
   input  instruction_t debug_instr_i,
 `endif
+  output logic wb_is_next_cycle_o,
   output logic result_ready_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
   output logic [DATA_WIDTH-1:0] result_o,
@@ -72,6 +73,8 @@ module ex_stages #(
 `endif
     end
   end
+
+  assign wb_is_next_cycle_o = pipe4_valid;
 
   assign result_ready_o = pipe5_valid;
   assign wr_reg_o       = pipe5_wr_reg;

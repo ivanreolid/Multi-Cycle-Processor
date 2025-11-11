@@ -12,6 +12,7 @@ module fetch_stage #(
   input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
+  input  logic dec_stall_i,
   input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
@@ -69,11 +70,11 @@ module fetch_stage #(
           pc_d            = (pc + 4) % MEM_SIZE;
           dec_pc_d        = pc;
           dec_instr_d     = instr_i;
-          state_d         = mem_stall_i ? STALL : MEM_REQ;
+          state_d         = dec_stall_i ? STALL : MEM_REQ;
         end
       end
       STALL: begin
-        if (!mem_stall_i)
+        if (!dec_stall_i)
           state_d     = MEM_REQ;
       end
       FLUSH: begin
@@ -93,7 +94,7 @@ module fetch_stage #(
       dec_valid_o    <= 1'b0;
       dec_pc_o       <= '0;
       instruction_o  <= '0;
-    end else if (!mem_stall_i) begin
+    end else if (!dec_stall_i) begin
       state          <= state_d;
       pc             <= pc_d;
       dec_valid_o    <= dec_valid_d;

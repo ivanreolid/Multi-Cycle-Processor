@@ -13,6 +13,7 @@ module decode_stage #(
   input  logic branch_taken_i,
   input  logic alu_instr_finishes_i,
   input  logic mem_stall_i,
+  input  logic wb_is_next_cycle_i,
   input  logic wb_reg_wr_en_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
@@ -20,6 +21,7 @@ module decode_stage #(
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  instruction_t instruction_i,
+  output logic stall_o,
   output logic alu_valid_o,
   output logic ex_valid_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
@@ -49,7 +51,7 @@ module decode_stage #(
     if (!rst_i) begin
       alu_valid_o          <= 1'b0;
       ex_valid_o           <= 1'b0;
-    end else if (!mem_stall_i) begin
+    end else if (!stall_o) begin
       alu_valid_o          <= ~is_mul & valid_instruction;
       ex_valid_o           <= is_mul & valid_instruction;
       ex_wr_reg_o          <= instruction_i.rd;
@@ -98,5 +100,7 @@ module decode_stage #(
 
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
+
+  assign stall_o = (mem_stall_i | wb_is_next_cycle_i) & valid_i;
 
 endmodule : decode_stage
