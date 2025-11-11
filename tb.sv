@@ -265,6 +265,10 @@ module tb;
           default: model_regs[model_instr.rd] = model_regs[model_instr.rd];
         endcase
       end
+      AUIPC: begin
+        offset_sign_extend = {{model_instr[31]}, model_instr[31:12] << 12};
+        model_regs[model_instr.rd] = model_pc + offset_sign_extend;
+      end
     endcase
   endtask
 

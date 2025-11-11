@@ -13,7 +13,8 @@ package params_pkg;
     STORE     = 7'b0100011,
     BRANCH    = 7'b1100011,
     JAL       = 7'b1101111,
-    IMMEDIATE = 7'b0010011
+    IMMEDIATE = 7'b0010011,
+    AUIPC     = 7'b0010111
   } opcode;
 
   typedef enum logic [1:0] {
@@ -30,6 +31,7 @@ package params_pkg;
       BRANCH    : opcode_to_string = "BRANCH";
       JAL       : opcode_to_string = "JAL";
       IMMEDIATE : opcode_to_string = "IMMEDIATE";
+      AUIPC     : opcode_to_string = "AUIPC";
       default: opcode_to_string = "???";
     endcase
   endfunction

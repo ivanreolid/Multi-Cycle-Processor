@@ -72,15 +72,16 @@ module decode_stage #(
     case (instruction_i.opcode)
       LOAD      : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:20]};
       STORE     : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:25],
-                                      instruction_i[11:7]};
+                                         instruction_i[11:7]};
       BRANCH    : offset_sign_extend_d = {{19{instruction_i[31]}}, instruction_i[31],
-                                      instruction_i[7], instruction_i[30:25],
-                                      instruction_i[11:8], 1'b0};
+                                         instruction_i[7], instruction_i[30:25],
+                                         instruction_i[11:8], 1'b0};
       JAL       : offset_sign_extend_d = {{11{instruction_i[31]}}, instruction_i[31],
-                                      instruction_i[19:12], instruction_i[20], instruction_i[30:21],
-                                      1'b0};
+                                         instruction_i[19:12], instruction_i[20],
+                                         instruction_i[30:21], 1'b0};
       IMMEDIATE : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:20]};
-      default: offset_sign_extend_d = '0;
+      AUIPC     : offset_sign_extend_d = {{instruction_i[31]}, instruction_i[31:12] << 12};
+      default   : offset_sign_extend_d = '0;
     endcase
   end
 

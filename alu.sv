@@ -37,6 +37,7 @@ module alu #(
         if (funct3_i == 3'b000)
           result_o = a_i + b_i;
       end
+      AUIPC: result_o = a_i + b_i;
       default:     result_o = 0;
     endcase
   end
