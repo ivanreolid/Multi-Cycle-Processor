@@ -76,34 +76,35 @@ module tb;
     .debug_mem_o                    (cpu_mem)
   );
 
+  always_ff @(posedge clk) begin : cycles_count
+    if (!rst)
+      total_cycles <= 0;
+    else
+      total_cycles <= total_cycles + 1;
+  end
+
   always_ff @(posedge clk) begin : check
     if (!rst) begin
       model_pc <= '0;
-    end else begin
-      if (cpu_instr_is_completed)
+    end else if (cpu_instr_is_completed) begin
         execute_and_compare();
     end
   end
 
   initial begin
-    clk = 1;
-    rst = 0;
+    clk = 0;
+    forever #5 clk = ~clk;
+  end
 
-    total_cycles = 0;
+  initial begin
+    rst = 0;
     instructions_executed = 0;
 
     initialize_registers();
     initialize_memories();
 
-    #5 clk = 0;
-    #5 clk = 1; rst = 1;
-    #5 clk = 0;
-
-    for (int i = 0; i < 30000; ++i) begin
-      #5 clk = 1;
-      #5 clk = 0;
-      ++total_cycles;
-    end
+    repeat (2) @(posedge clk);
+    rst = 1;
   end
 
   function void initialize_registers();
