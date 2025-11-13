@@ -27,10 +27,10 @@ module fetch_stage #(
 );
 
   typedef enum logic [2:0] {
-    IDLE     = 2'b000,
-    MEM_REQ  = 2'b001,
-    MEM_WAIT = 2'b010,
-    FLUSH    = 2'b011,
+    IDLE     = 3'b000,
+    MEM_REQ  = 3'b001,
+    MEM_WAIT = 3'b010,
+    FLUSH    = 3'b011,
     STALL    = 3'b100
   } state_t;
 
