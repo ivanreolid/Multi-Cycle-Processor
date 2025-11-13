@@ -1,0 +1,27 @@
+The purpose of this file is to explain implementation decisions that have been taken and possible problems that are going to appear.
+
+Stalls
+
+There is no need at this moment to check execution pipeline in order to stall decode stage since latencies are so high. It is not possible to have an instruction in either of the execution stages and another instruction in any other stage (a part from fetch). This also means that no out of order completion can occur when an instruction in some of the exection stages is involded.
+
+Always flopping in memory stage to write back stage, since the latter doesn't stall. The only important thing here to remember is that there are two important wires that have to be flopped with 1 one cycle: wb_valid and reg_wr_en.
+
+Performance results
+
+No caches
+
+Buffer sum
+  - Total cycles = 24103
+  - Instructions executed = 1677
+  - CPI = 14.381
+
+Mem copy
+  - Total cycles = 25500
+  - Instructions executed = 1804
+  - CPI = 14.141
+
+Matrix multiply
+  This test is really huge that it takes to much time to simulate (at least with modelsim). The total number of cycles is not accurate since it has been calculated from having the total number of cycles executed for 9 iterations of the loop i and then extrapolated to the 128 iterations for i.
+  - Total cycles = 373.450.536
+  - Instructions executed = 29.689.746
+  - CPI = 12.58

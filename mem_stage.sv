@@ -30,6 +30,7 @@ module mem_stage #(
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic stall_o,
+  output logic wb_is_next_cycle_o,
   output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
   output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
   output logic [DATA_WIDTH-1:0] wb_alu_result_o,
@@ -49,6 +50,7 @@ module mem_stage #(
   } state_t;
 
   logic wb_valid_d;
+  logic wb_reg_wr_en_d;
   logic [DATA_WIDTH-1:0] wb_data_from_mem_d;
 
   state_t state, state_d;
@@ -61,7 +63,7 @@ module mem_stage #(
       state              <= IDLE;
     end else begin
       wb_valid_o         <= wb_valid_d;
-      wb_reg_wr_en_o     <= reg_wr_en_i;
+      wb_reg_wr_en_o     <= wb_reg_wr_en_d;
       wb_is_load_o       <= is_load_i;
       wb_wr_reg_o        <= wr_reg_i;
       wb_alu_result_o    <= alu_result_i;
@@ -78,6 +80,7 @@ module mem_stage #(
     rd_req_valid_o = 1'b0;
     wr_req_valid_o = 1'b0;
     wb_valid_d     = 1'b0;
+    wb_reg_wr_en_d = 1'b0;
     stall_o        = 1'b0;
     state_d        = state;
 
@@ -89,16 +92,13 @@ module mem_stage #(
         if (valid_i) begin
           mem_req_address_o = alu_result_i;
           req_access_size_o = access_size_i;
-          if (is_load_i) begin
-            rd_req_valid_o = 1'b1;
-            state_d        = WAITING;
-          end else if (is_store_i) begin
-            wr_req_valid_o = 1'b1;
-            wr_data_o      = rs2_data_i;
-            wb_valid_d     = 1'b1;
-            state_d        = READY;
-          end else
-            wb_valid_d     = 1'b1;
+          rd_req_valid_o    = is_load_i;
+          wr_req_valid_o    = is_store_i;
+          wr_data_o         = rs2_data_i;
+          wb_reg_wr_en_d    = is_load_i ? 1'b0 : reg_wr_en_i;
+          wb_valid_d        = is_load_i ? 1'b0 : 1'b1;
+          stall_o           = is_load_i;
+          state_d           = is_load_i ? WAITING : READY;
         end
       end
       WAITING: begin
@@ -106,10 +106,14 @@ module mem_stage #(
         if (mem_data_is_valid_i) begin
           wb_data_from_mem_d = mem_data_i;
           wb_valid_d         = 1'b1;
+          wb_reg_wr_en_d     = 1'b1;
+          stall_o            = 1'b0;
           state_d            = READY;
         end
       end
     endcase
   end
+
+  assign wb_is_next_cycle_o = wb_valid_d;
 
 endmodule : mem_stage

@@ -12,6 +12,7 @@ module fetch_stage #(
   input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
+  input  logic dec_stall_i,
   input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
@@ -44,16 +45,16 @@ module fetch_stage #(
 
   always_comb begin : state_update
     rd_req_valid_o   = 1'b0;
-    mem_req_addr_o   = pc;
-    dec_valid_d      = 1'b0;
     state_d          = state;
-    pc_d             = pc;
 
     case (state)
       IDLE: begin
-        state_d = MEM_REQ;
+        pc_d        = pc;
+        dec_valid_d = 1'b0;
+        state_d     = MEM_REQ;
       end
       MEM_REQ: begin
+        dec_valid_d         = 1'b0;
         if (!mem_req_i) begin
           rd_req_valid_o    = 1'b1;
           mem_req_addr_o    = pc;
@@ -65,25 +66,16 @@ module fetch_stage #(
         if (alu_branch_taken_i | is_jump_i)
           state_d = FLUSH;
         else if (instr_valid_i) begin
-          if (mem_stall_i) begin
-            dec_instr_d   = instr_i;
-            state_d       = STALL;
-          end else begin
-            dec_valid_d   = 1'b1;
-            dec_instr_d   = instr_i;
-            dec_pc_d      = pc;
-            pc_d          = (pc + 4) % MEM_SIZE;
-            state_d       = MEM_REQ;
-          end
+          dec_valid_d     = 1'b1;
+          pc_d            = (pc + 4) % MEM_SIZE;
+          dec_pc_d        = pc;
+          dec_instr_d     = instr_i;
+          state_d         = dec_stall_i ? STALL : MEM_REQ;
         end
       end
       STALL: begin
-        if (!mem_stall_i) begin
-          dec_valid_d = 1'b1;
-          dec_pc_d    = pc;
-          pc_d        = (pc + 4) % MEM_SIZE;
+        if (!dec_stall_i)
           state_d     = MEM_REQ;
-        end
       end
       FLUSH: begin
         if (instr_valid_i) begin
@@ -102,7 +94,7 @@ module fetch_stage #(
       dec_valid_o    <= 1'b0;
       dec_pc_o       <= '0;
       instruction_o  <= '0;
-    end else if (!mem_stall_i) begin
+    end else if (!dec_stall_i) begin
       state          <= state_d;
       pc             <= pc_d;
       dec_valid_o    <= dec_valid_d;

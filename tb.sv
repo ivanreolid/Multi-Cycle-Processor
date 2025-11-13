@@ -4,8 +4,6 @@
 import params_pkg::*;
 
 module tb;
-  localparam MEM_SIZE = 4096;
-
   logic clk;
   logic rst;
 
@@ -76,34 +74,35 @@ module tb;
     .debug_mem_o                    (cpu_mem)
   );
 
+  always_ff @(posedge clk) begin : cycles_count
+    if (!rst)
+      total_cycles <= 0;
+    else
+      total_cycles <= total_cycles + 1;
+  end
+
   always_ff @(posedge clk) begin : check
     if (!rst) begin
       model_pc <= '0;
-    end else begin
-      if (cpu_instr_is_completed)
+    end else if (cpu_instr_is_completed) begin
         execute_and_compare();
     end
   end
 
   initial begin
-    clk = 1;
-    rst = 0;
+    clk = 0;
+    forever #5 clk = ~clk;
+  end
 
-    total_cycles = 0;
+  initial begin
+    rst = 0;
     instructions_executed = 0;
 
     initialize_registers();
     initialize_memories();
 
-    #5 clk = 0;
-    #5 clk = 1; rst = 1;
-    #5 clk = 0;
-
-    for (int i = 0; i < 20000; ++i) begin
-      #5 clk = 1;
-      #5 clk = 0;
-      ++total_cycles;
-    end
+    repeat (2) @(posedge clk);
+    rst = 1;
   end
 
   function void initialize_registers();
@@ -113,37 +112,9 @@ module tb;
   endfunction
 
   function void initialize_memories();
-    for (int i = 0; i < MEM_SIZE; ++i) begin
-      model_mem[i] = 8'h0;
-    end
-    /*model_mem[1] = 32'h4470;      // ADD r1, r2 -> r7
-    model_mem[2] = 32'h40B23;     // SUB r6, r5 -> r18
-    model_mem[3] = 32'h446F1;     // LW @17(r3) -> r15
-    model_mem[4] = 32'hFFFE1981;  // LW @-17(r12) -> r24
-    model_mem[5] = 32'h36212;     // SW r1 -> @13(r17)
-    model_mem[6] = 32'hFFFF50E2;  // SW r14 -> @-3(r8)
-    model_mem[7] = 32'hA0DF9;     // BEQ r16, r6, 63
-    model_mem[8] = 32'h98DF9;     // BEQ r6, r6, 63
-    model_mem[61] = 32'h427A;     // BNE r1, r1, 3
-    model_mem[62] = 32'h4CAA;     // BNE r1, r6, 10
-    model_mem[71] = 32'hFFF98D69; // BEQ r6, r6, -10
-    model_mem[72] = 32'h390AB;    // BLT r14, r8, 10
-    model_mem[73] = 32'h21CAB;    // BLT r8, r14, 10
-    model_mem[83] = 32'h6BEAC;    // BGE r26, r31, 10
-    model_mem[84] = 32'h7F4AC;    // BGE r31, r26, 10
-    model_mem[94] = 32'h400D;     // JMP r1*/
-
-    model_mem[1] = 32'h446F1;
-    model_mem[2] = 32'h4470;
-    model_mem[3] = 32'h4470;
-    model_mem[4] = 32'h4470;
-    model_mem[5] = 32'h4470;
-    model_mem[6] = 32'h4470;
-    model_mem[7] = 32'h4470;
-    model_mem[8] = 32'h4470;
-    model_mem[9] = 32'h4470;
-    model_mem[10] = 32'h4470;
-
+    //$readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("mem_copy.mem", model_mem);
+    $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -158,10 +129,8 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    /*if (model_pc == 9)
-      $finish;*/
-
-    if (model_pc == 61) begin
+    if (model_pc == 228) begin
+      compare_memories();
       $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
                instructions_executed);
@@ -174,9 +143,11 @@ module tb;
   task automatic check_completed_instr();
     if (model_instr != cpu_wb_instr) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h",
-                  " (funct7=0x%0h rs2=0x%0h rs1=0x%0h funct3=0x%0h rd=0x%0h opcode=%s)\n",
-                  cpu_wb_pc, cpu_wb_instr, cpu_wb_instr.funct7, cpu_wb_instr.rs2, cpu_wb_instr.rs1,
-                  cpu_wb_instr.funct3, cpu_wb_instr.rd, opcode_to_string(cpu_wb_instr.opcode))};
+                   cpu_wb_pc, cpu_wb_instr)};
+      error_msg = {error_msg, $sformatf(" (funct7=0x%0h rs2=0x%0h rs1=0x%0h funct3=0x%0h",
+                  cpu_wb_instr.funct7, cpu_wb_instr.rs2, cpu_wb_instr.rs1, cpu_wb_instr.funct3)};
+      error_msg = {error_msg, $sformatf(" rd=0x%0h opcode=%s)\n", cpu_wb_instr.rd,
+                   opcode_to_string(cpu_wb_instr.opcode))};
       error = 1'b1;
     end
   endtask
@@ -194,10 +165,15 @@ module tb;
   task execute_model_instr();
     case (model_instr.opcode)
       R: begin
-        if (model_instr.funct3 == 3'b000) begin //ADD or SUB
-            model_regs[model_instr.rd] = model_instr.funct7 == 0 ?
-            model_regs[model_instr.rs1] + model_regs[model_instr.rs2] :
-            model_regs[model_instr.rs1] - model_regs[model_instr.rs2];
+        if (model_instr.funct3 == 3'b000) begin //ADD, SUB or MUL
+          case (model_instr.funct7)
+            7'b0000000: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] + model_regs[model_instr.rs2];
+            7'b0100000: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] - model_regs[model_instr.rs2];
+            7'b0000001: model_regs[model_instr.rd] =
+                        model_regs[model_instr.rs1] * model_regs[model_instr.rs2];
+          endcase
         end
       end
       LOAD: begin
@@ -250,6 +226,17 @@ module tb;
                                model_instr[20], model_instr[30:21], 1'b0};
         new_model_pc = model_pc + offset_sign_extend;
         model_regs[model_instr.rd] = model_pc + 4;
+      end
+      IMMEDIATE: begin
+        offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
+        case (model_instr.funct3)
+          3'b000 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] + offset_sign_extend;
+          default: model_regs[model_instr.rd] = model_regs[model_instr.rd];
+        endcase
+      end
+      AUIPC: begin
+        offset_sign_extend = {{model_instr[31]}, model_instr[31:12] << 12};
+        model_regs[model_instr.rd] = model_pc + offset_sign_extend;
       end
     endcase
   endtask

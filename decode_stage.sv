@@ -11,25 +11,36 @@ module decode_stage #(
   input  logic valid_i,
   input  logic is_jump_i,
   input  logic branch_taken_i,
+  input  logic alu_instr_finishes_i,
   input  logic mem_stall_i,
+  input  logic wb_is_next_cycle_i,
+  input  logic wb_reg_wr_en_i,
+  input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  instruction_t instruction_i,
+  output logic stall_o,
   output logic alu_valid_o,
+  output logic ex_valid_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] rs1_o,
   output logic [REGISTER_WIDTH-1:0] rs2_o,
+  output logic [REGISTER_WIDTH-1:0] ex_wr_reg_o,
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
   output instruction_t instruction_o,
 `ifndef SYNTHESIS
-  output logic [ADDR_WIDTH-1:0] debug_alu_pc_o
+  output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
+  output logic [ADDR_WIDTH-1:0] debug_ex_pc_o,
+  output instruction_t debug_ex_instr_o
 `endif
 );
 
-  logic is_branch, is_store;
+  logic valid_instruction;
+  logic is_mul;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] offset_sign_extend_d;
@@ -39,35 +50,59 @@ module decode_stage #(
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       alu_valid_o          <= 1'b0;
-    end else if (!mem_stall_i) begin
-      alu_valid_o          <= valid_i & ~is_jump_i & ~branch_taken_i;
+      ex_valid_o           <= 1'b0;
+    end else if (!stall_o) begin
+      alu_valid_o          <= ~is_mul & valid_instruction;
+      ex_valid_o           <= is_mul & valid_instruction;
+      ex_wr_reg_o          <= instruction_i.rd;
       alu_pc_o             <= pc_i;
-      alu_rs1_data_o       <= rs1_data_i;
-      alu_rs2_data_o       <= rs2_data_i;
+      alu_rs1_data_o       <= alu_rs1_data_d;
+      alu_rs2_data_o       <= alu_rs2_data_d;
       offset_sign_extend_o <= offset_sign_extend_d;
       instruction_o        <= instruction_i;
 `ifndef SYNTHESIS
       debug_alu_pc_o       <= pc_i;
+      debug_ex_pc_o        <= pc_i;
+      debug_ex_instr_o     <= instruction_i;
 `endif
     end
   end
 
   always_comb begin : offset_computation
     case (instruction_i.opcode)
-      LOAD   : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:20]};
-      STORE  : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:25],
-                                      instruction_i[11:7]};
-      BRANCH : offset_sign_extend_d = {{19{instruction_i[31]}}, instruction_i[31],
-                                      instruction_i[7], instruction_i[30:25],
-                                      instruction_i[11:8], 1'b0};
-      JAL    : offset_sign_extend_d = {{11{instruction_i[31]}}, instruction_i[31],
-                                      instruction_i[19:12], instruction_i[20], instruction_i[30:21],
-                                      1'b0};
-      default: offset_sign_extend_d = '0;
+      LOAD      : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:20]};
+      STORE     : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:25],
+                                         instruction_i[11:7]};
+      BRANCH    : offset_sign_extend_d = {{19{instruction_i[31]}}, instruction_i[31],
+                                         instruction_i[7], instruction_i[30:25],
+                                         instruction_i[11:8], 1'b0};
+      JAL       : offset_sign_extend_d = {{11{instruction_i[31]}}, instruction_i[31],
+                                         instruction_i[19:12], instruction_i[20],
+                                         instruction_i[30:21], 1'b0};
+      IMMEDIATE : offset_sign_extend_d = {{20{instruction_i[31]}}, instruction_i[31:20]};
+      AUIPC     : offset_sign_extend_d = {{instruction_i[31]}, instruction_i[31:12] << 12};
+      default   : offset_sign_extend_d = '0;
     endcase
   end
 
+  always_comb begin : bypass_computation
+    logic is_bypass_wb_rs1;
+    logic is_bypass_wb_rs2;
+
+    is_bypass_wb_rs1 = wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2 = wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+
+    alu_rs1_data_d = is_bypass_wb_rs1 ? wb_data_to_reg_i : rs1_data_i;
+    alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
+  end
+
+  assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
+  assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
+                  instruction_i.funct7 == 7'b0000001;
+
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
+
+  assign stall_o = (mem_stall_i | wb_is_next_cycle_i) & valid_i;
 
 endmodule : decode_stage
