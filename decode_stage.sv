@@ -109,6 +109,8 @@ module decode_stage #(
   assign instr_reads_operands = (instruction_i.opcode != JAL && instruction_i.opcode != AUIPC);
   assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
                   instruction_i.funct7 == 7'b0000001;
+  assign is_instr_wbalu = (instruction_i.opcode == R && ~is_mul) || (instruction_i.opcode == JAL) ||
+                          (instruction_i.opcode == IMMEDIATE)    || (instruction_i.opcode == AUIPC);
 
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
@@ -119,6 +121,6 @@ module decode_stage #(
                       (ex3_valid_i & (ex3_wr_reg_i == rs1_o || ex3_wr_reg_i == rs2_o)) ||
                       (ex4_valid_i & (ex4_wr_reg_i == rs1_o || ex4_wr_reg_i == rs2_o)));
 
-  assign stall_o = (mem_stall_i | wb_is_next_cycle_i | ex_hazard) & valid_i;
+  assign stall_o = (mem_stall_i | (is_instr_wbalu && wb_is_next_cycle_i) | ex_hazard) & valid_i;
 
 endmodule : decode_stage
