@@ -17,15 +17,15 @@ module wb_stage #(
 `ifndef SYNTHESIS
   input  logic [ADDR_WIDTH-1:0] debug_mem_pc_i,
   input  logic [ADDR_WIDTH-1:0] debug_ex_pc_i,
-  input  instruction_t debug_mem_instr_i,
-  input  instruction_t debug_ex_instr_i,
+  input  var instruction_t debug_mem_instr_i,
+  input  var instruction_t debug_ex_instr_i,
 `endif
   output logic reg_wr_en_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
   output logic [DATA_WIDTH-1:0] data_to_reg_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_pc_o,
-  output instruction_t debug_instr_o
+  output var instruction_t debug_instr_o
 `endif
 );
 
