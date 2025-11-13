@@ -25,48 +25,40 @@ module ex_stages #(
 `endif
 );
 
-  logic pipe1_valid, pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid;
-  logic [REGISTER_WIDTH-1:0] pipe1_wr_reg, pipe2_wr_reg, pipe3_wr_reg, pipe4_wr_reg, pipe5_wr_reg;
+  logic pipe2_valid, pipe3_valid, pipe4_valid, pipe5_valid;
+  logic [REGISTER_WIDTH-1:0] pipe2_wr_reg, pipe3_wr_reg, pipe4_wr_reg, pipe5_wr_reg;
   logic [DATA_WIDTH-1:0] pipe1_result, pipe2_result, pipe3_result, pipe4_result, pipe5_result;
 
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] pipe1_debug_pc, pipe2_debug_pc, pipe3_debug_pc, pipe4_debug_pc,
-                         pipe5_debug_pc;
-  instruction_t pipe1_debug_instr, pipe2_debug_instr, pipe3_debug_instr, pipe4_debug_instr,
-                pipe5_debug_instr;
+  logic [ADDR_WIDTH-1:0] pipe2_debug_pc, pipe3_debug_pc, pipe4_debug_pc, pipe5_debug_pc;
+  instruction_t pipe2_debug_instr, pipe3_debug_instr, pipe4_debug_instr, pipe5_debug_instr;
 `endif
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      pipe1_valid <= 1'b0;
       pipe2_valid <= 1'b0;
       pipe3_valid <= 1'b0;
       pipe4_valid <= 1'b0;
       pipe5_valid <= 1'b0;
     end else begin
-      pipe1_valid  <= valid_i;
-      pipe2_valid  <= pipe1_valid;
+      pipe2_valid  <= valid_i;
       pipe3_valid  <= pipe2_valid;
       pipe4_valid  <= pipe3_valid;
       pipe5_valid  <= pipe4_valid;
-      pipe1_wr_reg <= wr_reg_i;
-      pipe2_wr_reg <= pipe1_wr_reg;
+      pipe2_wr_reg <= wr_reg_i;
       pipe3_wr_reg <= pipe2_wr_reg;
       pipe4_wr_reg <= pipe3_wr_reg;
       pipe5_wr_reg <= pipe4_wr_reg;
-      pipe1_result <= a_i * b_i;
-      pipe2_result <= pipe1_result;
+      pipe2_result <= a_i * b_i;
       pipe3_result <= pipe2_result;
       pipe4_result <= pipe3_result;
       pipe5_result <= pipe4_result;
 `ifndef SYNTHESIS
-      pipe1_debug_pc    <= debug_pc_i;
-      pipe2_debug_pc    <= pipe1_debug_pc;
+      pipe2_debug_pc    <= debug_pc_i;
       pipe3_debug_pc    <= pipe2_debug_pc;
       pipe4_debug_pc    <= pipe3_debug_pc;
       pipe5_debug_pc    <= pipe4_debug_pc;
-      pipe1_debug_instr <= debug_instr_i;
-      pipe2_debug_instr <= pipe1_debug_instr;
+      pipe2_debug_instr <= debug_instr_i;
       pipe3_debug_instr <= pipe2_debug_instr;
       pipe4_debug_instr <= pipe3_debug_instr;
       pipe5_debug_instr <= pipe4_debug_instr;
