@@ -1,11 +1,11 @@
 package params_pkg;
 
-  parameter int OPCODE_WIDTH = 4;
+  parameter int OPCODE_WIDTH   = 4;
   parameter int REGISTER_WIDTH = 5;
-  parameter int INSTR_WIDTH = 32;
-  parameter int ADDR_WIDTH  = 32;
-  parameter int DATA_WIDTH  = 32;
-  parameter int MEM_SIZE = 4096;
+  parameter int INSTR_WIDTH    = 32;
+  parameter int ADDR_WIDTH     = 32;
+  parameter int DATA_WIDTH     = 32;
+  parameter int MEM_SIZE       = 200000;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,
@@ -32,7 +32,7 @@ package params_pkg;
       JAL       : opcode_to_string = "JAL";
       IMMEDIATE : opcode_to_string = "IMMEDIATE";
       AUIPC     : opcode_to_string = "AUIPC";
-      default: opcode_to_string = "???";
+      default   : opcode_to_string = "???";
     endcase
   endfunction
 

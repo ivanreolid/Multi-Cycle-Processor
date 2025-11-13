@@ -19,3 +19,9 @@ Mem copy
   - Total cycles = 25500
   - Instructions executed = 1804
   - CPI = 14.141
+
+Matrix multiply
+  This test is really huge that it takes to much time to simulate (at least with modelsim). The total number of cycles is not accurate since it has been calculated from having the total number of cycles executed for 9 iterations of the loop i and then extrapolated to the 128 iterations for i.
+  - Total cycles = 373.450.536
+  - Instructions executed = 29.689.746
+  - CPI = 12.58
