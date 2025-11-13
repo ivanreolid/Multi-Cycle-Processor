@@ -78,9 +78,9 @@ module cpu (
 `endif
 
   // EX1 stage wires
-  logic ex_valid;
+  logic ex_valid, ex2_valid, ex3_valid, ex4_valid;
   logic ex_wb_is_next_cycle;
-  logic [REGISTER_WIDTH-1:0] ex_wr_reg;
+  logic [REGISTER_WIDTH-1:0] ex_wr_reg, ex2_wr_reg, ex3_wr_reg, ex4_wr_reg;
   logic [DATA_WIDTH-1:0] ex_a, ex_b;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_ex_pc;
@@ -149,7 +149,15 @@ module cpu (
     .mem_stall_i          (mem_stall),
     .wb_is_next_cycle_i   (mem_wb_is_next_cycle | ex_wb_is_next_cycle),
     .wb_reg_wr_en_i       (reg_wr_en),
+    .ex1_valid_i          (ex_valid),
+    .ex2_valid_i          (ex2_valid),
+    .ex3_valid_i          (ex3_valid),
+    .ex4_valid_i          (ex4_valid),
     .wb_wr_reg_i          (wr_reg),
+    .ex1_wr_reg_i         (ex_wr_reg),
+    .ex2_wr_reg_i         (ex2_wr_reg),
+    .ex3_wr_reg_i         (ex3_wr_reg),
+    .ex4_wr_reg_i         (ex4_wr_reg),
     .pc_i                 (dec_pc),
     .rs1_data_i           (dec_rs1_data),
     .rs2_data_i           (dec_rs2_data),
@@ -265,8 +273,14 @@ module cpu (
     .debug_pc_i         (debug_ex_pc),
     .debug_instr_i      (debug_ex_instr),
 `endif
+    .ex2_valid_o        (ex2_valid),
+    .ex3_valid_o        (ex3_valid),
+    .ex4_valid_o        (ex4_valid),
     .wb_is_next_cycle_o (ex_wb_is_next_cycle),
     .result_ready_o     (wb_valid_from_ex),
+    .ex2_wr_reg_o       (ex2_wr_reg),
+    .ex3_wr_reg_o       (ex3_wr_reg),
+    .ex4_wr_reg_o       (ex4_wr_reg),
     .wr_reg_o           (wb_wr_reg_from_ex),
     .result_o           (wb_data_from_ex),
 `ifndef SYNTHESIS

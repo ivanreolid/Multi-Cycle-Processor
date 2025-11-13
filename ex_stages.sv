@@ -15,8 +15,14 @@ module ex_stages #(
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
   input  var instruction_t debug_instr_i,
 `endif
+  output logic ex2_valid_o,
+  output logic ex3_valid_o,
+  output logic ex4_valid_o,
   output logic wb_is_next_cycle_o,
   output logic result_ready_o,
+  output logic [REGISTER_WIDTH-1:0] ex2_wr_reg_o,
+  output logic [REGISTER_WIDTH-1:0] ex3_wr_reg_o,
+  output logic [REGISTER_WIDTH-1:0] ex4_wr_reg_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
   output logic [DATA_WIDTH-1:0] result_o,
 `ifndef SYNTHESIS
@@ -71,6 +77,13 @@ module ex_stages #(
 `endif
     end
   end
+
+  assign ex2_valid_o  = pipe2_valid;
+  assign ex2_wr_reg_o = pipe2_wr_reg;
+  assign ex3_valid_o  = pipe3_valid;
+  assign ex3_wr_reg_o = pipe3_wr_reg;
+  assign ex4_valid_o  = pipe4_valid;
+  assign ex4_wr_reg_o = pipe4_wr_reg;
 
   assign wb_is_next_cycle_o = pipe5_valid;
 

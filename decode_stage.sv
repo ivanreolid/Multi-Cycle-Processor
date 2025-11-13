@@ -15,7 +15,15 @@ module decode_stage #(
   input  logic mem_stall_i,
   input  logic wb_is_next_cycle_i,
   input  logic wb_reg_wr_en_i,
+  input  logic ex1_valid_i,
+  input  logic ex2_valid_i,
+  input  logic ex3_valid_i,
+  input  logic ex4_valid_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
@@ -40,6 +48,7 @@ module decode_stage #(
 );
 
   logic valid_instruction;
+  logic instr_reads_operands;
   logic is_mul;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
@@ -96,13 +105,20 @@ module decode_stage #(
     alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
   end
 
-  assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
+  assign valid_instruction    = valid_i & ~is_jump_i & ~branch_taken_i;
+  assign instr_reads_operands = (instruction_i.opcode != JAL && instruction_i.opcode != AUIPC);
   assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
                   instruction_i.funct7 == 7'b0000001;
 
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
 
-  assign stall_o = (mem_stall_i | wb_is_next_cycle_i) & valid_i;
+  assign ex_hazard = instr_reads_operands &
+                     ((ex1_valid_i & (ex1_wr_reg_i == rs1_o || ex1_wr_reg_i == rs2_o)) ||
+                      (ex2_valid_i & (ex2_wr_reg_i == rs1_o || ex2_wr_reg_i == rs2_o)) ||
+                      (ex3_valid_i & (ex3_wr_reg_i == rs1_o || ex3_wr_reg_i == rs2_o)) ||
+                      (ex4_valid_i & (ex4_wr_reg_i == rs1_o || ex4_wr_reg_i == rs2_o)));
+
+  assign stall_o = (mem_stall_i | wb_is_next_cycle_i | ex_hazard) & valid_i;
 
 endmodule : decode_stage
