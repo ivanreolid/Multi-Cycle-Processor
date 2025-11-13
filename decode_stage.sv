@@ -20,7 +20,7 @@ module decode_stage #(
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
-  input  instruction_t instruction_i,
+  input  var instruction_t instruction_i,
   output logic stall_o,
   output logic alu_valid_o,
   output logic ex_valid_o,
@@ -31,7 +31,7 @@ module decode_stage #(
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
-  output instruction_t instruction_o,
+  output var instruction_t instruction_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
   output logic [ADDR_WIDTH-1:0] debug_ex_pc_o,

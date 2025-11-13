@@ -15,7 +15,7 @@ module alu_stage #(
   input  logic [DATA_WIDTH-1:0] data_b_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] offset_sign_extend_i,
-  input  instruction_t instruction_i,
+  input  var instruction_t instruction_i,
 `ifndef SYNTHESIS
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
 `endif
@@ -37,7 +37,7 @@ module alu_stage #(
   output access_size_t mem_access_size_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_mem_pc_o,
-  output instruction_t debug_mem_instr_o
+  output var instruction_t debug_mem_instr_o
 `endif
 );
 

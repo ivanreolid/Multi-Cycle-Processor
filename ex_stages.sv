@@ -13,7 +13,7 @@ module ex_stages #(
   input  logic [DATA_WIDTH-1:0] b_i,
 `ifndef SYNTHESIS
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
-  input  instruction_t debug_instr_i,
+  input  var instruction_t debug_instr_i,
 `endif
   output logic wb_is_next_cycle_o,
   output logic result_ready_o,
@@ -21,7 +21,7 @@ module ex_stages #(
   output logic [DATA_WIDTH-1:0] result_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_pc_o,
-  output instruction_t debug_instr_o
+  output var instruction_t debug_instr_o
 `endif
 );
 

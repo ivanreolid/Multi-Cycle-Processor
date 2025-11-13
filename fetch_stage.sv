@@ -17,20 +17,20 @@ module fetch_stage #(
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
   input  logic instr_valid_i,
-  input  instruction_t instr_i,
+  input  logic [DATA_WIDTH-1:0] instr_i,
   output logic rd_req_valid_o,
   output logic dec_valid_o,
   output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
   output access_size_t req_access_size_o,
-  output instruction_t instruction_o
+  output var instruction_t instruction_o
 );
 
   typedef enum logic [2:0] {
-    IDLE     = 2'b000,
-    MEM_REQ  = 2'b001,
-    MEM_WAIT = 2'b010,
-    FLUSH    = 2'b011,
+    IDLE     = 3'b000,
+    MEM_REQ  = 3'b001,
+    MEM_WAIT = 3'b010,
+    FLUSH    = 3'b011,
     STALL    = 3'b100
   } state_t;
 
@@ -69,7 +69,7 @@ module fetch_stage #(
           dec_valid_d     = 1'b1;
           pc_d            = (pc + 4) % MEM_SIZE;
           dec_pc_d        = pc;
-          dec_instr_d     = instr_i;
+          dec_instr_d     = instruction_t'(instr_i);
           state_d         = dec_stall_i ? STALL : MEM_REQ;
         end
       end

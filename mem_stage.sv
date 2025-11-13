@@ -22,7 +22,7 @@ module mem_stage #(
   input  access_size_t access_size_i,
 `ifndef SYNTHESIS
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
-  input  instruction_t debug_instr_i,
+  input  var instruction_t debug_instr_i,
 `endif
   output logic wb_valid_o,
   output logic wb_reg_wr_en_o,
@@ -39,7 +39,7 @@ module mem_stage #(
   output access_size_t req_access_size_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
-  output instruction_t debug_wb_instr_o
+  output var instruction_t debug_wb_instr_o
 `endif
 );
 
