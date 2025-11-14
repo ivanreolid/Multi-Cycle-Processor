@@ -19,14 +19,17 @@ module decode_stage #(
   input  logic ex2_valid_i,
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
+  input  logic ex5_valid_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex5_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  var instruction_t instruction_i,
   output logic stall_o,
@@ -97,12 +100,18 @@ module decode_stage #(
   always_comb begin : bypass_computation
     logic is_bypass_wb_rs1;
     logic is_bypass_wb_rs2;
+    logic is_bypass_ex5_rs1;
+    logic is_bypass_ex5_rs2;
 
-    is_bypass_wb_rs1 = wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
-    is_bypass_wb_rs2 = wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+    is_bypass_ex5_rs1 = instr_reads_operands && ex5_valid_i && (instruction_i.rs1 == ex5_wr_reg_i);
+    is_bypass_ex5_rs2 = instr_reads_operands && ex5_valid_i && (instruction_i.rs2 == ex5_wr_reg_i);
+    is_bypass_wb_rs1 = instr_reads_operands && wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2 = instr_reads_operands && wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
 
-    alu_rs1_data_d = is_bypass_wb_rs1 ? wb_data_to_reg_i : rs1_data_i;
-    alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
+    alu_rs1_data_d = is_bypass_ex5_rs1 ? ex5_result_i : is_bypass_wb_rs1 ?
+                                                             wb_data_to_reg_i : rs1_data_i;
+    alu_rs2_data_d = is_bypass_ex5_rs2 ? ex5_result_i : is_bypass_wb_rs2 ?
+                                                             wb_data_to_reg_i : rs2_data_i;
   end
 
   assign valid_instruction    = valid_i & ~is_jump_i & ~branch_taken_i;
