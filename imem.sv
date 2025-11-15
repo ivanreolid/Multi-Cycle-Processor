@@ -49,7 +49,23 @@ module imem #(
   logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
                          pipe5_write_data;
 
+  logic [DATA_WIDTH-1:0] pipe1_read_data_d, pipe1_read_data;
+
   always_comb begin : memory_operation
+    if (rd_req_valid_i && req_is_instr_i) begin
+      case (access_size_i)
+        BYTE: pipe1_read_data_d = {24'b0, mem[address_i]};
+        WORD: begin
+          pipe1_read_data_d = {
+            mem[address_i + 3],
+            mem[address_i + 2],
+            mem[address_i + 1],
+            mem[address_i]
+          };
+        end
+      default: pipe6_read_data_d = '0;
+      endcase
+    end
     if (pipe5_valid & ~pipe5_is_wr) begin
       case (pipe5_access_size)
         BYTE: pipe6_read_data_d = {24'b0, mem[pipe5_addr]};
@@ -94,6 +110,7 @@ module imem #(
       pipe4_is_wr     <= 1'b0;
       pipe5_is_wr     <= 1'b0;
     end else begin
+      pipe1_read_data   <= pipe1_read_data_d;
       pipe1_valid       <= pipe1_valid_d;
       pipe2_valid       <= pipe1_valid;
       pipe3_valid       <= pipe2_valid;
@@ -167,9 +184,9 @@ module imem #(
   assign pipe1_addr_d = address_i;
   assign pipe1_write_data_d = wr_data_i;
 
-  assign data_valid_o = pipe10_valid;
-  assign data_is_instr_o = pipe10_is_instr;
-  assign data_o = pipe10_read_data;
+  assign data_valid_o = pipe1_is_instr ? pipe1_valid : pipe10_valid;
+  assign data_is_instr_o = pipe1_is_instr | pipe10_is_instr;
+  assign data_o = pipe1_is_instr ? pipe1_read_data : pipe10_read_data;
 
 `ifndef SYNTHESIS
   assign debug_mem_o = mem;
@@ -178,7 +195,52 @@ module imem #(
   initial begin
     //$readmemh("buffer_sum.mem", mem);
     //$readmemh("mem_copy.mem", mem);
-    $readmemh("matrix_multiply.mem", mem);
+    //$readmemh("matrix_multiply.mem", mem);
+    mem[0] = 8'h93;
+    mem[1] = 8'h00;
+    mem[2] = 8'ha0;
+    mem[3] = 8'h00; // addi x1, x0, 10
+
+    mem[4] = 8'h13;
+    mem[5] = 8'h01;
+    mem[6] = 8'h40;
+    mem[7] = 8'h01; // addi x2, x0, 20
+
+    mem[8] = 8'h93;
+    mem[9] = 8'h01;
+    mem[10] = 8'he0;
+    mem[11] = 8'h01; // addi x3, x0, 30
+
+    mem[12] = 8'h23;
+    mem[13] = 8'h22;
+    mem[14] = 8'h10;
+    mem[15] = 8'h06; // sw x1, 100(x0)
+
+    mem[16]  = 8'h33;
+    mem[17]  = 8'h02;
+    mem[18] = 8'h31;
+    mem[19] = 8'h02; // mul x4, x2, x3
+
+    mem[20] = 8'h23;
+    mem[21] = 8'h22;
+    mem[22] = 8'h12;
+    mem[23] = 8'h06; // sw x1, 100(x4)
+
+    mem[24] = 8'h13;
+    mem[25] = 8'h00;
+    mem[26] = 8'h00;
+    mem[27] = 8'h00; // addi x0, x0, 0
+
+    /*mem[12] = 8'h23;
+    mem[13] = 8'h22;
+    mem[14] = 8'h30;
+    mem[15] = 8'h06; // sw x3, 100(x0)*/
+
+    /*mem[12]  = 8'h13;
+    mem[13]  = 8'h82;
+    mem[14] = 8'h11;
+    mem[15] = 8'h00; // add x4, x3, 1*/
+
   end
 
 endmodule

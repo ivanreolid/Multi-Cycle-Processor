@@ -2,6 +2,12 @@ The purpose of this file is to explain implementation decisions that have been t
 
 1. Stalls
 
+Decode stage stalls even if there is no instruction valid on it. If some other stage in the pipeline is stalled, decode stage cannot propagate the new valid (0) to the next stage, since it could be stalled. For the reason, by stalling the decode we make sure that the propagation value is going to be the same as the cycle before.
+
+Decode stage stalls for ALU instructions in the following cases in order to not allow the instruction to complete out of order. In addition, sending a nop is mandatory in order to not populate the next stage with the same instruction again.
+  1. A multiplication is under execution.
+  2. A non ALU instruction is on the ALU stage.
+
 1.1 RAW
 
 1.1.1 Decode - Execution stages

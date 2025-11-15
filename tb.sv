@@ -114,7 +114,53 @@ module tb;
   function void initialize_memories();
     //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    $readmemh("matrix_multiply.mem", model_mem);
+    //$readmemh("matrix_multiply.mem", model_mem);
+    model_mem[0] = 8'h93;
+    model_mem[1] = 8'h00;
+    model_mem[2] = 8'ha0;
+    model_mem[3] = 8'h00; // addi x1, x0, 10
+
+    model_mem[4] = 8'h13;
+    model_mem[5] = 8'h01;
+    model_mem[6] = 8'h40;
+    model_mem[7] = 8'h01; // addi x2, x0, 20
+
+    model_mem[8] = 8'h93;
+    model_mem[9] = 8'h01;
+    model_mem[10] = 8'he0;
+    model_mem[11] = 8'h01; // addi x3, x0, 30
+
+    model_mem[12] = 8'h23;
+    model_mem[13] = 8'h22;
+    model_mem[14] = 8'h10;
+    model_mem[15] = 8'h06; // sw x1, 100(x0)
+
+    model_mem[16]  = 8'h33;
+    model_mem[17]  = 8'h02;
+    model_mem[18] = 8'h31;
+    model_mem[19] = 8'h02; // mul x4, x2, x3
+
+    model_mem[20] = 8'h23;
+    model_mem[21] = 8'h22;
+    model_mem[22] = 8'h12;
+    model_mem[23] = 8'h06; // sw x1, 100(x4)
+
+    model_mem[24] = 8'h13;
+    model_mem[25] = 8'h00;
+    model_mem[26] = 8'h00;
+    model_mem[27] = 8'h00; // addi x0, x0, 0
+
+
+    /*model_mem[12] = 8'h23;
+    model_mem[13] = 8'h22;
+    model_mem[14] = 8'h30;
+    model_mem[15] = 8'h06; // sw x3, 100(x0)*/
+
+    /*model_mem[12]  = 8'h13;
+    model_mem[13]  = 8'h82;
+    model_mem[14] = 8'h11;
+    model_mem[15] = 8'h00; // add x4, x3, 1*/
+
   endfunction
 
   task automatic execute_and_compare();
@@ -129,7 +175,7 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 228) begin
+    if (model_pc == 24) begin
       compare_memories();
       $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
