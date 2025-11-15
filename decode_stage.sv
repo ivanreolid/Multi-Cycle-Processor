@@ -52,6 +52,7 @@ module decode_stage #(
 
   logic valid_instruction;
   logic instr_reads_operands;
+  logic ex_stage_busy;
   logic is_mul;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
@@ -124,12 +125,15 @@ module decode_stage #(
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
 
+  assign ex_stage_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i;
+
   assign ex_hazard = valid_i & instr_reads_operands &
                      ((ex1_valid_i & (ex1_wr_reg_i == rs1_o || ex1_wr_reg_i == rs2_o)) ||
                       (ex2_valid_i & (ex2_wr_reg_i == rs1_o || ex2_wr_reg_i == rs2_o)) ||
                       (ex3_valid_i & (ex3_wr_reg_i == rs1_o || ex3_wr_reg_i == rs2_o)) ||
                       (ex4_valid_i & (ex4_wr_reg_i == rs1_o || ex4_wr_reg_i == rs2_o)));
 
-  assign stall_o = mem_stall_i | (is_instr_wbalu && wb_is_next_cycle_i) | ex_hazard;
+  assign stall_o = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) ||
+                   (is_instr_wbalu && ex_stage_busy) || ex_hazard;
 
 endmodule : decode_stage
