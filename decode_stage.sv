@@ -51,7 +51,7 @@ module decode_stage #(
 );
 
   logic valid_instruction;
-  logic instr_reads_operands;
+  logic instr_reads_rs1, instr_reads_rs2;
   logic ex_stage_busy;
   logic is_mul;
 
@@ -104,10 +104,10 @@ module decode_stage #(
     logic is_bypass_ex5_rs1;
     logic is_bypass_ex5_rs2;
 
-    is_bypass_ex5_rs1 = instr_reads_operands && ex5_valid_i && (instruction_i.rs1 == ex5_wr_reg_i);
-    is_bypass_ex5_rs2 = instr_reads_operands && ex5_valid_i && (instruction_i.rs2 == ex5_wr_reg_i);
-    is_bypass_wb_rs1 = instr_reads_operands && wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
-    is_bypass_wb_rs2 = instr_reads_operands && wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+    is_bypass_ex5_rs1 = instr_reads_rs1 && ex5_valid_i    && (instruction_i.rs1 == ex5_wr_reg_i);
+    is_bypass_ex5_rs2 = instr_reads_rs2 && ex5_valid_i    && (instruction_i.rs2 == ex5_wr_reg_i);
+    is_bypass_wb_rs1  = instr_reads_rs1 && wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2  = instr_reads_rs2 && wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
 
     alu_rs1_data_d = is_bypass_ex5_rs1 ? ex5_result_i : is_bypass_wb_rs1 ?
                                                              wb_data_to_reg_i : rs1_data_i;
@@ -115,8 +115,12 @@ module decode_stage #(
                                                              wb_data_to_reg_i : rs2_data_i;
   end
 
-  assign valid_instruction    = valid_i & ~is_jump_i & ~branch_taken_i;
-  assign instr_reads_operands = (instruction_i.opcode != JAL && instruction_i.opcode != AUIPC);
+  assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
+
+  assign instr_reads_rs1 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC;
+  assign instr_reads_rs2 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC &&
+                           instruction_i.opcode != LOAD;
+
   assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
                   instruction_i.funct7 == 7'b0000001;
   assign is_instr_wbalu = (instruction_i.opcode == R && ~is_mul) || (instruction_i.opcode == JAL) ||
@@ -127,13 +131,17 @@ module decode_stage #(
 
   assign ex_stage_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i;
 
-  assign ex_hazard = valid_i & instr_reads_operands &
-                     ((ex1_valid_i & (ex1_wr_reg_i == rs1_o || ex1_wr_reg_i == rs2_o)) ||
-                      (ex2_valid_i & (ex2_wr_reg_i == rs1_o || ex2_wr_reg_i == rs2_o)) ||
-                      (ex3_valid_i & (ex3_wr_reg_i == rs1_o || ex3_wr_reg_i == rs2_o)) ||
-                      (ex4_valid_i & (ex4_wr_reg_i == rs1_o || ex4_wr_reg_i == rs2_o)));
+  assign ex_raw_hazard = valid_i &&
+                               ( (instr_reads_rs1 && ((ex1_valid_i && (ex1_wr_reg_i == rs1_o))   ||
+                                                      (ex2_valid_i && (ex2_wr_reg_i == rs1_o))   ||
+                                                      (ex3_valid_i && (ex3_wr_reg_i == rs1_o))   ||
+                                                      (ex4_valid_i && (ex4_wr_reg_i == rs1_o)))) ||
+                                 (instr_reads_rs2 && ((ex1_valid_i && (ex1_wr_reg_i == rs2_o))   ||
+                                                      (ex2_valid_i && (ex2_wr_reg_i == rs2_o))   ||
+                                                      (ex3_valid_i && (ex3_wr_reg_i == rs2_o))   ||
+                                                      (ex4_valid_i && (ex4_wr_reg_i == rs2_o)))) );
 
   assign stall_o = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) ||
-                   (is_instr_wbalu && ex_stage_busy) || ex_hazard;
+                   (is_instr_wbalu && ex_stage_busy) || ex_raw_hazard;
 
 endmodule : decode_stage
