@@ -53,7 +53,9 @@ module decode_stage #(
   logic valid_instruction;
   logic instr_reads_rs1, instr_reads_rs2;
   logic ex_stage_busy;
+  logic is_instr_wbalu;
   logic is_mul;
+  logic send_nop;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] offset_sign_extend_d;
@@ -62,6 +64,9 @@ module decode_stage #(
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
+      alu_valid_o          <= 1'b0;
+      ex_valid_o           <= 1'b0;
+    end else if (send_nop) begin
       alu_valid_o          <= 1'b0;
       ex_valid_o           <= 1'b0;
     end else if (!stall_o) begin
@@ -141,7 +146,8 @@ module decode_stage #(
                                                       (ex3_valid_i && (ex3_wr_reg_i == rs2_o))   ||
                                                       (ex4_valid_i && (ex4_wr_reg_i == rs2_o)))) );
 
-  assign stall_o = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) ||
-                   (is_instr_wbalu && ex_stage_busy) || ex_raw_hazard;
+  assign send_nop = is_instr_wbalu && (ex_stage_busy || (alu_valid_o && ~alu_instr_finishes_i));
+  assign stall_o  = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) || send_nop ||
+                    ex_raw_hazard;
 
 endmodule : decode_stage
