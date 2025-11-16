@@ -2,11 +2,19 @@ The purpose of this file is to explain implementation decisions that have been t
 
 1. Stalls
 
-1.1 RAW
+1.1 Decode stage stalls
 
-1.1.1 Decode - Execution stages
+Decode stage stalls even if there is no instruction valid on it. If some other stage in the pipeline is stalled, decode stage cannot propagate the new valid (0) to the next stage, since it could be stalled. For the reason, by stalling the decode we make sure that the propagation value is going to be the same as the cycle before.
+
+Decode stage stalls for ALU instructions in the following cases in order to not allow the instruction to complete out of order. In addition, sending a nop is mandatory in order to not populate the next stage with the same instruction again.
+  1. A multiplication is under execution.
+  2. A non ALU instruction is on the ALU stage.
+
+Taking into account that a memory operation takes at least 2 cycles in the memory stage (it hits on cache), we need to stall that instruction in the decode stage either if there is a multiplication in EX1 or EX2. Otherwise we will end up in the situations either the memory instruction is in the write back stage when the multiplication is still in EX5 stage or the memory instruction is in the last cycle of the memory stage and the multiplication is in EX5 (they both access to the write back stage next cycle).
 
 The RAW detection is done with EX1-EX4 stages. For non ALU WB operations (loads, stores and mults), a bypass with the result of the multiplication is used from the EX5 stage. ALU WB operations cannot use this bypass, since it would result with the instruction advancing to the ALU stage (also a WB) and the multiplication advancing to the WB stage.
+
+1.2 Other stalls
 
 Always flopping in memory stage to write back stage, since the latter doesn't stall. The only important thing here to remember is that there are two important wires that have to be flopped with 1 one cycle: wb_valid and reg_wr_en.
 
