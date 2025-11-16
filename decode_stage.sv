@@ -55,6 +55,7 @@ module decode_stage #(
   logic ex_stage_busy;
   logic is_instr_wbalu;
   logic is_mul;
+  logic is_mem;
   logic send_nop;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
@@ -126,6 +127,7 @@ module decode_stage #(
   assign instr_reads_rs2 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC &&
                            instruction_i.opcode != LOAD;
 
+  assign is_mem = instruction_i.opcode == LOAD || instruction_i.opcode == STORE;
   assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
                   instruction_i.funct7 == 7'b0000001;
   assign is_instr_wbalu = (instruction_i.opcode == R && ~is_mul) || (instruction_i.opcode == JAL) ||
@@ -148,6 +150,6 @@ module decode_stage #(
 
   assign send_nop = is_instr_wbalu && (ex_stage_busy || (alu_valid_o && ~alu_instr_finishes_i));
   assign stall_o  = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) || send_nop ||
-                    ex_raw_hazard;
+                    (is_mem && (ex1_valid_i || ex2_valid_i)) || ex_raw_hazard;
 
 endmodule : decode_stage
