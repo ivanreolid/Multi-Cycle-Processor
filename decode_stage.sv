@@ -15,10 +15,21 @@ module decode_stage #(
   input  logic mem_stall_i,
   input  logic wb_is_next_cycle_i,
   input  logic wb_reg_wr_en_i,
+  input  logic ex1_valid_i,
+  input  logic ex2_valid_i,
+  input  logic ex3_valid_i,
+  input  logic ex4_valid_i,
+  input  logic ex5_valid_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
+  input  logic [REGISTER_WIDTH-1:0] ex5_wr_reg_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
   input  var instruction_t instruction_i,
   output logic stall_o,
@@ -40,7 +51,12 @@ module decode_stage #(
 );
 
   logic valid_instruction;
+  logic instr_reads_rs1, instr_reads_rs2;
+  logic ex_stage_busy;
+  logic is_instr_wbalu;
   logic is_mul;
+  logic is_mem;
+  logic send_nop;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] offset_sign_extend_d;
@@ -49,6 +65,9 @@ module decode_stage #(
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
+      alu_valid_o          <= 1'b0;
+      ex_valid_o           <= 1'b0;
+    end else if (send_nop) begin
       alu_valid_o          <= 1'b0;
       ex_valid_o           <= 1'b0;
     end else if (!stall_o) begin
@@ -88,21 +107,49 @@ module decode_stage #(
   always_comb begin : bypass_computation
     logic is_bypass_wb_rs1;
     logic is_bypass_wb_rs2;
+    logic is_bypass_ex5_rs1;
+    logic is_bypass_ex5_rs2;
 
-    is_bypass_wb_rs1 = wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
-    is_bypass_wb_rs2 = wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+    is_bypass_ex5_rs1 = instr_reads_rs1 && ex5_valid_i    && (instruction_i.rs1 == ex5_wr_reg_i);
+    is_bypass_ex5_rs2 = instr_reads_rs2 && ex5_valid_i    && (instruction_i.rs2 == ex5_wr_reg_i);
+    is_bypass_wb_rs1  = instr_reads_rs1 && wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2  = instr_reads_rs2 && wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
 
-    alu_rs1_data_d = is_bypass_wb_rs1 ? wb_data_to_reg_i : rs1_data_i;
-    alu_rs2_data_d = is_bypass_wb_rs2 ? wb_data_to_reg_i : rs2_data_i;
+    alu_rs1_data_d = is_bypass_ex5_rs1 ? ex5_result_i : is_bypass_wb_rs1 ?
+                                                             wb_data_to_reg_i : rs1_data_i;
+    alu_rs2_data_d = is_bypass_ex5_rs2 ? ex5_result_i : is_bypass_wb_rs2 ?
+                                                             wb_data_to_reg_i : rs2_data_i;
   end
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
+
+  assign instr_reads_rs1 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC;
+  assign instr_reads_rs2 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC &&
+                           instruction_i.opcode != LOAD;
+
+  assign is_mem = instruction_i.opcode == LOAD || instruction_i.opcode == STORE;
   assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
                   instruction_i.funct7 == 7'b0000001;
+  assign is_instr_wbalu = (instruction_i.opcode == R && ~is_mul) || (instruction_i.opcode == JAL) ||
+                          (instruction_i.opcode == IMMEDIATE)    || (instruction_i.opcode == AUIPC);
 
   assign rs1_o = instruction_i.rs1;
   assign rs2_o = instruction_i.rs2;
 
-  assign stall_o = (mem_stall_i | wb_is_next_cycle_i) & valid_i;
+  assign ex_stage_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i;
+
+  assign ex_raw_hazard = valid_i &&
+                               ( (instr_reads_rs1 && ((ex1_valid_i && (ex1_wr_reg_i == rs1_o))   ||
+                                                      (ex2_valid_i && (ex2_wr_reg_i == rs1_o))   ||
+                                                      (ex3_valid_i && (ex3_wr_reg_i == rs1_o))   ||
+                                                      (ex4_valid_i && (ex4_wr_reg_i == rs1_o)))) ||
+                                 (instr_reads_rs2 && ((ex1_valid_i && (ex1_wr_reg_i == rs2_o))   ||
+                                                      (ex2_valid_i && (ex2_wr_reg_i == rs2_o))   ||
+                                                      (ex3_valid_i && (ex3_wr_reg_i == rs2_o))   ||
+                                                      (ex4_valid_i && (ex4_wr_reg_i == rs2_o)))) );
+
+  assign send_nop = is_instr_wbalu && (ex_stage_busy || (alu_valid_o && ~alu_instr_finishes_i));
+  assign stall_o  = mem_stall_i || (is_instr_wbalu && wb_is_next_cycle_i) || send_nop ||
+                    (is_mem && (ex1_valid_i || ex2_valid_i)) || ex_raw_hazard;
 
 endmodule : decode_stage

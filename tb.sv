@@ -261,7 +261,7 @@ module tb;
     error_msg = "";
     error = 1'b0;
     for (int i = 0; i < MEM_SIZE; i++) begin
-      if (model_mem[i] != cpu_mem[i]) begin
+      if (model_mem[i] !== cpu_mem[i]) begin
         error = 1'b1;
         error_msg = {error_msg, $sformatf("@0x%0h model=0x%0h, cpu=0x%0h\n", i, model_mem[i],
                     cpu_mem[i])};
