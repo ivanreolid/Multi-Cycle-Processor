@@ -23,14 +23,14 @@ Performance results
 No caches
 
 Buffer sum
-  - Total cycles = 24103
+  - Total cycles = 24360
   - Instructions executed = 1677
-  - CPI = 14.381
+  - CPI = 14.535
 
 Mem copy
-  - Total cycles = 25500
+  - Total cycles = 25757
   - Instructions executed = 1804
-  - CPI = 14.141
+  - CPI = 14.286
 
 Matrix multiply
   This test is really huge that it takes to much time to simulate (at least with modelsim). The total number of cycles is not accurate since it has been calculated from having the total number of cycles executed for 9 iterations of the loop i and then extrapolated to the 128 iterations for i.

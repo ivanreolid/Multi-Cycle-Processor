@@ -44,6 +44,7 @@ module cpu (
   // ALU stage wires
   logic [ADDR_WIDTH-1:0] alu_pc;
   logic [DATA_WIDTH-1:0] alu_rs1_data, alu_rs2_data;
+  logic [SHAMT_WIDTH-1:0] alu_shamt;
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend;
   logic [ADDR_WIDTH-1:0] alu_pc_branch_offset;
   logic [ADDR_WIDTH-1:0] jump_address;
@@ -136,6 +137,7 @@ module cpu (
   );
 
   decode_stage #(
+    .SHAMT_WIDTH          (SHAMT_WIDTH),
     .DATA_WIDTH           (DATA_WIDTH),
     .ADDR_WIDTH           (ADDR_WIDTH),
     .REGISTER_WIDTH       (REGISTER_WIDTH),
@@ -170,6 +172,7 @@ module cpu (
     .stall_o              (dec_stall),
     .alu_valid_o          (alu_valid),
     .ex_valid_o           (ex_valid),
+    .shamt_o              (alu_shamt),
     .offset_sign_extend_o (alu_offset_sign_extend),
     .rs1_o                (rs1),
     .rs2_o                (rs2),
@@ -186,6 +189,7 @@ module cpu (
   );
 
   alu_stage #(
+    .SHAMT_WIDTH          (SHAMT_WIDTH),
     .DATA_WIDTH           (DATA_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) alu_stage (
@@ -193,6 +197,7 @@ module cpu (
     .rst_i                (rst_i),
     .valid_i              (alu_valid),
     .mem_stall_i          (mem_stall),
+    .shamt_i              (alu_shamt),
     .data_a_i             (alu_rs1_data),
     .data_b_i             (alu_rs2_data),
     .pc_i                 (alu_pc),

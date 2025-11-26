@@ -32,13 +32,15 @@ module alu #(
         else if (funct3_i == 3'b010)    // SW
           result_o = a_i + b_i;
       end
-      JAL: result_o = a_i + b_i;
       IMMEDIATE: begin
-        if (funct3_i == 3'b000)
-          result_o = a_i + b_i;
+        case (funct3_i)
+          3'b000: result_o = a_i + b_i;
+          3'b001: result_o = a_i << b_i;
+          default : result_o = a_i + b_i;
+        endcase
       end
-      AUIPC: result_o = a_i + b_i;
-      default:     result_o = 0;
+      JAL, AUIPC: result_o = a_i + b_i;
+      default   : result_o = 0;
     endcase
   end
 

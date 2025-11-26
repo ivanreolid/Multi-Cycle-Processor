@@ -1,6 +1,7 @@
 import params_pkg::*;
 
 module decode_stage #(
+  parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
   parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
@@ -31,10 +32,11 @@ module decode_stage #(
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
-  input  var instruction_t instruction_i,
+  input  var   instruction_t instruction_i,
   output logic stall_o,
   output logic alu_valid_o,
   output logic ex_valid_o,
+  output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] rs1_o,
   output logic [REGISTER_WIDTH-1:0] rs2_o,
@@ -42,7 +44,7 @@ module decode_stage #(
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
-  output var instruction_t instruction_o,
+  output var   instruction_t instruction_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
   output logic [ADDR_WIDTH-1:0] debug_ex_pc_o,
@@ -59,6 +61,7 @@ module decode_stage #(
   logic send_nop;
 
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
+  logic [SHAMT_WIDTH-1:0] shamt_d;
   logic [DATA_WIDTH-1:0] offset_sign_extend_d;
 
   logic [ADDR_WIDTH-1:0] branch_offset_d;
@@ -77,6 +80,7 @@ module decode_stage #(
       alu_pc_o             <= pc_i;
       alu_rs1_data_o       <= alu_rs1_data_d;
       alu_rs2_data_o       <= alu_rs2_data_d;
+      shamt_o              <= shamt_d;
       offset_sign_extend_o <= offset_sign_extend_d;
       instruction_o        <= instruction_i;
 `ifndef SYNTHESIS
@@ -85,6 +89,13 @@ module decode_stage #(
       debug_ex_instr_o     <= instruction_i;
 `endif
     end
+  end
+
+  always_comb begin : shamt_computation
+    case (instruction_i.opcode)
+      IMMEDIATE : shamt_d = {instruction_i[25], instruction_i.rs2};
+      default   : shamt_d = '0;
+    endcase
   end
 
   always_comb begin : offset_computation
