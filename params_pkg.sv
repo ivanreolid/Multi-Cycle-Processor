@@ -2,6 +2,7 @@ package params_pkg;
 
   parameter int OPCODE_WIDTH   = 4;
   parameter int REGISTER_WIDTH = 5;
+  parameter int SHAMT_WIDTH    = 6;
   parameter int INSTR_WIDTH    = 32;
   parameter int ADDR_WIDTH     = 32;
   parameter int DATA_WIDTH     = 32;

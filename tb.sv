@@ -27,6 +27,7 @@ module tb;
   instruction_t model_instr, cpu_wb_instr;
   logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
+  logic [SHAMT_WIDTH-1:0] shamt;
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
   logic [ADDR_WIDTH-1:0] pc_plus_offset;
@@ -129,7 +130,7 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 228) begin
+    if (model_pc == 224) begin
       compare_memories();
       $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
@@ -228,9 +229,11 @@ module tb;
         model_regs[model_instr.rd] = model_pc + 4;
       end
       IMMEDIATE: begin
+        shamt              = {model_instr[25], model_instr.rs2};
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
         case (model_instr.funct3)
           3'b000 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] + offset_sign_extend;
+          3'b001 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] << shamt;
           default: model_regs[model_instr.rd] = model_regs[model_instr.rd];
         endcase
       end

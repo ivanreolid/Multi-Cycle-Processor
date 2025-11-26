@@ -3,6 +3,7 @@
 import params_pkg::*;
 
 module alu_stage #(
+  parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
@@ -11,6 +12,7 @@ module alu_stage #(
   input  logic rst_i,
   input  logic valid_i,
   input  logic mem_stall_i,
+  input  logic [SHAMT_WIDTH-1:0] shamt_i,
   input  logic [DATA_WIDTH-1:0] data_a_i,
   input  logic [DATA_WIDTH-1:0] data_b_i,
   input  logic [ADDR_WIDTH-1:0] pc_i,
@@ -103,7 +105,10 @@ module alu_stage #(
       IMMEDIATE: begin
         is_instr_wbalu_o = valid_i;
         instr_finishes_o = valid_i;
-        alu_data_b       = offset_sign_extend_i;
+        case (instruction_i.funct3)
+          3'b001  : alu_data_b = shamt_i;  // SLLI
+          default : alu_data_b = offset_sign_extend_i;
+        endcase
       end
       AUIPC: begin
         is_instr_wbalu_o = valid_i;
