@@ -3,24 +3,35 @@ import params_pkg::*;
 module imem #(
   parameter int MEM_SIZE   = params_pkg::MEM_SIZE,
   parameter int ADDR_WIDTH = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH = params_pkg::DATA_WIDTH
+  parameter int DATA_WIDTH = params_pkg::DATA_WIDTH,
+  parameter int LINE_BYTES = 16
 )(
   input  logic clk_i,
   input  logic rst_i,
-  input  logic rd_req_valid_i,
-  input  logic wr_req_valid_i,
-  input  logic req_is_instr_i,
-  input  logic [ADDR_WIDTH-1:0] address_i,
-  input  logic [DATA_WIDTH-1:0] wr_data_i,
-  input  access_size_t access_size_i,
-  output logic data_valid_o,
-  output logic data_is_instr_o,
-  output logic [DATA_WIDTH-1:0] data_o,
+
+  //instr mem
+  input  logic instr_req_i,
+  input  logic [ADDR_WIDTH-1:0] instr_address_i,
+
+  output logic [LINE_BYTES*8-1:0] instr_o,
+  output logic mem_busy_instr_o,
+  output logic mem_rvalid_instr_o,
+
+  //data mem
+  input  logic data_req_i,
+  input  logic data_wr_we_i,
+  input  logic [ADDR_WIDTH-1:0] data_address_i,
+  input  logic [LINE_BYTES*8-1:0] wr_data_i,
+
+  output logic mem_busy_data_o,
+  output logic mem_rvalid_data_o,
+  output logic [LINE_BYTES*8-1:0] data_o,
 `ifndef SYNTHESIS
   output [7:0] debug_mem_o [MEM_SIZE]
 `endif
 );
 
+  localparam LINE_WIDTH = LINE_BYTES * 8;
   logic [7:0] mem [MEM_SIZE];
 
   logic pipe1_valid_d;
@@ -31,9 +42,9 @@ module imem #(
   logic pipe1_is_wr, pipe2_is_wr, pipe3_is_wr, pipe4_is_wr, pipe5_is_wr;
 
   access_size_t pipe1_access_size_d;
-  access_size_t pipe1_access_size, pipe2_access_size, pipe3_access_size, pipe4_access_size,
-                pipe5_access_size, pipe6_access_size, pipe7_access_size, pipe8_access_size,
-                pipe9_access_size, pipe10_access_size;
+ // access_size_t pipe1_access_size, pipe2_access_size, pipe3_access_size, pipe4_access_size,
+ //               pipe5_access_size, pipe6_access_size, pipe7_access_size, pipe8_access_size,
+ //               pipe9_access_size, pipe10_access_size;
 
   logic pipe1_is_instr_d;
   logic pipe1_is_instr, pipe2_is_instr, pipe3_is_instr, pipe4_is_instr, pipe5_is_instr,
@@ -42,26 +53,28 @@ module imem #(
   logic [ADDR_WIDTH-1:0] pipe1_addr_d;
   logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
 
-  logic [ADDR_WIDTH-1:0] pipe6_read_data_d;
-  logic [ADDR_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data, pipe10_read_data;
+  logic [LINE_WIDTH-1:0] pipe6_read_data_d;
+  logic [LINE_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data, pipe10_read_data;
 
-  logic [DATA_WIDTH-1:0] pipe1_write_data_d;
-  logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
+  logic [LINE_WIDTH-1:0] pipe1_write_data_d;
+  logic [LINE_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
                          pipe5_write_data;
 
   always_comb begin : memory_operation
     if (pipe5_valid & ~pipe5_is_wr) begin
       case (pipe5_access_size)
-        BYTE: pipe6_read_data_d = {24'b0, mem[pipe5_addr]};
-        WORD: begin
-          pipe6_read_data_d = {
+        //BYTE: pipe6_read_data_d = {24'b0, mem[pipe5_addr]};
+        //WORD: begin
+        /*  pipe6_read_data_d = {
             mem[pipe5_addr + 3],
             mem[pipe5_addr + 2],
             mem[pipe5_addr + 1],
             mem[pipe5_addr]
-          };
-        end
-      default: pipe6_read_data_d = '0;
+          };*/
+          for (int i = 0; i < LINE_BYTES; i++) begin
+            pipe6_read_data_d[i*8 +: 8] = mem[pipe5_addr + i];
+          end
+      //default: pipe6_read_data_d = '0;
       endcase
     end
   end
@@ -78,6 +91,7 @@ module imem #(
       pipe8_valid     <= 1'b0;
       pipe9_valid     <= 1'b0;
       pipe10_valid    <= 1'b0;
+
       pipe1_is_instr  <= 1'b0;
       pipe2_is_instr  <= 1'b0;
       pipe3_is_instr  <= 1'b0;
@@ -88,6 +102,7 @@ module imem #(
       pipe8_is_instr  <= 1'b0;
       pipe9_is_instr  <= 1'b0;
       pipe10_is_instr <= 1'b0;
+
       pipe1_is_wr     <= 1'b0;
       pipe2_is_wr     <= 1'b0;
       pipe3_is_wr     <= 1'b0;
@@ -104,6 +119,7 @@ module imem #(
       pipe8_valid       <= pipe7_valid;
       pipe9_valid       <= pipe8_valid;
       pipe10_valid      <= pipe9_valid;
+
       pipe1_is_instr    <= pipe1_is_instr_d;
       pipe2_is_instr    <= pipe1_is_instr;
       pipe3_is_instr    <= pipe2_is_instr;
@@ -114,46 +130,43 @@ module imem #(
       pipe8_is_instr    <= pipe7_is_instr;
       pipe9_is_instr    <= pipe8_is_instr;
       pipe10_is_instr   <= pipe9_is_instr;
+
       pipe1_addr        <= pipe1_addr_d;
       pipe2_addr        <= pipe1_addr;
       pipe3_addr        <= pipe2_addr;
       pipe4_addr        <= pipe3_addr;
       pipe5_addr        <= pipe4_addr;
+
       pipe6_read_data   <= pipe6_read_data_d;
       pipe7_read_data   <= pipe6_read_data;
       pipe8_read_data   <= pipe7_read_data;
       pipe9_read_data   <= pipe8_read_data;
       pipe10_read_data  <= pipe9_read_data;
+
       pipe1_write_data  <= pipe1_write_data_d;
       pipe2_write_data  <= pipe1_write_data;
       pipe3_write_data  <= pipe2_write_data;
       pipe4_write_data  <= pipe3_write_data;
       pipe5_write_data  <= pipe4_write_data;
+
       pipe1_is_wr        <= pipe1_is_wr_d;
       pipe2_is_wr        <= pipe1_is_wr;
       pipe3_is_wr        <= pipe2_is_wr;
       pipe4_is_wr        <= pipe3_is_wr;
       pipe5_is_wr        <= pipe4_is_wr;
-      pipe1_access_size  <= pipe1_access_size_d;
-      pipe2_access_size  <= pipe1_access_size;
-      pipe3_access_size  <= pipe2_access_size;
-      pipe4_access_size  <= pipe3_access_size;
-      pipe5_access_size  <= pipe4_access_size;
-      pipe6_access_size  <= pipe5_access_size;
-      pipe7_access_size  <= pipe6_access_size;
-      pipe8_access_size  <= pipe7_access_size;
-      pipe9_access_size  <= pipe8_access_size;
-      pipe10_access_size <= pipe9_access_size;
 
       if (pipe5_valid & pipe5_is_wr) begin
         case (pipe5_access_size)
-          BYTE: mem[pipe5_addr] <= pipe5_write_data[7:0];
+          for (int i = 0; i < LINE_BYTES; i++) begin
+            mem[pipe5_addr + i] <= pipe5_write_data[i*8 +: 8];
+          end
+          /*BYTE: mem[pipe5_addr] <= pipe5_write_data[7:0];
           WORD: begin
             mem[pipe5_addr]     <= pipe5_write_data[7:0];
             mem[pipe5_addr + 1] <= pipe5_write_data[15:8];
             mem[pipe5_addr + 2] <= pipe5_write_data[23:16];
             mem[pipe5_addr + 3] <= pipe5_write_data[31:24];
-          end
+          end*/
         endcase
       end
     end
