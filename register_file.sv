@@ -1,6 +1,6 @@
 import params_pkg::*;
 
-module rbank #(
+module register_file #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH
 )(

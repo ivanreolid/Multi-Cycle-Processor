@@ -5,7 +5,7 @@
 `include "mem_stage.sv"
 `include "ex_stages.sv"
 `include "wb_arbiter.sv"
-`include "rbank.sv"
+`include "register_file.sv"
 `include "mem_arbiter.sv"
 
 import params_pkg::*;
@@ -491,10 +491,10 @@ mem_arbiter #(
 `endif
   );
 
-  rbank #(
+  register_file #(
     .REGISTER_WIDTH (REGISTER_WIDTH),
     .DATA_WIDTH     (DATA_WIDTH)
-   ) rbank (
+   ) architectural_file (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (wb_reg_wr_en),
