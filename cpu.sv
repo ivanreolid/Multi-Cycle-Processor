@@ -155,6 +155,11 @@ module cpu #(
   instruction_t debug_wb_instr_from_mem, debug_wb_instr_from_ex, debug_wb_instr;
 `endif
 
+  // Future file wires
+`ifndef SYNTHESIS
+  logic [DATA_WIDTH-1:0] debug_future_file [32];
+`endif
+
 logic mem_req,mem_we;
 logic [ADDR_WIDTH-1:0] mem_addr;
 logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
@@ -494,16 +499,34 @@ mem_arbiter #(
   register_file #(
     .REGISTER_WIDTH (REGISTER_WIDTH),
     .DATA_WIDTH     (DATA_WIDTH)
+  ) future_file (
+    .clk_i          (clk_i),
+    .rst_i          (rst_i),
+    .wr_en_i        (wb_reg_wr_en),
+    .rd_reg_a_i     (hazard_signals.rs1),
+    .rd_reg_b_i     (hazard_signals.rs2),
+    .wr_reg_i       (wb_wr_reg),
+    .wr_data_i      (wb_data_to_reg),
+    .reg_a_data_o   (dec_rs1_data),
+    .reg_b_data_o   (dec_rs2_data)
+`ifndef SYNTHESIS
+    , .debug_regs_o (debug_future_file)
+`endif
+);
+
+  register_file #(
+    .REGISTER_WIDTH (REGISTER_WIDTH),
+    .DATA_WIDTH     (DATA_WIDTH)
    ) architectural_file (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (wb_reg_wr_en),
-    .rd_reg_a_i   (hazard_signals.rs1),
-    .rd_reg_b_i   (hazard_signals.rs2),
+    .rd_reg_a_i   (),
+    .rd_reg_b_i   (),
     .wr_reg_i     (wb_wr_reg),
     .wr_data_i    (wb_data_to_reg),
-    .reg_a_data_o (dec_rs1_data),
-    .reg_b_data_o (dec_rs2_data),
+    .reg_a_data_o (),
+    .reg_b_data_o (),
 `ifndef SYNTHESIS
     .debug_regs_o (debug_regs_o)
 `endif
