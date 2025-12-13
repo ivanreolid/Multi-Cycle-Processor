@@ -91,9 +91,6 @@ module fetch_stage #(
       state          <= IDLE;
       pc             <= '0;
       branch_target  <= '0;
-      dec_valid_o    <= 1'b0;
-      dec_pc_o       <= '0;
-      instruction_o  <= '0;
     end else if (!dec_stall_i) begin
       state          <= state_d;
       pc             <= pc_d;
