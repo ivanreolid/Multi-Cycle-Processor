@@ -31,6 +31,7 @@ module cpu (
 
   // Fetch stage wires
   logic fetch_rd_req_valid;
+  logic fetch_stall;
   logic dec_valid_d;
   logic [ADDR_WIDTH-1:0] dec_pc_d;
   logic [ADDR_WIDTH-1:0] fetch_req_address;
@@ -150,7 +151,7 @@ module cpu (
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
     .stall_decode_o     (dec_stall),
-    .stall_fetch_o      ()
+    .stall_fetch_o      (fetch_stall)
   );
 
   fetch_stage #(
@@ -174,7 +175,7 @@ module cpu (
     .mem_req_addr_o      (fetch_req_address),
     .dec_pc_o            (dec_pc_d),
     .req_access_size_o   (fetch_req_access_size),
-    .instruction_o       (dec_instruction_d)
+    .dec_instr_o         (dec_instruction_d)
   );
 
   decode_stage #(
@@ -387,9 +388,12 @@ module cpu (
       is_jump           <= 1'b0;
       alu_branch_taken  <= 1'b0;
     end else begin
-      dec_valid_q       <= dec_valid_d;
-      dec_pc_q          <= dec_pc_d;
-      dec_instruction_q <= dec_instruction_d;
+
+      if (!dec_stall) begin
+        dec_valid_q       <= dec_valid_d;
+        dec_pc_q          <= dec_pc_d;
+        dec_instruction_q <= dec_instruction_d;
+      end
 
       // Decode -> ALU flops
       if (!alu_stall) begin
