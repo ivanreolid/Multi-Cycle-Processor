@@ -70,31 +70,41 @@ module cpu (
   logic alu_branch_taken;
   logic alu_valid_q;
   logic alu_stall;
+  logic mem_valid_d;
+  logic mem_is_load_d;
+  logic mem_is_store_d;
+  logic mem_reg_wr_en_d;
   logic alu_is_instr_wbalu, alu_instr_finishes;
   logic [REGISTER_WIDTH-1:0] alu_wr_reg;
+  logic [REGISTER_WIDTH-1:0] mem_wr_reg_d;
   logic [DATA_WIDTH-1:0] alu_data_to_reg;
+  logic [DATA_WIDTH-1:0] mem_alu_result_d;
+  logic [DATA_WIDTH-1:0] mem_rs2_data_d;
+  access_size_t mem_access_size_d;
   instruction_t alu_instruction_q;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_alu_pc_q;
+  logic [ADDR_WIDTH-1:0] debug_mem_pc_d;
+  instruction_t debug_mem_instr_d;
 `endif
 
   // Mem stage wires
-  logic [DATA_WIDTH-1:0] mem_alu_result;
-  logic [DATA_WIDTH-1:0] mem_rs2_data;
+  logic [DATA_WIDTH-1:0] mem_alu_result_q;
+  logic [DATA_WIDTH-1:0] mem_rs2_data_q;
   logic [DATA_WIDTH-1:0] mem_data_from_mem;
-  logic [REGISTER_WIDTH-1:0] mem_wr_reg;
-  logic mem_reg_wr_en;
-  logic mem_is_load, mem_is_store;
+  logic [REGISTER_WIDTH-1:0] mem_wr_reg_q;
+  logic mem_reg_wr_en_q;
+  logic mem_is_load_q, mem_is_store_q;
   logic mem_branch_taken;
-  logic mem_valid;
+  logic mem_valid_q;
   logic mem_rd_req_valid, mem_wr_req_valid;
   logic mem_stall;
   logic mem_wb_is_next_cycle;
   logic [ADDR_WIDTH-1:0] mem_req_address;
-  access_size_t mem_access_size, mem_req_access_size;
+  access_size_t mem_access_size_q, mem_req_access_size;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_mem_pc;
-  instruction_t debug_mem_instr;
+  logic [ADDR_WIDTH-1:0] debug_mem_pc_q;
+  instruction_t debug_mem_instr_q;
 `endif
 
   // EX1 stage wires
@@ -229,8 +239,6 @@ module cpu (
     .DATA_WIDTH           (DATA_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) alu_stage (
-    .clk_i                (clk_i),
-    .rst_i                (rst_i),
     .valid_i              (alu_valid_q),
     .mem_stall_i          (mem_stall),
     .shamt_i              (alu_shamt_q),
@@ -242,25 +250,25 @@ module cpu (
 `ifndef SYNTHESIS
     .debug_pc_i           (debug_alu_pc_q),
 `endif
-    .mem_valid_o          (mem_valid),
-    .mem_reg_wr_en_o      (mem_reg_wr_en),
+    .mem_valid_o          (mem_valid_d),
+    .mem_reg_wr_en_o      (mem_reg_wr_en_d),
     .is_instr_wbalu_o     (alu_is_instr_wbalu),
     .instr_finishes_o     (alu_instr_finishes),
     .wr_reg_o             (alu_wr_reg),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
-    .mem_alu_result_o     (mem_alu_result),
-    .mem_rs2_data_o       (mem_rs2_data),
-    .mem_wr_reg_o         (mem_wr_reg),
+    .mem_alu_result_o     (mem_alu_result_d),
+    .mem_rs2_data_o       (mem_rs2_data_d),
+    .mem_wr_reg_o         (mem_wr_reg_d),
     .data_to_reg_o        (alu_data_to_reg),
-    .mem_is_load_o        (mem_is_load),
-    .mem_is_store_o       (mem_is_store),
+    .mem_is_load_o        (mem_is_load_d),
+    .mem_is_store_o       (mem_is_store_d),
     .branch_taken_o       (alu_branch_taken),
     .is_jump_o            (is_jump),
-    .mem_access_size_o    (mem_access_size),
+    .mem_access_size_o    (mem_access_size_d),
 `ifndef SYNTHESIS
-    .debug_mem_pc_o       (debug_mem_pc),
-    .debug_mem_instr_o    (debug_mem_instr)
+    .debug_mem_pc_o       (debug_mem_pc_d),
+    .debug_mem_instr_o    (debug_mem_instr_d)
 `endif
   );
 
@@ -271,19 +279,19 @@ module cpu (
   ) mem_stage (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
-    .alu_result_i               (mem_alu_result),
-    .rs2_data_i                 (mem_rs2_data),
-    .wr_reg_i                   (mem_wr_reg),
+    .alu_result_i               (mem_alu_result_q),
+    .rs2_data_i                 (mem_rs2_data_q),
+    .wr_reg_i                   (mem_wr_reg_q),
     .mem_data_i                 (mem_data_i),
-    .valid_i                    (mem_valid),
-    .is_load_i                  (mem_is_load),
-    .is_store_i                 (mem_is_store),
-    .reg_wr_en_i                (mem_reg_wr_en),
+    .valid_i                    (mem_valid_q),
+    .is_load_i                  (mem_is_load_q),
+    .is_store_i                 (mem_is_store_q),
+    .reg_wr_en_i                (mem_reg_wr_en_q),
     .mem_data_is_valid_i        (mem_data_valid_i & ~mem_data_is_instr_i),
-    .access_size_i              (mem_access_size),
+    .access_size_i              (mem_access_size_q),
 `ifndef SYNTHESIS
-    .debug_pc_i                 (debug_mem_pc),
-    .debug_instr_i              (debug_mem_instr),
+    .debug_pc_i                 (debug_mem_pc_q),
+    .debug_instr_i              (debug_mem_instr_q),
 `endif
     .wb_valid_o                 (wb_valid_from_mem),
     .wb_reg_wr_en_o             (wb_reg_wr_en_from_mem),
@@ -389,6 +397,7 @@ module cpu (
       alu_branch_taken  <= 1'b0;
     end else begin
 
+      // Fetch -> Decode flops
       if (!dec_stall) begin
         dec_valid_q       <= dec_valid_d;
         dec_pc_q          <= dec_pc_d;
@@ -416,6 +425,22 @@ module cpu (
 `ifndef SYNTHESIS
         debug_ex_pc_q            <= debug_ex_pc_d;
         debug_ex_instr_q         <= debug_ex_instr_d;
+`endif
+      end
+
+      // ALU -> MEM flops
+      if (!mem_stall) begin
+        mem_valid_q       <= mem_valid_d;
+        mem_is_load_q     <= mem_is_load_d;
+        mem_is_store_q    <= mem_is_store_d;
+        mem_reg_wr_en_q   <= mem_reg_wr_en_d;
+        mem_wr_reg_q      <= mem_wr_reg_d;
+        mem_alu_result_q  <= mem_alu_result_d;
+        mem_rs2_data_q    <= mem_rs2_data_d;
+        mem_access_size_q <= mem_access_size_d;
+`ifndef SYNTHESIS
+        debug_mem_pc_q    <= debug_mem_pc_d;
+        debug_mem_instr_q <= debug_mem_instr_d;
 `endif
       end
 
