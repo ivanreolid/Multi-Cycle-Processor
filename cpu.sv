@@ -91,12 +91,17 @@ module cpu (
   // Mem stage wires
   logic [DATA_WIDTH-1:0] mem_alu_result_q;
   logic [DATA_WIDTH-1:0] mem_rs2_data_q;
-  logic [DATA_WIDTH-1:0] mem_data_from_mem;
+  logic [DATA_WIDTH-1:0] wb_data_from_mem_d;
+  logic [DATA_WIDTH-1:0] wb_alu_result_d;
   logic [REGISTER_WIDTH-1:0] mem_wr_reg_q;
+  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem_d;
   logic mem_reg_wr_en_q;
+  logic wb_reg_wr_en_from_mem_d;
   logic mem_is_load_q, mem_is_store_q;
   logic mem_branch_taken;
   logic mem_valid_q;
+  logic wb_valid_from_mem_d;
+  logic wb_is_load_from_mem_d;
   logic mem_rd_req_valid, mem_wr_req_valid;
   logic mem_stall;
   logic mem_wb_is_next_cycle;
@@ -104,7 +109,9 @@ module cpu (
   access_size_t mem_access_size_q, mem_req_access_size;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc_q;
+  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem_d;
   instruction_t debug_mem_instr_q;
+  instruction_t debug_wb_instr_from_mem_d;
 `endif
 
   // EX1 stage wires
@@ -120,21 +127,20 @@ module cpu (
 `endif
 
   // WB stage wires
-  logic wb_valid_from_mem, wb_valid_from_ex;
-  logic wb_reg_wr_en_from_mem;
-  logic wb_is_load_from_mem;
-  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem, wb_wr_reg_from_ex;
+  logic wb_valid_from_mem_q, wb_valid_from_ex;
+  logic wb_reg_wr_en_from_mem_q;
+  logic wb_is_load_from_mem_q;
+  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem_q, wb_wr_reg_from_ex;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
-  logic [DATA_WIDTH-1:0] wb_alu_result;
-  logic [DATA_WIDTH-1:0] wb_data_from_mem, wb_data_from_ex;
-  logic wb_is_load;
+  logic [DATA_WIDTH-1:0] wb_alu_result_q;
+  logic [DATA_WIDTH-1:0] wb_data_from_mem_q, wb_data_from_ex;
   logic wb_reg_wr_en;
   logic wb_valid;
   logic [DATA_WIDTH-1:0] wb_data_to_reg;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem, debug_wb_pc_from_ex, debug_wb_pc;
+  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem_q, debug_wb_pc_from_ex, debug_wb_pc;
   logic debug_non_store_is_completed;
-  instruction_t debug_wb_instr_from_mem, debug_wb_instr_from_ex, debug_wb_instr;
+  instruction_t debug_wb_instr_from_mem_q, debug_wb_instr_from_ex, debug_wb_instr;
 `endif
 
   // Rbank wires coming from WB stage
@@ -293,22 +299,22 @@ module cpu (
     .debug_pc_i                 (debug_mem_pc_q),
     .debug_instr_i              (debug_mem_instr_q),
 `endif
-    .wb_valid_o                 (wb_valid_from_mem),
-    .wb_reg_wr_en_o             (wb_reg_wr_en_from_mem),
-    .wb_is_load_o               (wb_is_load_from_mem),
+    .wb_valid_o                 (wb_valid_from_mem_d),
+    .wb_reg_wr_en_o             (wb_reg_wr_en_from_mem_d),
+    .wb_is_load_o               (wb_is_load_from_mem_d),
     .rd_req_valid_o             (mem_rd_req_valid),
     .wr_req_valid_o             (mem_wr_req_valid),
     .stall_o                    (mem_stall),
     .wb_is_next_cycle_o         (mem_wb_is_next_cycle),
-    .wb_wr_reg_o                (wb_wr_reg_from_mem),
-    .wb_data_from_mem_o         (wb_data_from_mem),
-    .wb_alu_result_o            (wb_alu_result),
+    .wb_wr_reg_o                (wb_wr_reg_from_mem_d),
+    .wb_data_from_mem_o         (wb_data_from_mem_d),
+    .wb_alu_result_o            (wb_alu_result_d),
     .mem_req_address_o          (mem_req_address),
     .wr_data_o                  (wr_data_o),
     .req_access_size_o          (mem_req_access_size),
 `ifndef SYNTHESIS
-    .debug_wb_pc_o              (debug_wb_pc_from_mem),
-    .debug_wb_instr_o           (debug_wb_instr_from_mem)
+    .debug_wb_pc_o              (debug_wb_pc_from_mem_d),
+    .debug_wb_instr_o           (debug_wb_instr_from_mem_d)
 `endif
   );
 
@@ -348,19 +354,19 @@ module cpu (
   wb_stage #(
     .DATA_WIDTH      (DATA_WIDTH)
   ) wb_stage (
-    .mem_valid_i       (wb_valid_from_mem),
+    .mem_valid_i       (wb_valid_from_mem_q),
     .ex_valid_i        (wb_valid_from_ex),
-    .mem_reg_wr_en_i   (wb_reg_wr_en_from_mem),
-    .mem_wr_reg_i      (wb_wr_reg_from_mem),
+    .mem_reg_wr_en_i   (wb_reg_wr_en_from_mem_q),
+    .mem_wr_reg_i      (wb_wr_reg_from_mem_q),
     .ex_wr_reg_i       (wb_wr_reg_from_ex),
-    .alu_result_i      (wb_alu_result),
+    .alu_result_i      (wb_alu_result_q),
     .ex_result_i       (wb_data_from_ex),
-    .data_from_mem_i   (wb_data_from_mem),
-    .is_load_i         (wb_is_load_from_mem),
+    .data_from_mem_i   (wb_data_from_mem_q),
+    .is_load_i         (wb_is_load_from_mem_q),
 `ifndef SYNTHESIS
-    .debug_mem_pc_i    (debug_wb_pc_from_mem),
+    .debug_mem_pc_i    (debug_wb_pc_from_mem_q),
     .debug_ex_pc_i     (debug_wb_pc_from_ex),
-    .debug_mem_instr_i (debug_wb_instr_from_mem),
+    .debug_mem_instr_i (debug_wb_instr_from_mem_q),
     .debug_ex_instr_i  (debug_wb_instr_from_ex),
 `endif
     .reg_wr_en_o       (wb_reg_wr_en),
@@ -444,8 +450,20 @@ module cpu (
 `endif
       end
 
+      // We don't arbite yet between MEM and EX stages
+      wb_valid_from_mem_q       <= wb_valid_from_mem_d;
+      wb_reg_wr_en_from_mem_q   <= wb_reg_wr_en_from_mem_d;
+      wb_wr_reg_from_mem_q      <= wb_wr_reg_from_mem_d;
+      wb_alu_result_q           <= wb_alu_result_d;
+      wb_data_from_mem_q        <= wb_data_from_mem_d;
+      wb_is_load_from_mem_q     <= wb_is_load_from_mem_d;
 `ifndef SYNTHESIS
-      debug_instr_is_completed_o <= alu_instr_finishes | wb_valid_from_mem | wb_valid_from_ex;
+      debug_wb_pc_from_mem_q    <= debug_wb_pc_from_mem_d;
+      debug_wb_instr_from_mem_q <= debug_wb_instr_from_mem_d;
+`endif
+
+`ifndef SYNTHESIS
+      debug_instr_is_completed_o <= alu_instr_finishes | wb_valid_from_mem_q | wb_valid_from_ex;
       debug_pc_o                 <= alu_instr_finishes ? alu_pc_q          : debug_wb_pc;
       debug_instr_o              <= alu_instr_finishes ? alu_instruction_q : debug_wb_instr;
 `endif
