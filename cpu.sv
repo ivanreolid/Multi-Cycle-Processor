@@ -41,9 +41,9 @@ module cpu (
   // Decode stage wires
   logic dec_valid_q;
   logic alu_valid_d;
-  logic ex_valid_d;
+  logic ex1_valid_d;
   logic [REGISTER_WIDTH-1:0] rs1, rs2;
-  logic [REGISTER_WIDTH-1:0] ex_wr_reg_d;
+  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_d;
   logic [SHAMT_WIDTH-1:0] alu_shamt_d;
   logic [ADDR_WIDTH-1:0] alu_pc_d;
   logic [ADDR_WIDTH-1:0] dec_pc_q;
@@ -55,8 +55,8 @@ module cpu (
   instruction_t alu_instruction_d;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_alu_pc_d;
-  logic [ADDR_WIDTH-1:0] debug_ex_pc_d;
-  instruction_t debug_ex_instr_d;
+  logic [ADDR_WIDTH-1:0] ex1_debug_pc_d;
+  instruction_t ex1_debug_instr_d;
 `endif
 
   // ALU stage wires
@@ -115,32 +115,44 @@ module cpu (
 `endif
 
   // EX1 stage wires
-  logic ex_valid_q, ex2_valid, ex3_valid, ex4_valid, ex5_valid;
+  logic ex2_valid_d, ex3_valid_d, ex4_valid_d, ex5_valid_d;
+  logic ex1_valid_q, ex2_valid_q, ex3_valid_q, ex4_valid_q, ex5_valid_q;
   logic ex_stall;
   logic ex_wb_is_next_cycle;
-  logic [REGISTER_WIDTH-1:0] ex_wr_reg_q, ex2_wr_reg, ex3_wr_reg, ex4_wr_reg, ex5_wr_reg;
+  logic wb_valid_from_ex_d;
+  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
+  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_q, ex2_wr_reg_q, ex3_wr_reg_q, ex4_wr_reg_q, ex5_wr_reg_q;
+  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_ex_d;
   logic [DATA_WIDTH-1:0] ex_a, ex_b;
-  logic [DATA_WIDTH-1:0] ex5_result;
+  logic [DATA_WIDTH-1:0] ex2_result_d, ex3_result_d, ex4_result_d, ex5_result_d;
+  logic [DATA_WIDTH-1:0] ex2_result_q, ex3_result_q, ex4_result_q, ex5_result_q;
+  logic [DATA_WIDTH-1:0] wb_data_from_ex_d;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_ex_pc_q;
-  instruction_t debug_ex_instr_q;
+  logic [ADDR_WIDTH-1:0] ex2_debug_pc_d, ex3_debug_pc_d, ex4_debug_pc_d, ex5_debug_pc_d;
+  logic [ADDR_WIDTH-1:0] ex1_debug_pc_q, ex2_debug_pc_q, ex3_debug_pc_q, ex4_debug_pc_q,
+                         ex5_debug_pc_q;
+  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_ex_d;
+  instruction_t ex2_debug_instr_d, ex3_debug_instr_d, ex4_debug_instr_d, ex5_debug_instr_d;
+  instruction_t ex1_debug_instr_q, ex2_debug_instr_q, ex3_debug_instr_q, ex4_debug_instr_q,
+                ex5_debug_instr_q;
+  instruction_t debug_wb_instr_from_ex_d;
 `endif
 
   // WB stage wires
-  logic wb_valid_from_mem_q, wb_valid_from_ex;
-  logic wb_reg_wr_en_from_mem_q;
+  logic wb_valid_from_mem_q, wb_valid_from_ex_q;
+  logic wb_reg_wr_en_from_mem_q, wb_reg_wr_en_from_ex_q;
   logic wb_is_load_from_mem_q;
-  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem_q, wb_wr_reg_from_ex;
+  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem_q, wb_wr_reg_from_ex_q;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
   logic [DATA_WIDTH-1:0] wb_alu_result_q;
-  logic [DATA_WIDTH-1:0] wb_data_from_mem_q, wb_data_from_ex;
+  logic [DATA_WIDTH-1:0] wb_data_from_mem_q, wb_data_from_ex_q;
   logic wb_reg_wr_en;
   logic wb_valid;
   logic [DATA_WIDTH-1:0] wb_data_to_reg;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem_q, debug_wb_pc_from_ex, debug_wb_pc;
+  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem_q, debug_wb_pc_from_ex_q, debug_wb_pc;
   logic debug_non_store_is_completed;
-  instruction_t debug_wb_instr_from_mem_q, debug_wb_instr_from_ex, debug_wb_instr;
+  instruction_t debug_wb_instr_from_mem_q, debug_wb_instr_from_ex_q, debug_wb_instr;
 `endif
 
   // Rbank wires coming from WB stage
@@ -154,14 +166,14 @@ module cpu (
     .dec_valid_i        (dec_valid_q),
     .mem_busy_i         (mem_stall),
     .wb_is_next_cycle_i (mem_wb_is_next_cycle | ex_wb_is_next_cycle),
-    .ex1_valid_i        (ex_valid_q),
-    .ex2_valid_i        (ex2_valid),
-    .ex3_valid_i        (ex3_valid),
-    .ex4_valid_i        (ex4_valid),
-    .ex1_wr_reg_i       (ex_wr_reg_q),
-    .ex2_wr_reg_i       (ex2_wr_reg),
-    .ex3_wr_reg_i       (ex3_wr_reg),
-    .ex4_wr_reg_i       (ex4_wr_reg),
+    .ex1_valid_i        (ex1_valid_q),
+    .ex2_valid_i        (ex2_valid_q),
+    .ex3_valid_i        (ex3_valid_q),
+    .ex4_valid_i        (ex4_valid_q),
+    .ex1_wr_reg_i       (ex1_wr_reg_q),
+    .ex2_wr_reg_i       (ex2_wr_reg_q),
+    .ex3_wr_reg_i       (ex3_wr_reg_q),
+    .ex4_wr_reg_i       (ex4_wr_reg_q),
     .dec_instr_i        (dec_instruction_q),
     .stall_ex_o         (ex_stall),
     .stall_mem_o        (),
@@ -205,38 +217,38 @@ module cpu (
     .is_jump_i            (is_jump),
     .branch_taken_i       (alu_branch_taken),
     .wb_reg_wr_en_i       (reg_wr_en),
-    .ex1_valid_i          (ex_valid_q),
-    .ex2_valid_i          (ex2_valid),
-    .ex3_valid_i          (ex3_valid),
-    .ex4_valid_i          (ex4_valid),
-    .ex5_valid_i          (ex5_valid),
+    .ex1_valid_i          (ex1_valid_q),
+    .ex2_valid_i          (ex2_valid_q),
+    .ex3_valid_i          (ex3_valid_q),
+    .ex4_valid_i          (ex4_valid_q),
+    .ex5_valid_i          (ex5_valid_q),
     .wb_wr_reg_i          (wr_reg),
-    .ex1_wr_reg_i         (ex_wr_reg_q),
-    .ex2_wr_reg_i         (ex2_wr_reg),
-    .ex3_wr_reg_i         (ex3_wr_reg),
-    .ex4_wr_reg_i         (ex4_wr_reg),
-    .ex5_wr_reg_i         (ex5_wr_reg),
+    .ex1_wr_reg_i         (ex1_wr_reg_q),
+    .ex2_wr_reg_i         (ex2_wr_reg_q),
+    .ex3_wr_reg_i         (ex3_wr_reg_q),
+    .ex4_wr_reg_i         (ex4_wr_reg_q),
+    .ex5_wr_reg_i         (ex5_wr_reg_q),
     .pc_i                 (dec_pc_q),
     .rs1_data_i           (dec_rs1_data),
     .rs2_data_i           (dec_rs2_data),
-    .ex5_result_i         (ex5_result),
+    .ex5_result_i         (ex5_result_q),
     .wb_data_to_reg_i     (data_to_reg),
     .instruction_i        (dec_instruction_q),
     .alu_valid_o          (alu_valid_d),
-    .ex_valid_o           (ex_valid_d),
+    .ex_valid_o           (ex1_valid_d),
     .shamt_o              (alu_shamt_d),
     .offset_sign_extend_o (alu_offset_sign_extend_d),
     .rs1_o                (rs1),
     .rs2_o                (rs2),
-    .ex_wr_reg_o          (ex_wr_reg_d),
+    .ex_wr_reg_o          (ex1_wr_reg_d),
     .alu_pc_o             (alu_pc_d),
     .alu_rs1_data_o       (alu_rs1_data_d),
     .alu_rs2_data_o       (alu_rs2_data_d),
     .instruction_o        (alu_instruction_d),
 `ifndef SYNTHESIS
     .debug_alu_pc_o       (debug_alu_pc_d),
-    .debug_ex_pc_o        (debug_ex_pc_d),
-    .debug_ex_instr_o     (debug_ex_instr_d)
+    .debug_ex_pc_o        (ex1_debug_pc_d),
+    .debug_ex_instr_o     (ex1_debug_instr_d)
 `endif
   );
 
@@ -322,32 +334,61 @@ module cpu (
     .REGISTER_WIDTH     (REGISTER_WIDTH),
     .DATA_WIDTH         (DATA_WIDTH)
   ) ex_stages (
-    .clk_i              (clk_i),
-    .rst_i              (rst_i),
-    .valid_i            (ex_valid_q),
-    .wr_reg_i           (ex_wr_reg_q),
-    .a_i                (alu_rs1_data_q),
-    .b_i                (alu_rs2_data_q),
+    .ex1_valid_i        (ex1_valid_q),
+    .ex2_valid_i        (ex2_valid_q),
+    .ex3_valid_i        (ex3_valid_q),
+    .ex4_valid_i        (ex4_valid_q),
+    .ex5_valid_i        (ex5_valid_q),
+    .ex1_wr_reg_i       (ex1_wr_reg_q),
+    .ex2_wr_reg_i       (ex2_wr_reg_q),
+    .ex3_wr_reg_i       (ex3_wr_reg_q),
+    .ex4_wr_reg_i       (ex4_wr_reg_q),
+    .ex5_wr_reg_i       (ex5_wr_reg_q),
+    .ex1_a_i            (alu_rs1_data_q),
+    .ex1_b_i            (alu_rs2_data_q),
+    .ex2_result_i       (ex2_result_q),
+    .ex3_result_i       (ex3_result_q),
+    .ex4_result_i       (ex4_result_q),
+    .ex5_result_i       (ex5_result_q),
 `ifndef SYNTHESIS
-    .debug_pc_i         (debug_ex_pc_q),
-    .debug_instr_i      (debug_ex_instr_q),
+    .ex1_debug_pc_i     (ex1_debug_pc_q),
+    .ex2_debug_pc_i     (ex2_debug_pc_q),
+    .ex3_debug_pc_i     (ex3_debug_pc_q),
+    .ex4_debug_pc_i     (ex4_debug_pc_q),
+    .ex5_debug_pc_i     (ex5_debug_pc_q),
+    .ex1_debug_instr_i  (ex1_debug_instr_q),
+    .ex2_debug_instr_i  (ex2_debug_instr_q),
+    .ex3_debug_instr_i  (ex3_debug_instr_q),
+    .ex4_debug_instr_i  (ex4_debug_instr_q),
+    .ex5_debug_instr_i  (ex5_debug_instr_q),
 `endif
-    .ex2_valid_o        (ex2_valid),
-    .ex3_valid_o        (ex3_valid),
-    .ex4_valid_o        (ex4_valid),
-    .ex5_valid_o        (ex5_valid),
+    .ex2_valid_o        (ex2_valid_d),
+    .ex3_valid_o        (ex3_valid_d),
+    .ex4_valid_o        (ex4_valid_d),
+    .ex5_valid_o        (ex5_valid_d),
     .wb_is_next_cycle_o (ex_wb_is_next_cycle),
-    .result_ready_o     (wb_valid_from_ex),
-    .ex2_wr_reg_o       (ex2_wr_reg),
-    .ex3_wr_reg_o       (ex3_wr_reg),
-    .ex4_wr_reg_o       (ex4_wr_reg),
-    .ex5_wr_reg_o       (ex5_wr_reg),
-    .wr_reg_o           (wb_wr_reg_from_ex),
-    .ex5_result_o       (ex5_result),
-    .result_o           (wb_data_from_ex),
+    .result_ready_o     (wb_valid_from_ex_d),
+    .ex2_wr_reg_o       (ex2_wr_reg_d),
+    .ex3_wr_reg_o       (ex3_wr_reg_d),
+    .ex4_wr_reg_o       (ex4_wr_reg_d),
+    .ex5_wr_reg_o       (ex5_wr_reg_d),
+    .wr_reg_o           (wb_wr_reg_from_ex_d),
+    .ex2_result_o       (ex2_result_d),
+    .ex3_result_o       (ex3_result_d),
+    .ex4_result_o       (ex4_result_d),
+    .ex5_result_o       (ex5_result_d),
+    .result_o           (wb_data_from_ex_d),
 `ifndef SYNTHESIS
-    .debug_pc_o         (debug_wb_pc_from_ex),
-    .debug_instr_o      (debug_wb_instr_from_ex)
+    .ex2_debug_pc_o     (ex2_debug_pc_d),
+    .ex3_debug_pc_o     (ex3_debug_pc_d),
+    .ex4_debug_pc_o     (ex4_debug_pc_d),
+    .ex5_debug_pc_o     (ex5_debug_pc_d),
+    .debug_pc_o         (debug_wb_pc_from_ex_d),
+    .ex2_debug_instr_o  (ex2_debug_instr_d),
+    .ex3_debug_instr_o  (ex3_debug_instr_d),
+    .ex4_debug_instr_o  (ex4_debug_instr_d),
+    .ex5_debug_instr_o  (ex5_debug_instr_d),
+    .debug_instr_o      (debug_wb_instr_from_ex_d)
 `endif
   );
 
@@ -355,19 +396,19 @@ module cpu (
     .DATA_WIDTH      (DATA_WIDTH)
   ) wb_stage (
     .mem_valid_i       (wb_valid_from_mem_q),
-    .ex_valid_i        (wb_valid_from_ex),
+    .ex_valid_i        (wb_valid_from_ex_q),
     .mem_reg_wr_en_i   (wb_reg_wr_en_from_mem_q),
     .mem_wr_reg_i      (wb_wr_reg_from_mem_q),
-    .ex_wr_reg_i       (wb_wr_reg_from_ex),
+    .ex_wr_reg_i       (wb_wr_reg_from_ex_q),
     .alu_result_i      (wb_alu_result_q),
-    .ex_result_i       (wb_data_from_ex),
+    .ex_result_i       (wb_data_from_ex_q),
     .data_from_mem_i   (wb_data_from_mem_q),
     .is_load_i         (wb_is_load_from_mem_q),
 `ifndef SYNTHESIS
     .debug_mem_pc_i    (debug_wb_pc_from_mem_q),
-    .debug_ex_pc_i     (debug_wb_pc_from_ex),
+    .debug_ex_pc_i     (debug_wb_pc_from_ex_q),
     .debug_mem_instr_i (debug_wb_instr_from_mem_q),
-    .debug_ex_instr_i  (debug_wb_instr_from_ex),
+    .debug_ex_instr_i  (debug_wb_instr_from_ex_q),
 `endif
     .reg_wr_en_o       (wb_reg_wr_en),
     .wr_reg_o          (wb_wr_reg),
@@ -426,13 +467,37 @@ module cpu (
 
       // Decode -> EX flops
       if (!ex_stall) begin
-        ex_valid_q               <= ex_valid_d;
-        ex_wr_reg_q              <= ex_wr_reg_d;
+        ex1_valid_q              <= ex1_valid_d;
+        ex1_wr_reg_q             <= ex1_wr_reg_d;
 `ifndef SYNTHESIS
-        debug_ex_pc_q            <= debug_ex_pc_d;
-        debug_ex_instr_q         <= debug_ex_instr_d;
+        ex1_debug_pc_q           <= ex1_debug_pc_d;
+        ex1_debug_instr_q        <= ex1_debug_instr_d;
 `endif
       end
+
+      // Internal EX flops
+      ex2_valid_q       <= ex2_valid_d;
+      ex3_valid_q       <= ex3_valid_d;
+      ex4_valid_q       <= ex4_valid_d;
+      ex5_valid_q       <= ex5_valid_d;
+      ex2_wr_reg_q      <= ex2_wr_reg_d;
+      ex3_wr_reg_q      <= ex3_wr_reg_d;
+      ex4_wr_reg_q      <= ex4_wr_reg_d;
+      ex5_wr_reg_q      <= ex5_wr_reg_d;
+      ex2_result_q      <= ex2_result_d;
+      ex3_result_q      <= ex3_result_d;
+      ex4_result_q      <= ex4_result_d;
+      ex5_result_q      <= ex5_result_d;
+`ifndef SYNTHESIS
+      ex2_debug_pc_q    <= ex2_debug_pc_d;
+      ex3_debug_pc_q    <= ex3_debug_pc_d;
+      ex4_debug_pc_q    <= ex4_debug_pc_d;
+      ex5_debug_pc_q    <= ex5_debug_pc_d;
+      ex2_debug_instr_q <= ex2_debug_instr_d;
+      ex3_debug_instr_q <= ex3_debug_instr_d;
+      ex4_debug_instr_q <= ex4_debug_instr_d;
+      ex5_debug_instr_q <= ex5_debug_instr_d;
+`endif
 
       // ALU -> MEM flops
       if (!mem_stall) begin
@@ -452,18 +517,24 @@ module cpu (
 
       // We don't arbite yet between MEM and EX stages
       wb_valid_from_mem_q       <= wb_valid_from_mem_d;
+      wb_valid_from_ex_q        <= wb_valid_from_ex_d;
       wb_reg_wr_en_from_mem_q   <= wb_reg_wr_en_from_mem_d;
+      wb_reg_wr_en_from_ex_q    <= wb_valid_from_ex_d;
       wb_wr_reg_from_mem_q      <= wb_wr_reg_from_mem_d;
+      wb_wr_reg_from_ex_q       <= wb_wr_reg_from_ex_d;
       wb_alu_result_q           <= wb_alu_result_d;
       wb_data_from_mem_q        <= wb_data_from_mem_d;
+      wb_data_from_ex_q         <= wb_data_from_ex_d;
       wb_is_load_from_mem_q     <= wb_is_load_from_mem_d;
 `ifndef SYNTHESIS
       debug_wb_pc_from_mem_q    <= debug_wb_pc_from_mem_d;
+      debug_wb_pc_from_ex_q     <= debug_wb_pc_from_ex_d;
       debug_wb_instr_from_mem_q <= debug_wb_instr_from_mem_d;
+      debug_wb_instr_from_ex_q  <= debug_wb_instr_from_ex_d;
 `endif
 
 `ifndef SYNTHESIS
-      debug_instr_is_completed_o <= alu_instr_finishes | wb_valid_from_mem_q | wb_valid_from_ex;
+      debug_instr_is_completed_o <= alu_instr_finishes | wb_valid_from_mem_q | wb_valid_from_ex_q;
       debug_pc_o                 <= alu_instr_finishes ? alu_pc_q          : debug_wb_pc;
       debug_instr_o              <= alu_instr_finishes ? alu_instruction_q : debug_wb_instr;
 `endif
