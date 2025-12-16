@@ -439,9 +439,18 @@ module cpu (
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
-      dec_valid_q       <= 1'b0;
-      is_jump           <= 1'b0;
-      alu_branch_taken  <= 1'b0;
+      dec_valid_q         <= 1'b0;
+      is_jump             <= 1'b0;
+      alu_branch_taken    <= 1'b0;
+      alu_valid_q         <= 1'b0;
+      mem_valid_q         <= 1'b0;
+      ex1_valid_q         <= 1'b0;
+      ex2_valid_q         <= 1'b0;
+      ex3_valid_q         <= 1'b0;
+      ex4_valid_q         <= 1'b0;
+      ex5_valid_q         <= 1'b0;
+      wb_valid_from_mem_q <= 1'b0;
+      wb_valid_from_ex_q  <= 1'b0;
     end else begin
 
       // Fetch -> Decode flops
