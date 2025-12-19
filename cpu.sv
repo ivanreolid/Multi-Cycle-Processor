@@ -51,6 +51,7 @@ module cpu (
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend_d;
   logic dec_stall;
+  logic alu_bubble;
   instruction_t dec_instruction_q;
   instruction_t alu_instruction_d;
 `ifndef SYNTHESIS
@@ -170,6 +171,7 @@ module cpu (
     .ex2_valid_i        (ex2_valid_q),
     .ex3_valid_i        (ex3_valid_q),
     .ex4_valid_i        (ex4_valid_q),
+    .ex5_valid_i        (ex5_valid_q),
     .ex1_wr_reg_i       (ex1_wr_reg_q),
     .ex2_wr_reg_i       (ex2_wr_reg_q),
     .ex3_wr_reg_i       (ex3_wr_reg_q),
@@ -179,7 +181,8 @@ module cpu (
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
     .stall_decode_o     (dec_stall),
-    .stall_fetch_o      (fetch_stall)
+    .stall_fetch_o      (fetch_stall),
+    .alu_bubble_o       (alu_bubble)
   );
 
   fetch_stage #(
@@ -461,7 +464,9 @@ module cpu (
       end
 
       // Decode -> ALU flops
-      if (!alu_stall) begin
+      if (alu_bubble) begin
+        alu_valid_q              <= 1'b0;
+      end else if (!alu_stall) begin
         alu_valid_q              <= alu_valid_d;
         alu_pc_q                 <= alu_pc_d;
         alu_rs1_data_q           <= alu_rs1_data_d;

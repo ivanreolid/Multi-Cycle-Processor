@@ -10,6 +10,7 @@ module hazard_unit #(
   input  logic ex2_valid_i,
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
+  input  logic ex5_valid_i,
   input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
@@ -19,13 +20,16 @@ module hazard_unit #(
   output logic stall_mem_o,
   output logic stall_alu_o,
   output logic stall_decode_o,
-  output logic stall_fetch_o
+  output logic stall_fetch_o,
+  output logic alu_bubble_o
 );
 
   logic rs1_needed, rs2_needed;
   logic [REGISTER_WIDTH-1:0] rs1, rs2;
 
   logic raw_hazard_rs1, raw_hazard_rs2, any_raw_hazard;
+
+  logic ex_stage_is_busy;
 
   assign stall_mem_o = mem_busy_i;
   assign stall_ex_o  = 1'b0;
@@ -71,11 +75,19 @@ module hazard_unit #(
     any_raw_hazard = raw_hazard_rs1 | raw_hazard_rs2;
   end
 
+  assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
+
   always_comb begin : decode_stall
     stall_decode_o = 1'b0;
+    alu_bubble_o   = 1'b0;
 
     if (stall_alu_o || stall_ex_o) begin
       stall_decode_o = 1'b1;
+    end
+    // TODO: remove as soon as we allow instructions to complete out of order
+    else if (is_branch(dec_instr_i) && ex_stage_is_busy) begin
+      stall_decode_o = 1'b1;
+      alu_bubble_o   = 1'b1;
     end else if (is_instr_wbalu(dec_instr_i) && wb_is_next_cycle_i) begin
       stall_decode_o = 1'b1;
     end else if (is_mem(dec_instr_i) && (ex1_valid_i || ex2_valid_i)) begin
@@ -94,6 +106,10 @@ module hazard_unit #(
 
   function automatic logic is_mem(instruction_t instr);
     return (instr.opcode == LOAD || instr.opcode == STORE);
+  endfunction
+
+  function automatic logic is_branch(instruction_t instr);
+    return instr.opcode == BRANCH;
   endfunction
 
 endmodule : hazard_unit
