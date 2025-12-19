@@ -37,7 +37,6 @@ module ex_stages #(
   output logic ex3_valid_o,
   output logic ex4_valid_o,
   output logic ex5_valid_o,
-  output logic wb_is_next_cycle_o,
   output logic result_ready_o,
   output logic [REGISTER_WIDTH-1:0] ex2_wr_reg_o,
   output logic [REGISTER_WIDTH-1:0] ex3_wr_reg_o,
@@ -80,8 +79,6 @@ module ex_stages #(
   assign ex5_result_o   = ex4_result_i;
   assign result_o       = ex5_result_i;
   assign result_ready_o = ex5_valid_i;
-
-  assign wb_is_next_cycle_o = ex5_valid_o;
 
 `ifndef SYNTHESIS
   assign ex2_debug_pc_o  = ex1_debug_pc_i;

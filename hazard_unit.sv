@@ -21,7 +21,8 @@ module hazard_unit #(
   output logic stall_alu_o,
   output logic stall_decode_o,
   output logic stall_fetch_o,
-  output logic alu_bubble_o
+  output logic alu_bubble_o,
+  output logic ex_bubble_o
 );
 
   logic rs1_needed, rs2_needed;
@@ -65,9 +66,17 @@ module hazard_unit #(
   always_comb begin : decode_stall
     stall_decode_o = 1'b0;
     alu_bubble_o   = 1'b0;
+    ex_bubble_o    = 1'b0;
 
     if (stall_alu_o || stall_ex_o) begin
       stall_decode_o = 1'b1;
+      // TODO: remove as soon as we allow instructions to complete out of order
+      alu_bubble_o   = 1'b1;
+      ex_bubble_o    = 1'b1;
+    end else if (any_raw_hazard) begin
+      stall_decode_o = 1'b1;
+      alu_bubble_o   = 1'b1;
+      ex_bubble_o    = 1'b1;
     end
     // TODO: remove as soon as we allow instructions to complete out of order
     else if (hazard_signals_i.is_branch && ex_stage_is_busy) begin
@@ -75,9 +84,8 @@ module hazard_unit #(
       alu_bubble_o   = 1'b1;
     end else if (hazard_signals_i.is_instr_wb_alu && wb_is_next_cycle_i) begin
       stall_decode_o = 1'b1;
+      alu_bubble_o   = 1'b1;
     end else if (hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i)) begin
-      stall_decode_o = 1'b1;
-    end else if (any_raw_hazard) begin
       stall_decode_o = 1'b1;
     end
   end

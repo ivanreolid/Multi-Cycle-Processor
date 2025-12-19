@@ -50,7 +50,7 @@ module cpu (
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend_d;
   logic dec_stall;
-  logic alu_bubble;
+  logic alu_bubble, ex_bubble;
   hazard_ctrl_t hazard_signals;
   instruction_t dec_instruction_q;
   instruction_t alu_instruction_d;
@@ -119,7 +119,6 @@ module cpu (
   logic ex2_valid_d, ex3_valid_d, ex4_valid_d, ex5_valid_d;
   logic ex1_valid_q, ex2_valid_q, ex3_valid_q, ex4_valid_q, ex5_valid_q;
   logic ex_stall;
-  logic ex_wb_is_next_cycle;
   logic wb_valid_from_ex_d;
   logic [REGISTER_WIDTH-1:0] ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
   logic [REGISTER_WIDTH-1:0] ex1_wr_reg_q, ex2_wr_reg_q, ex3_wr_reg_q, ex4_wr_reg_q, ex5_wr_reg_q;
@@ -166,7 +165,7 @@ module cpu (
   ) hazard_unit (
     .dec_valid_i        (dec_valid_q),
     .mem_busy_i         (mem_stall),
-    .wb_is_next_cycle_i (mem_wb_is_next_cycle | ex_wb_is_next_cycle),
+    .wb_is_next_cycle_i (mem_wb_is_next_cycle | wb_valid_from_ex_d),
     .ex1_valid_i        (ex1_valid_q),
     .ex2_valid_i        (ex2_valid_q),
     .ex3_valid_i        (ex3_valid_q),
@@ -182,7 +181,8 @@ module cpu (
     .stall_alu_o        (alu_stall),
     .stall_decode_o     (dec_stall),
     .stall_fetch_o      (fetch_stall),
-    .alu_bubble_o       (alu_bubble)
+    .alu_bubble_o       (alu_bubble),
+    .ex_bubble_o        (ex_bubble)
   );
 
   fetch_stage #(
@@ -368,7 +368,6 @@ module cpu (
     .ex3_valid_o        (ex3_valid_d),
     .ex4_valid_o        (ex4_valid_d),
     .ex5_valid_o        (ex5_valid_d),
-    .wb_is_next_cycle_o (ex_wb_is_next_cycle),
     .result_ready_o     (wb_valid_from_ex_d),
     .ex2_wr_reg_o       (ex2_wr_reg_d),
     .ex3_wr_reg_o       (ex3_wr_reg_d),
@@ -479,7 +478,9 @@ module cpu (
       end
 
       // Decode -> EX flops
-      if (!ex_stall) begin
+      if (ex_bubble) begin
+        ex1_valid_q              <= 1'b0;
+      end else if (!ex_stall) begin
         ex1_valid_q              <= ex1_valid_d;
         ex1_wr_reg_q             <= ex1_wr_reg_d;
 `ifndef SYNTHESIS
