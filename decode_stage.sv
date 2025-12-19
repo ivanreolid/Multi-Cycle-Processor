@@ -32,12 +32,11 @@ module decode_stage #(
   output logic ex_valid_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
-  output logic [REGISTER_WIDTH-1:0] rs1_o,
-  output logic [REGISTER_WIDTH-1:0] rs2_o,
   output logic [REGISTER_WIDTH-1:0] ex_wr_reg_o,
   output logic [ADDR_WIDTH-1:0] alu_pc_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
+  output var   hazard_ctrl_t hazard_signals_o,
   output var   instruction_t instruction_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_alu_pc_o,
@@ -47,8 +46,52 @@ module decode_stage #(
 );
 
   logic valid_instruction;
-  logic instr_reads_rs1, instr_reads_rs2;
-  logic is_mul;
+
+  always_comb begin : decode_instruction
+    hazard_signals_o.rs1             = instruction_i.rs1;
+    hazard_signals_o.rs2             = instruction_i.rs2;
+    hazard_signals_o.rs1_needed      = 1'b0;
+    hazard_signals_o.rs2_needed      = 1'b0;
+    hazard_signals_o.is_mul          = 1'b0;
+    hazard_signals_o.is_instr_wb_alu = 1'b0;
+    hazard_signals_o.is_instr_mem    = 1'b0;
+    hazard_signals_o.is_branch       = 1'b0;
+
+    case (instruction_i.opcode)
+      R: begin
+        hazard_signals_o.rs1_needed      = 1'b1;
+        hazard_signals_o.rs2_needed      = 1'b1;
+        hazard_signals_o.is_mul          = instruction_i.funct3 == 3'b000 &&
+                                           instruction_i.funct7 == 7'b0000001;
+        hazard_signals_o.is_instr_wb_alu = instruction_i.funct7 != 7'b0000001;
+      end
+      LOAD: begin
+        hazard_signals_o.rs1_needed      = 1'b1;
+        hazard_signals_o.is_instr_mem    = 1'b1;
+      end
+      STORE: begin
+        hazard_signals_o.rs1_needed      = 1'b1;
+        hazard_signals_o.rs2_needed      = 1'b1;
+        hazard_signals_o.is_instr_mem    = 1'b1;
+      end
+      BRANCH: begin
+        hazard_signals_o.rs1_needed      = 1'b1;
+        hazard_signals_o.rs2_needed      = 1'b1;
+        hazard_signals_o.is_branch       = 1'b1;
+      end
+      JAL: begin
+        hazard_signals_o.is_instr_wb_alu = 1'b1;
+      end
+      IMMEDIATE: begin
+        hazard_signals_o.rs1_needed      = 1'b1;
+        hazard_signals_o.is_instr_wb_alu = 1'b1;
+      end
+      AUIPC: begin
+        hazard_signals_o.is_instr_wb_alu = 1'b1;
+      end
+      default;
+    endcase
+  end
 
   always_comb begin : shamt_computation
     case (instruction_i.opcode)
@@ -80,10 +123,14 @@ module decode_stage #(
     logic is_bypass_ex5_rs1;
     logic is_bypass_ex5_rs2;
 
-    is_bypass_ex5_rs1 = instr_reads_rs1 && ex5_valid_i    && (instruction_i.rs1 == ex5_wr_reg_i);
-    is_bypass_ex5_rs2 = instr_reads_rs2 && ex5_valid_i    && (instruction_i.rs2 == ex5_wr_reg_i);
-    is_bypass_wb_rs1  = instr_reads_rs1 && wb_reg_wr_en_i && (instruction_i.rs1 == wb_wr_reg_i);
-    is_bypass_wb_rs2  = instr_reads_rs2 && wb_reg_wr_en_i && (instruction_i.rs2 == wb_wr_reg_i);
+    is_bypass_ex5_rs1 = hazard_signals_o.rs1_needed && ex5_valid_i    &&
+                        (instruction_i.rs1 == ex5_wr_reg_i);
+    is_bypass_ex5_rs2 = hazard_signals_o.rs2_needed && ex5_valid_i    &&
+                        (instruction_i.rs2 == ex5_wr_reg_i);
+    is_bypass_wb_rs1  = hazard_signals_o.rs1_needed && wb_reg_wr_en_i &&
+                        (instruction_i.rs1 == wb_wr_reg_i);
+    is_bypass_wb_rs2  = hazard_signals_o.rs2_needed && wb_reg_wr_en_i &&
+                        (instruction_i.rs2 == wb_wr_reg_i);
 
     alu_rs1_data_o = is_bypass_ex5_rs1 ? ex5_result_i : is_bypass_wb_rs1 ?
                                                              wb_data_to_reg_i : rs1_data_i;
@@ -93,18 +140,8 @@ module decode_stage #(
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
 
-  assign instr_reads_rs1 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC;
-  assign instr_reads_rs2 = instruction_i.opcode != JAL && instruction_i.opcode != AUIPC &&
-                           instruction_i.opcode != LOAD;
-
-  assign is_mul = instruction_i.opcode == R && instruction_i.funct3 == 3'b000 &&
-                  instruction_i.funct7 == 7'b0000001;
-
-  assign rs1_o = instruction_i.rs1;
-  assign rs2_o = instruction_i.rs2;
-
-  assign alu_valid_o          = ~is_mul & valid_instruction;
-  assign ex_valid_o           = is_mul & valid_instruction;
+  assign alu_valid_o          = ~hazard_signals_o.is_mul & valid_instruction;
+  assign ex_valid_o           = hazard_signals_o.is_mul & valid_instruction;
   assign ex_wr_reg_o          = instruction_i.rd;
   assign alu_pc_o             = pc_i;
   assign instruction_o        = instruction_i;

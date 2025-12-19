@@ -42,7 +42,6 @@ module cpu (
   logic dec_valid_q;
   logic alu_valid_d;
   logic ex1_valid_d;
-  logic [REGISTER_WIDTH-1:0] rs1, rs2;
   logic [REGISTER_WIDTH-1:0] ex1_wr_reg_d;
   logic [SHAMT_WIDTH-1:0] alu_shamt_d;
   logic [ADDR_WIDTH-1:0] alu_pc_d;
@@ -52,6 +51,7 @@ module cpu (
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend_d;
   logic dec_stall;
   logic alu_bubble;
+  hazard_ctrl_t hazard_signals;
   instruction_t dec_instruction_q;
   instruction_t alu_instruction_d;
 `ifndef SYNTHESIS
@@ -176,7 +176,7 @@ module cpu (
     .ex2_wr_reg_i       (ex2_wr_reg_q),
     .ex3_wr_reg_i       (ex3_wr_reg_q),
     .ex4_wr_reg_i       (ex4_wr_reg_q),
-    .dec_instr_i        (dec_instruction_q),
+    .hazard_signals_i   (hazard_signals),
     .stall_ex_o         (ex_stall),
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
@@ -241,12 +241,11 @@ module cpu (
     .ex_valid_o           (ex1_valid_d),
     .shamt_o              (alu_shamt_d),
     .offset_sign_extend_o (alu_offset_sign_extend_d),
-    .rs1_o                (rs1),
-    .rs2_o                (rs2),
     .ex_wr_reg_o          (ex1_wr_reg_d),
     .alu_pc_o             (alu_pc_d),
     .alu_rs1_data_o       (alu_rs1_data_d),
     .alu_rs2_data_o       (alu_rs2_data_d),
+    .hazard_signals_o     (hazard_signals),
     .instruction_o        (alu_instruction_d),
 `ifndef SYNTHESIS
     .debug_alu_pc_o       (debug_alu_pc_d),
@@ -429,8 +428,8 @@ module cpu (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (reg_wr_en),
-    .rd_reg_a_i   (rs1),
-    .rd_reg_b_i   (rs2),
+    .rd_reg_a_i   (hazard_signals.rs1),
+    .rd_reg_b_i   (hazard_signals.rs2),
     .wr_reg_i     (wr_reg),
     .wr_data_i    (data_to_reg),
     .reg_a_data_o (dec_rs1_data),

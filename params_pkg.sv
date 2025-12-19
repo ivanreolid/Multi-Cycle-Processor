@@ -18,6 +18,17 @@ package params_pkg;
     AUIPC     = 7'b0010111
   } opcode;
 
+  typedef struct packed {
+    logic is_mul;
+    logic is_instr_wb_alu;
+    logic is_instr_mem;
+    logic is_branch;
+    logic rs1_needed;
+    logic rs2_needed;
+    logic [4:0] rs1;
+    logic [4:0] rs2;
+  } hazard_ctrl_t;
+
   typedef enum logic [1:0] {
     BYTE  = 2'b00,
     HALF  = 2'b01,
