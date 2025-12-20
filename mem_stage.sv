@@ -1,5 +1,3 @@
-`include "dmem.sv"
-
 import params_pkg::*;
 
 module mem_stage #(
