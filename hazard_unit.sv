@@ -4,7 +4,11 @@ module hazard_unit #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
 )(
   input  logic dec_valid_i,
+  input  logic alu_valid_i,
+  input  logic alu_instr_finishes_i,
   input  logic mem_busy_i,
+  input  logic ex_allowed_wb_i,
+  input  logic alu_allowed_wb_i,
   input  logic wb_is_next_cycle_i,
   input  logic ex1_valid_i,
   input  logic ex2_valid_i,
@@ -33,8 +37,7 @@ module hazard_unit #(
   logic ex_stage_is_busy;
 
   assign stall_mem_o = mem_busy_i;
-  assign stall_ex_o  = 1'b0;
-  assign stall_alu_o = stall_mem_o;
+  assign stall_ex_o  = !ex_allowed_wb_i;
 
   always_comb begin : decode_raw_hazard
     raw_hazard_rs1 = 1'b0;
@@ -63,6 +66,18 @@ module hazard_unit #(
 
   assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
 
+  always_comb begin : alu_stall
+    stall_alu_o = 1'b0;
+
+    if (alu_valid_i) begin
+      if (stall_mem_o) begin
+        stall_alu_o = 1'b1;
+      end else if (!alu_allowed_wb_i) begin
+        stall_alu_o = alu_instr_finishes_i;
+      end
+    end
+  end
+
   always_comb begin : decode_stall
     stall_decode_o = 1'b0;
     alu_bubble_o   = 1'b0;
@@ -71,7 +86,7 @@ module hazard_unit #(
     if (stall_alu_o || stall_ex_o) begin
       stall_decode_o = 1'b1;
       // TODO: remove as soon as we allow instructions to complete out of order
-      alu_bubble_o   = 1'b1;
+      alu_bubble_o   = !stall_alu_o;
       ex_bubble_o    = 1'b1;
     end else if (any_raw_hazard) begin
       stall_decode_o = 1'b1;

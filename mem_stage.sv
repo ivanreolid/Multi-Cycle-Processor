@@ -26,14 +26,12 @@ module mem_stage #(
 `endif
   output logic wb_valid_o,
   output logic wb_reg_wr_en_o,
-  output logic wb_is_load_o,
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic stall_o,
   output logic wb_is_next_cycle_o,
   output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
   output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
-  output logic [DATA_WIDTH-1:0] wb_alu_result_o,
   output logic [ADDR_WIDTH-1:0] mem_req_address_o,
   output logic [DATA_WIDTH-1:0] wr_data_o,
   output access_size_t req_access_size_o,
@@ -63,9 +61,7 @@ module mem_stage #(
   assign req_access_size_o  = access_size_i;
   assign wr_data_o          = rs2_data_i;
 
-  assign wb_is_load_o       = is_load_i;
   assign wb_wr_reg_o        = wr_reg_i;
-  assign wb_alu_result_o    = alu_result_i;
   assign wb_data_from_mem_o = mem_data_i;
 `ifndef SYNTHESIS
   assign debug_wb_pc_o      = debug_pc_i;

@@ -18,6 +18,12 @@ The RAW detection is done with EX1-EX4 stages. For non ALU WB operations (loads,
 
 Always flopping in memory stage to write back stage, since the latter doesn't stall. The only important thing here to remember is that there are two important wires that have to be flopped with 1 one cycle: wb_valid and reg_wr_en.
 
+2. Completions and write backs
+
+WB arbiter is the responsible to select which stage is able to complete and write into a register if needed. The priority is: MEM > EX5 > ALU.
+When an instruction is not granted to complete, it has to remain at its stage.
+When an instruction that is granted to complete has also to write back into a register, that register is written at the end of the cycle the instruction completes.
+
 Performance results
 
 No caches
