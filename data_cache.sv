@@ -24,6 +24,7 @@ module data_cache #(
     output logic                      mem_we,     // 1=write, 0=read
     output logic [ADDR_WIDTH-1:0]     mem_addr,   // Line aligned address
     output logic [LINE_BYTES*8-1:0]   mem_wdata,  // Full line write data
+    input  logic                      mem_gnt,    // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid, // Memory read valid
     input  logic [LINE_BYTES*8-1:0]   mem_rdata   // Full line read data
 );
@@ -62,7 +63,7 @@ module data_cache #(
     pending_req_t pending;
 
     
-    // Current request address breakdown (combinational)
+    // Current request address breakdown
     wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
@@ -103,8 +104,6 @@ module data_cache #(
     assign mem_wdata = mem_wdata_r;
 
 
-
-    // Load Operations with Size
     function automatic [31:0] load_from_line(
         input [LINE_BYTES*8-1:0] line_data,
         input [WORD_OFF_BITS-1:0] word_idx,
@@ -141,7 +140,6 @@ module data_cache #(
         end
     endfunction
 
-    // Store Operations with Strobe
     function automatic [LINE_BYTES*8-1:0] store_to_line(
         input [LINE_BYTES*8-1:0]  old_line,
         input [WORD_OFF_BITS-1:0] word_idx,
@@ -228,19 +226,17 @@ module data_cache #(
             mem_wdata_r <= '0;
         end else begin
             cpu_rvalid_r <= 1'b0;
-            mem_req_r    <= 1'b0;
 
             case (state)
                 
                 S_IDLE: begin
+                    mem_req_r <= 1'b0;
                     if (cpu_req && cpu_ready_r) begin
-                        // Tag lookup happens combinationally in the same cycle
-                        // Check hit/miss immediately
                         
                         if (curr_cache_hit) begin
-                            // HIT: Handle immediately, stay in IDLE
+                            // HIT
                             if (cpu_wr) begin
-                                // STORE HIT: Update cache line
+                                // STORE HIT
                                 logic [3:0] wstrb_to_use;
                                 wstrb_to_use = (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
                                 
@@ -253,7 +249,7 @@ module data_cache #(
                                 dirty_array[curr_index] <= 1'b1;
                                 
                             end else begin
-                                // LOAD HIT: Return data immediately
+                                // LOAD HIT
                                 cpu_rdata_r  <= load_from_line(
                                     data_array[curr_index],
                                     curr_word_off,
@@ -262,12 +258,11 @@ module data_cache #(
                                 );
                                 cpu_rvalid_r <= 1'b1;
                             end
-                            // Stay ready and in IDLE
                             cpu_ready_r <= 1'b1;
                             state <= S_IDLE;
                             
                         end else begin
-                            // MISS: Save request and start miss handling
+                            // MISS
                             pending.valid <= 1'b1;
                             pending.wr    <= cpu_wr;
                             pending.addr  <= cpu_addr;
@@ -280,9 +275,8 @@ module data_cache #(
                                 pending.wstrb <= 4'b0000;
                             end
                             cpu_ready_r <= 1'b0;
-                            // Start miss handling in the same cycle
                             if (curr_need_writeback) begin
-                                // Dirty line: need to writeback first
+                                // Dirty line 
                                 mem_req_r   <= 1'b1;
                                 mem_we_r    <= 1'b1;
                                 mem_addr_r  <= evicted_addr(curr_index);
@@ -303,22 +297,38 @@ module data_cache #(
                 end
 
                 S_WRITEBACK: begin
-                    // writeback already sent in previous cycle
-                    mem_req_r  <= 1'b1;
-                    mem_we_r   <= 1'b0;
-                    mem_addr_r <= pend_line_addr;
-                    state <= S_REFILL;
+                    // keep request until granted
+                    if (mem_req_r && !mem_gnt) begin
+                        // keep trying
+                        mem_req_r   <= 1'b1;
+                        mem_we_r    <= 1'b1;
+                        mem_addr_r  <= evicted_addr(pend_index);
+                        mem_wdata_r <= data_array[pend_index];
+                    end else if (mem_gnt && mem_we_r) begin
+                        mem_req_r  <= 1'b1;
+                        mem_we_r   <= 1'b0;
+                        mem_addr_r <= pend_line_addr;
+                        state <= S_REFILL;
+                    end
                 end
 
                 S_REFILL: begin
-                    // Wait for memory response
+                    // keep requesting refill until granted
+                    if (mem_req_r && !mem_gnt) begin
+                        // refill not granted keep trying
+                        mem_req_r  <= 1'b1;
+                        mem_we_r   <= 1'b0;
+                        mem_addr_r <= pend_line_addr;
+                    end else if (mem_gnt) begin
+                        // refill granted stop request
+                        mem_req_r <= 1'b0;
+                    end
+                    
                     if (mem_rvalid) begin
-                        // Refill complete
                         tag_array[pend_index]   <= pend_tag;
                         valid_array[pend_index] <= 1'b1;
                         
                         if (pending.wr) begin
-                            // WRITE-ALLOCATE: merge store into refilled line
                             data_array[pend_index] <= store_to_line(
                                 mem_rdata,
                                 pend_word_off,
@@ -327,7 +337,6 @@ module data_cache #(
                             );
                             dirty_array[pend_index] <= 1'b1;
                         end else begin
-                            // LOAD: install clean line and return data
                             data_array[pend_index]  <= mem_rdata;
                             dirty_array[pend_index] <= 1'b0;
                             
@@ -343,7 +352,6 @@ module data_cache #(
                         pending.valid <= 1'b0;
                         state <= S_IDLE; //done
                     end else begin
-                        // Still waiting for memory
                         cpu_ready_r <= 1'b0;
                         state <= S_REFILL;
                     end

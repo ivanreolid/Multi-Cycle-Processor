@@ -18,6 +18,7 @@ module instr_cache #(
 
     output logic                      mem_req,     // mem req
     output logic [ADDR_WIDTH-1:0]     mem_addr,   // Line-aligned adres
+    input  logic                      mem_gnt,     // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid, // mem read
     input  logic [LINE_BYTES*8-1:0]   mem_rdata   // full line
 );
@@ -49,13 +50,11 @@ module instr_cache #(
 
     pending_req_t pending;
 
-    // Current request address breakdown (combinational)
     wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
     wire [1:0]               curr_byte_off  = cpu_addr[1:0];
 
-    // Pending request address breakdown
     wire [IDX_BITS-1:0]      pend_index     = pending.addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      pend_tag       = pending.addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] pend_word_off  = pending.addr[OFFSET_BITS-1:2];
@@ -142,10 +141,9 @@ module instr_cache #(
             
         end else begin
             cpu_rvalid_r <= 1'b0;
-            mem_req_r    <= 1'b0;
-
             case (state)
                 S_IDLE: begin
+                    mem_req_r <= 1'b0;
                     if (cpu_req && cpu_ready_r) begin                        
                         if (curr_cache_hit) begin
                             // HIT
@@ -178,14 +176,21 @@ module instr_cache #(
                 end
 
                 S_REFILL: begin
-                    // Wait for memory response
+                    if (mem_req_r && !mem_gnt) begin
+                        // request not grnted, keep trying
+                        mem_req_r  <= 1'b1;
+                        mem_addr_r <= pend_line_addr;
+                    end else if (mem_gnt) begin
+                        // request grntd, stop request
+                        mem_req_r <= 1'b0;
+                    end
+                    // wait for mem resp
                     if (mem_rvalid) begin
-                        // Refill complete
+                        // refill complete
                         tag_array[pend_index]   <= pend_tag;
                         valid_array[pend_index] <= 1'b1;
                         data_array[pend_index]  <= mem_rdata;
                         
-                        // Return requested data
                         cpu_rdata_r  <= load_from_line(
                             mem_rdata,
                             pend_word_off,
@@ -198,7 +203,7 @@ module instr_cache #(
                         pending.valid <= 1'b0;
                         state <= S_IDLE;
                     end else begin
-                        // Still waiting for memory
+                        // waiting mem
                         cpu_ready_r <= 1'b0;
                         state <= S_REFILL;
                     end
@@ -210,5 +215,4 @@ module instr_cache #(
             endcase
         end
     end
-
 endmodule

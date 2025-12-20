@@ -6,12 +6,20 @@
 `include "ex_stages.sv"
 `include "wb_arbiter.sv"
 `include "rbank.sv"
+`include "mem.sv"
+`include "dcache.sv"
+`include "instr_cache.sv"
+`include "data_cache.sv"
+
 
 import params_pkg::*;
 
 module cpu (
   input  logic clk_i,
   input  logic rst_i,
+
+//cache portsss
+
   input  logic mem_data_valid_i,
   input  logic mem_data_is_instr_i,
   input  logic [DATA_WIDTH-1:0] mem_data_i,
