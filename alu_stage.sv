@@ -8,8 +8,6 @@ module alu_stage #(
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
 )(
-  input  logic clk_i,
-  input  logic rst_i,
   input  logic valid_i,
   input  logic mem_stall_i,
   input  logic [SHAMT_WIDTH-1:0] shamt_i,
@@ -44,25 +42,21 @@ module alu_stage #(
 );
 
   logic [DATA_WIDTH-1:0] alu_data_a, alu_data_b;
-  logic [DATA_WIDTH-1:0] mem_alu_result_d;
 
   logic is_zero, is_less;
-  logic is_load_d, is_store_d;
-  logic mem_valid_d, mem_reg_wr_en_d;
-
-  access_size_t access_size_d;
 
   always_comb begin : opcode
-    is_load_d        = 1'b0;
-    is_store_d       = 1'b0;
-    is_jump_o        = 1'b0;
-    mem_valid_d      = 1'b0;
-    mem_reg_wr_en_d  = 1'b0;
-    branch_taken_o   = 1'b0;
-    is_instr_wbalu_o = 1'b0;
-    instr_finishes_o = 1'b0;
-    alu_data_a       = data_a_i;
-    alu_data_b       = data_b_i;
+    mem_valid_o       = 1'b0;
+    mem_is_load_o     = 1'b0;
+    mem_is_store_o    = 1'b0;
+    mem_reg_wr_en_o   = 1'b0;
+    mem_access_size_o = WORD;
+    is_jump_o         = 1'b0;
+    branch_taken_o    = 1'b0;
+    is_instr_wbalu_o  = 1'b0;
+    instr_finishes_o  = 1'b0;
+    alu_data_a        = data_a_i;
+    alu_data_b        = data_b_i;
 
     case(instruction_i.opcode)
       R: begin
@@ -70,17 +64,17 @@ module alu_stage #(
         instr_finishes_o = valid_i;
       end
       LOAD: begin
-        is_load_d        = 1'b1;
-        alu_data_b       = offset_sign_extend_i;
-        access_size_d    = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
-        mem_valid_d      = valid_i;
-        mem_reg_wr_en_d  = 1'b1;
+        mem_valid_o       = valid_i;
+        mem_is_load_o     = 1'b1;
+        mem_reg_wr_en_o   = 1'b1;
+        alu_data_b        = offset_sign_extend_i;
+        mem_access_size_o = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
       end
       STORE: begin
-        is_store_d       = 1'b1;
-        alu_data_b       = offset_sign_extend_i;
-        mem_valid_d      = valid_i;
-        access_size_d    = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
+        mem_valid_o       = valid_i;
+        mem_is_store_o    = 1'b1;
+        alu_data_b        = offset_sign_extend_i;
+        mem_access_size_o = instruction_i.funct3 == 3'b000 ? BYTE : WORD;
       end
       BRANCH: begin
         if (valid_i) begin
@@ -119,33 +113,18 @@ module alu_stage #(
     endcase
   end
 
-  always_ff @(posedge clk_i) begin : flops
-    if (!rst_i) begin
-      mem_valid_o       <= 1'b0;
-      mem_reg_wr_en_o   <= 1'b0;
-      mem_is_load_o     <= 1'b0;
-      mem_is_store_o    <= 1'b0;
-    end else if (!mem_stall_i) begin
-      mem_valid_o       <= mem_valid_d;
-      mem_reg_wr_en_o   <= mem_reg_wr_en_d;
-      mem_is_load_o     <= is_load_d;
-      mem_is_store_o    <= is_store_d;
-      mem_rs2_data_o    <= data_b_i;
-      mem_wr_reg_o      <= instruction_i.rd;
-      mem_alu_result_o  <= mem_alu_result_d;
-      mem_access_size_o <= access_size_d;
+  assign mem_rs2_data_o    = data_b_i;
+  assign mem_wr_reg_o      = instruction_i.rd;
+  assign mem_alu_result_o  = data_to_reg_o;
 `ifndef SYNTHESIS
-      debug_mem_pc_o    <= debug_pc_i;
-      debug_mem_instr_o <= instruction_i;
+  assign debug_mem_pc_o    = debug_pc_i;
+  assign debug_mem_instr_o = instruction_i;
 `endif
-    end
-  end
 
   assign pc_branch_offset_o = pc_i + offset_sign_extend_i;
   assign jump_address_o     = pc_i + offset_sign_extend_i;
 
   assign wr_reg_o      = instruction_i.rd;
-  assign data_to_reg_o = mem_alu_result_d;  // ALU result
 
   alu #(
     .OPCODE_WIDTH (OPCODE_WIDTH),
@@ -158,7 +137,7 @@ module alu_stage #(
     .b_i       (alu_data_b),
     .is_zero_o (is_zero),
     .is_less_o (is_less),
-    .result_o  (mem_alu_result_d)
+    .result_o  (data_to_reg_o)
   );
 
 endmodule : alu_stage

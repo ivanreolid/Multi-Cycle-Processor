@@ -23,7 +23,7 @@ module fetch_stage #(
   output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
   output access_size_t req_access_size_o,
-  output var instruction_t instruction_o
+  output var instruction_t dec_instr_o
 );
 
   typedef enum logic [2:0] {
@@ -34,48 +34,70 @@ module fetch_stage #(
     STALL    = 3'b100
   } state_t;
 
-  logic [ADDR_WIDTH-1:0] pc, pc_d, dec_pc_d;
+  logic [ADDR_WIDTH-1:0] pc, pc_d;
   logic [ADDR_WIDTH-1:0] branch_target;
+
+  logic buffer_wr_en;
+  logic [ADDR_WIDTH-1:0] pc_buffer;
+  instruction_t instr_buffer;
 
   state_t state, state_d;
 
-  logic dec_valid_d;
-
-  instruction_t dec_instr_d;
-
   always_comb begin : state_update
-    rd_req_valid_o   = 1'b0;
-    state_d          = state;
+    rd_req_valid_o    = 1'b0;
+    mem_req_addr_o    = pc;
+    req_access_size_o = WORD;
+
+    buffer_wr_en      = 1'b0;
+
+    dec_valid_o       = 1'b0;
+    dec_pc_o          = pc;
+    dec_instr_o       = instruction_t'('0);
+
+    state_d           = state;
+    pc_d              = pc;
 
     case (state)
       IDLE: begin
-        pc_d        = pc;
-        dec_valid_d = 1'b0;
         state_d     = MEM_REQ;
       end
       MEM_REQ: begin
-        dec_valid_d         = 1'b0;
         if (!mem_req_i) begin
           rd_req_valid_o    = 1'b1;
-          mem_req_addr_o    = pc;
-          req_access_size_o = WORD;
           state_d           = MEM_WAIT;
         end
       end
       MEM_WAIT: begin
-        if (alu_branch_taken_i | is_jump_i)
-          state_d = FLUSH;
-        else if (instr_valid_i) begin
-          dec_valid_d     = 1'b1;
-          pc_d            = (pc + 4) % MEM_SIZE;
-          dec_pc_d        = pc;
-          dec_instr_d     = instruction_t'(instr_i);
-          state_d         = dec_stall_i ? STALL : MEM_REQ;
+        if (instr_valid_i) begin
+          if (alu_branch_taken_i || is_jump_i) begin
+            pc_d         = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
+            state_d      = MEM_REQ;
+          end else if (dec_stall_i) begin
+            buffer_wr_en = 1'b1;
+            state_d      = STALL;
+          end else begin
+            dec_valid_o  = 1'b1;
+            dec_instr_o  = instruction_t'(instr_i);
+            dec_pc_o     = pc;
+
+            pc_d         = (pc + 4) % MEM_SIZE;
+            state_d      = MEM_REQ;
+          end
+        end else if (alu_branch_taken_i || is_jump_i) begin
+          state_d        = FLUSH;
         end
       end
       STALL: begin
-        if (!dec_stall_i)
-          state_d     = MEM_REQ;
+        dec_valid_o = 1'b1;
+        dec_instr_o = instruction_t'(instr_buffer);
+        dec_pc_o    = pc_buffer;
+
+        if (alu_branch_taken_i || is_jump_i) begin
+          state_d   = FLUSH;
+        end else if (!dec_stall_i) begin
+          pc_d      = (pc + 4) % MEM_SIZE;
+          state_d   = MEM_REQ;
+        end
       end
       FLUSH: begin
         if (instr_valid_i) begin
@@ -83,6 +105,7 @@ module fetch_stage #(
           state_d = MEM_REQ;
         end
       end
+      default: state_d = IDLE;
     endcase
   end
 
@@ -91,22 +114,22 @@ module fetch_stage #(
       state          <= IDLE;
       pc             <= '0;
       branch_target  <= '0;
-      dec_valid_o    <= 1'b0;
-      dec_pc_o       <= '0;
-      instruction_o  <= '0;
-    end else if (!dec_stall_i) begin
+      instr_buffer   <= '0;
+      pc_buffer      <= '0;
+    end else begin
       state          <= state_d;
       pc             <= pc_d;
-      dec_valid_o    <= dec_valid_d;
-      dec_pc_o       <= dec_pc_d;
-      instruction_o  <= dec_instr_d;
 
       if (alu_branch_taken_i)
         branch_target <= pc_branch_offset_i;
       else if (is_jump_i)
         branch_target <= jump_address_i;
-    end else
-      state           <= state_d;
+
+      if (buffer_wr_en) begin
+        instr_buffer <= instr_i;
+        pc_buffer    <= pc;
+      end
+    end
   end
 
 endmodule : fetch_stage
