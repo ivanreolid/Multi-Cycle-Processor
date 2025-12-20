@@ -6,7 +6,9 @@ module hazard_unit #(
   input  logic dec_valid_i,
   input  logic alu_valid_i,
   input  logic alu_instr_finishes_i,
+  input  logic mem_valid_i,
   input  logic mem_busy_i,
+  input  logic mem_reg_wr_en_i,
   input  logic ex_allowed_wb_i,
   input  logic alu_allowed_wb_i,
   input  logic wb_is_next_cycle_i,
@@ -15,6 +17,7 @@ module hazard_unit #(
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
   input  logic ex5_valid_i,
+  input  logic [REGISTER_WIDTH-1:0] mem_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
@@ -32,7 +35,8 @@ module hazard_unit #(
   logic rs1_needed, rs2_needed;
   logic [REGISTER_WIDTH-1:0] rs1, rs2;
 
-  logic raw_hazard_rs1, raw_hazard_rs2, any_raw_hazard;
+  logic ex_raw_hazard_rs1, ex_raw_hazard_rs2, mem_raw_hazard_rs1, mem_raw_hazard_rs2,
+        any_raw_hazard;
 
   logic ex_stage_is_busy;
 
@@ -40,15 +44,17 @@ module hazard_unit #(
   assign stall_ex_o  = !ex_allowed_wb_i;
 
   always_comb begin : decode_raw_hazard
-    raw_hazard_rs1 = 1'b0;
-    raw_hazard_rs2 = 1'b0;
+    ex_raw_hazard_rs1  = 1'b0;
+    ex_raw_hazard_rs2  = 1'b0;
+    mem_raw_hazard_rs1 = 1'b0;
+    mem_raw_hazard_rs2 = 1'b0;
 
     if (dec_valid_i && hazard_signals_i.rs1_needed && hazard_signals_i.rs1 != '0) begin
       if ( (ex1_valid_i && ex1_wr_reg_i == hazard_signals_i.rs1) ||
            (ex2_valid_i && ex2_wr_reg_i == hazard_signals_i.rs1) ||
            (ex3_valid_i && ex3_wr_reg_i == hazard_signals_i.rs1) ||
            (ex4_valid_i && ex4_wr_reg_i == hazard_signals_i.rs1) ) begin
-             raw_hazard_rs1 = 1'b1;
+             ex_raw_hazard_rs1 = 1'b1;
       end
     end
 
@@ -57,11 +63,17 @@ module hazard_unit #(
            (ex2_valid_i && ex2_wr_reg_i == hazard_signals_i.rs2) ||
            (ex3_valid_i && ex3_wr_reg_i == hazard_signals_i.rs2) ||
            (ex4_valid_i && ex4_wr_reg_i == hazard_signals_i.rs2) ) begin
-             raw_hazard_rs2 = 1'b1;
+             ex_raw_hazard_rs2 = 1'b1;
       end
     end
 
-    any_raw_hazard = raw_hazard_rs1 | raw_hazard_rs2;
+    if (dec_valid_i && mem_valid_i && mem_busy_i && mem_reg_wr_en_i) begin
+      mem_raw_hazard_rs1 = hazard_signals_i.rs1_needed & (mem_wr_reg_i == hazard_signals_i.rs1);
+      mem_raw_hazard_rs2 = hazard_signals_i.rs2_needed & (mem_wr_reg_i == hazard_signals_i.rs2);
+    end
+
+    any_raw_hazard = ex_raw_hazard_rs1 | ex_raw_hazard_rs2 | mem_raw_hazard_rs1 |
+                     mem_raw_hazard_rs2;
   end
 
   assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
