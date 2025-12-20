@@ -42,9 +42,8 @@ module cpu (
   logic dec_valid_q;
   logic alu_valid_d;
   logic ex1_valid_d;
-  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_d;
+  logic [REGISTER_WIDTH-1:0] dec_wr_reg;
   logic [SHAMT_WIDTH-1:0] alu_shamt_d;
-  logic [ADDR_WIDTH-1:0] alu_pc_d;
   logic [ADDR_WIDTH-1:0] dec_pc_q;
   logic [DATA_WIDTH-1:0] dec_rs1_data, dec_rs2_data;
   logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
@@ -53,12 +52,6 @@ module cpu (
   logic alu_bubble, ex_bubble;
   hazard_ctrl_t hazard_signals;
   instruction_t dec_instruction_q;
-  instruction_t alu_instruction_d;
-`ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_alu_pc_d;
-  logic [ADDR_WIDTH-1:0] ex1_debug_pc_d;
-  instruction_t ex1_debug_instr_d;
-`endif
 
   // ALU stage wires
   logic [ADDR_WIDTH-1:0] alu_pc_q;
@@ -76,16 +69,13 @@ module cpu (
   logic mem_is_store_d;
   logic mem_reg_wr_en_d;
   logic alu_is_instr_wbalu, alu_instr_finishes;
-  logic [REGISTER_WIDTH-1:0] alu_wr_reg;
-  logic [REGISTER_WIDTH-1:0] mem_wr_reg_d;
+  logic [REGISTER_WIDTH-1:0] alu_wr_reg_q;
   logic [DATA_WIDTH-1:0] alu_data_to_reg;
   logic [DATA_WIDTH-1:0] mem_alu_result_d;
   logic [DATA_WIDTH-1:0] mem_rs2_data_d;
   access_size_t mem_access_size_d;
   instruction_t alu_instruction_q;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_alu_pc_q;
-  logic [ADDR_WIDTH-1:0] debug_mem_pc_d;
   instruction_t debug_mem_instr_d;
 `endif
 
@@ -228,7 +218,6 @@ module cpu (
     .ex3_wr_reg_i          (ex3_wr_reg_q),
     .ex4_wr_reg_i          (ex4_wr_reg_q),
     .ex5_wr_reg_i          (ex5_wr_reg_q),
-    .pc_i                  (dec_pc_q),
     .rs1_data_i            (dec_rs1_data),
     .rs2_data_i            (dec_rs2_data),
     .mem_stage_result_i    (wb_data_from_mem),
@@ -239,17 +228,10 @@ module cpu (
     .ex_valid_o            (ex1_valid_d),
     .shamt_o               (alu_shamt_d),
     .offset_sign_extend_o  (alu_offset_sign_extend_d),
-    .ex_wr_reg_o           (ex1_wr_reg_d),
-    .alu_pc_o              (alu_pc_d),
+    .wr_reg_o              (dec_wr_reg),
     .alu_rs1_data_o        (alu_rs1_data_d),
     .alu_rs2_data_o        (alu_rs2_data_d),
-    .hazard_signals_o      (hazard_signals),
-    .instruction_o         (alu_instruction_d),
-`ifndef SYNTHESIS
-    .debug_alu_pc_o        (debug_alu_pc_d),
-    .debug_ex_pc_o         (ex1_debug_pc_d),
-    .debug_ex_instr_o      (ex1_debug_instr_d)
-`endif
+    .hazard_signals_o      (hazard_signals)
   );
 
   alu_stage #(
@@ -265,19 +247,14 @@ module cpu (
     .pc_i                 (alu_pc_q),
     .offset_sign_extend_i (alu_offset_sign_extend_q),
     .instruction_i        (alu_instruction_q),
-`ifndef SYNTHESIS
-    .debug_pc_i           (debug_alu_pc_q),
-`endif
     .mem_valid_o          (mem_valid_d),
     .mem_reg_wr_en_o      (mem_reg_wr_en_d),
     .is_instr_wbalu_o     (alu_is_instr_wbalu),
     .instr_finishes_o     (alu_instr_finishes),
-    .wr_reg_o             (alu_wr_reg),
     .pc_branch_offset_o   (alu_pc_branch_offset),
     .jump_address_o       (jump_address),
     .mem_alu_result_o     (mem_alu_result_d),
     .mem_rs2_data_o       (mem_rs2_data_d),
-    .mem_wr_reg_o         (mem_wr_reg_d),
     .data_to_reg_o        (alu_data_to_reg),
     .mem_is_load_o        (mem_is_load_d),
     .mem_is_store_o       (mem_is_store_d),
@@ -285,7 +262,6 @@ module cpu (
     .is_jump_o            (is_jump),
     .mem_access_size_o    (mem_access_size_d),
 `ifndef SYNTHESIS
-    .debug_mem_pc_o       (debug_mem_pc_d),
     .debug_mem_instr_o    (debug_mem_instr_d)
 `endif
   );
@@ -397,14 +373,14 @@ module cpu (
     .mem_ready_i        (wb_valid_from_mem),
     .ex_ready_i         (wb_valid_from_ex),
     .mem_reg_wr_en_i    (wb_reg_wr_en_from_mem),
-    .alu_wr_reg_i       (alu_wr_reg),
+    .alu_wr_reg_i       (alu_wr_reg_q),
     .mem_wr_reg_i       (wb_wr_reg_from_mem),
     .ex_wr_reg_i        (wb_wr_reg_from_ex),
     .alu_result_i       (alu_data_to_reg),
     .ex_result_i        (wb_data_from_ex),
     .data_from_mem_i    (wb_data_from_mem),
 `ifndef SYNTHESIS
-    .debug_alu_pc_i     (debug_mem_pc_d),
+    .debug_alu_pc_i     (alu_pc_q),
     .debug_mem_pc_i     (debug_wb_pc_from_mem),
     .debug_ex_pc_i      (debug_wb_pc_from_ex),
     .debug_alu_instr_i  (debug_mem_instr_d),
@@ -487,15 +463,13 @@ module cpu (
         alu_valid_q              <= 1'b0;
       end else if (!alu_stall) begin
         alu_valid_q              <= alu_valid_d;
-        alu_pc_q                 <= alu_pc_d;
+        alu_pc_q                 <= dec_pc_q;
+        alu_wr_reg_q             <= dec_wr_reg;
         alu_rs1_data_q           <= alu_rs1_data_d;
         alu_rs2_data_q           <= alu_rs2_data_d;
         alu_shamt_q              <= alu_shamt_d;
         alu_offset_sign_extend_q <= alu_offset_sign_extend_d;
-        alu_instruction_q        <= alu_instruction_d;
-`ifndef SYNTHESIS
-        debug_alu_pc_q           <= debug_alu_pc_d;
-`endif
+        alu_instruction_q        <= dec_instruction_q;
       end
 
       // Decode -> EX flops
@@ -503,10 +477,10 @@ module cpu (
         ex1_valid_q              <= 1'b0;
       end else if (!ex_stall) begin
         ex1_valid_q              <= ex1_valid_d;
-        ex1_wr_reg_q             <= ex1_wr_reg_d;
+        ex1_wr_reg_q             <= dec_wr_reg;
 `ifndef SYNTHESIS
-        ex1_debug_pc_q           <= ex1_debug_pc_d;
-        ex1_debug_instr_q        <= ex1_debug_instr_d;
+        ex1_debug_pc_q           <= dec_pc_q;
+        ex1_debug_instr_q        <= dec_instruction_q;
 `endif
       end
 
@@ -540,12 +514,12 @@ module cpu (
         mem_is_load_q     <= mem_is_load_d;
         mem_is_store_q    <= mem_is_store_d;
         mem_reg_wr_en_q   <= mem_reg_wr_en_d;
-        mem_wr_reg_q      <= mem_wr_reg_d;
+        mem_wr_reg_q      <= alu_wr_reg_q;
         mem_alu_result_q  <= mem_alu_result_d;
         mem_rs2_data_q    <= mem_rs2_data_d;
         mem_access_size_q <= mem_access_size_d;
 `ifndef SYNTHESIS
-        debug_mem_pc_q    <= debug_mem_pc_d;
+        debug_mem_pc_q    <= alu_pc_q;
         debug_mem_instr_q <= debug_mem_instr_d;
 `endif
       end
