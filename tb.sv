@@ -142,7 +142,7 @@ module tb;
   endtask
 
   task automatic check_completed_instr();
-    if (model_instr != cpu_wb_instr) begin
+    if ((model_pc != cpu_wb_pc) || (model_instr != cpu_wb_instr)) begin
       error_msg = {error_msg, $sformatf(" CPU committed PC=0x%0h with instruction 0x%0h",
                    cpu_wb_pc, cpu_wb_instr)};
       error_msg = {error_msg, $sformatf(" (funct7=0x%0h rs2=0x%0h rs1=0x%0h funct3=0x%0h",
