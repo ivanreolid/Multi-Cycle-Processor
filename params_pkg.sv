@@ -24,6 +24,7 @@ package params_pkg;
     BRANCH    = 7'b1100011,
     JAL       = 7'b1101111,
     IMMEDIATE = 7'b0010011,
+    LUI       = 7'b0110111,
     AUIPC     = 7'b0010111
   } opcode;
 
