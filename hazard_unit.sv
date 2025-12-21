@@ -36,13 +36,15 @@ module hazard_unit #(
   logic rs1_needed, rs2_needed;
   logic [REGISTER_WIDTH-1:0] rs1, rs2;
 
-  logic ex_raw_hazard_rs1, ex_raw_hazard_rs2, mem_raw_hazard_rs1, mem_raw_hazard_rs2,
-        any_raw_hazard;
+  logic ex_raw_hazard_rs1, ex_raw_hazard_rs2, mem_raw_hazard_rs1, mem_raw_hazard_rs2;
 
-  logic ex_stage_is_busy;
+  logic ex_stage_is_busy, ex_stage_is_full;
+
+  assign ex_stage_is_busy = ex1_valid_i || ex2_valid_i || ex3_valid_i || ex4_valid_i || ex5_valid_i;
+  assign ex_stage_is_full = ex1_valid_i && ex2_valid_i && ex3_valid_i && ex4_valid_i && ex5_valid_i;
 
   assign stall_mem_o = mem_busy_i;
-  assign stall_ex_o  = !ex_allowed_wb_i;
+  assign stall_ex_o  = !ex_allowed_wb_i && ex_stage_is_full;
 
   always_comb begin : decode_raw_hazard
     ex_raw_hazard_rs1  = 1'b0;
@@ -72,51 +74,37 @@ module hazard_unit #(
       mem_raw_hazard_rs1 = hazard_signals_i.rs1_needed & (mem_wr_reg_i == hazard_signals_i.rs1);
       mem_raw_hazard_rs2 = hazard_signals_i.rs2_needed & (mem_wr_reg_i == hazard_signals_i.rs2);
     end
-
-    any_raw_hazard = ex_raw_hazard_rs1 | ex_raw_hazard_rs2 | mem_raw_hazard_rs1 |
-                     mem_raw_hazard_rs2;
   end
 
-  assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
-
   always_comb begin : alu_stall
-    logic is_wb_conflict;
+    logic stall_reason_wb_contention;
+    logic stall_reason_backpressure;
 
-    is_wb_conflict = !alu_allowed_wb_i && alu_instr_finishes_i;
+    stall_reason_wb_contention = !alu_allowed_wb_i && alu_instr_finishes_i;
+    stall_reason_backpressure  = stall_mem_o && !alu_instr_finishes_i;
 
-    stall_alu_o = alu_valid_i && (stall_mem_o || is_wb_conflict);
+    stall_alu_o = alu_valid_i && (stall_reason_backpressure || stall_reason_wb_contention);
   end
 
   always_comb begin : decode_stall
-    logic stall_reason_backpressure;
-    logic stall_reason_branch_ordering;
-    logic stall_reason_wb_contention;
-    logic stall_reason_mem_ordering;
+    logic stall_reason_ex_backpressure;
+    logic stall_reason_alu_backpressure;
+    logic stall_reason_mem_raw_hazard;
+    logic stall_reason_ex_raw_hazard;
 
-    stall_reason_backpressure    = stall_alu_o || stall_ex_o;
-    stall_reason_branch_ordering = hazard_signals_i.is_branch && ex_stage_is_busy;
-    stall_reason_wb_contention   = hazard_signals_i.is_instr_wb_alu && wb_is_next_cycle_i;
-    stall_reason_mem_ordering    = hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i);
+    stall_reason_ex_backpressure  = hazard_signals_i.is_mul && stall_ex_o;
+    stall_reason_alu_backpressure = !hazard_signals_i.is_mul && stall_alu_o;
+    stall_reason_mem_raw_hazard   = mem_raw_hazard_rs1 || mem_raw_hazard_rs2;
+    stall_reason_ex_raw_hazard    = ex_raw_hazard_rs1 || ex_raw_hazard_rs2;
 
     stall_decode_o = rob_is_full_i ||
-                     stall_reason_backpressure ||
-                     any_raw_hazard ||
-                     stall_reason_branch_ordering ||
-                     stall_reason_wb_contention ||
-                     stall_reason_mem_ordering;
+                     stall_reason_ex_backpressure ||
+                     stall_reason_alu_backpressure ||
+                     stall_reason_mem_raw_hazard ||
+                     stall_reason_ex_raw_hazard;
 
-    alu_bubble_o   = 1'b0;
-    ex_bubble_o    = 1'b0;
-
-    if (stall_reason_backpressure) begin
-      alu_bubble_o   = !stall_alu_o;
-      ex_bubble_o    = 1'b1;
-    end else if (any_raw_hazard) begin
-      alu_bubble_o   = 1'b1;
-      ex_bubble_o    = 1'b1;
-    end else if (stall_reason_branch_ordering || stall_reason_wb_contention) begin
-      alu_bubble_o   = 1'b1;
-    end
+    alu_bubble_o   = stall_decode_o && !stall_reason_alu_backpressure;
+    ex_bubble_o    = stall_decode_o && !stall_reason_ex_backpressure;
   end
 
   assign stall_fetch_o = stall_decode_o;
