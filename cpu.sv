@@ -6,6 +6,7 @@
 `include "ex_stages.sv"
 `include "wb_arbiter.sv"
 `include "register_file.sv"
+`include "reorder_buffer.sv"
 
 import params_pkg::*;
 
@@ -40,8 +41,10 @@ module cpu (
 
   // Decode stage wires
   logic dec_valid_q;
+  logic dec_instr_is_wb;
   logic alu_valid_d;
   logic ex1_valid_d;
+  logic [ROB_ENTRY_WIDTH-1:0] dec_rob_new_instr_idx;
   logic [REGISTER_WIDTH-1:0] dec_wr_reg;
   logic [SHAMT_WIDTH-1:0] alu_shamt_d;
   logic [ADDR_WIDTH-1:0] dec_pc_q;
@@ -69,6 +72,7 @@ module cpu (
   logic mem_is_store_d;
   logic mem_reg_wr_en_d;
   logic alu_is_instr_wbalu, alu_instr_finishes;
+  logic [ROB_ENTRY_WIDTH-1:0] alu_rob_instr_idx_q;
   logic [REGISTER_WIDTH-1:0] alu_wr_reg_q;
   logic [DATA_WIDTH-1:0] alu_data_to_reg;
   logic [DATA_WIDTH-1:0] mem_alu_result_d;
@@ -82,6 +86,7 @@ module cpu (
   // Mem stage wires
   logic [DATA_WIDTH-1:0] mem_alu_result_q;
   logic [DATA_WIDTH-1:0] mem_rs2_data_q;
+  logic [ROB_ENTRY_WIDTH-1:0] mem_rob_instr_idx_q;
   logic [REGISTER_WIDTH-1:0] mem_wr_reg_q;
   logic mem_reg_wr_en_q;
   logic mem_is_load_q, mem_is_store_q;
@@ -101,6 +106,8 @@ module cpu (
   logic ex2_valid_d, ex3_valid_d, ex4_valid_d, ex5_valid_d;
   logic ex1_valid_q, ex2_valid_q, ex3_valid_q, ex4_valid_q, ex5_valid_q;
   logic ex_stall;
+  logic [ROB_ENTRY_WIDTH-1:0] ex1_rob_instr_idx_q, ex2_rob_instr_idx_q, ex3_rob_instr_idx_q,
+                              ex4_rob_instr_idx_q, ex5_rob_instr_idx_q;
   logic [REGISTER_WIDTH-1:0] ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
   logic [REGISTER_WIDTH-1:0] ex1_wr_reg_q, ex2_wr_reg_q, ex3_wr_reg_q, ex4_wr_reg_q, ex5_wr_reg_q;
   logic [DATA_WIDTH-1:0] ex_a, ex_b;
@@ -137,9 +144,23 @@ module cpu (
   logic [DATA_WIDTH-1:0] debug_future_file [32];
 `endif
 
+  // Reorder buffer wires
+  logic rob_is_full;
+  logic rob_new_instr_valid;
+  logic rob_instr_commit_valid;
+  logic rob_instr_commit_is_wb;
+  logic [ROB_ENTRY_WIDTH-1:0] rob_instr_complete_idx;
+  logic [REGISTER_WIDTH-1:0] rob_instr_commit_reg_id;
+  logic [DATA_WIDTH-1:0] rob_instr_commit_data;
+`ifndef SYNTHESIS
+  logic [ADDR_WIDTH-1:0] debug_rob_instr_commit_pc;
+  instruction_t debug_rob_instr_commit;
+`endif
+
   hazard_unit #(
     .REGISTER_WIDTH     (REGISTER_WIDTH)
   ) hazard_unit (
+    .rob_is_full_i      (rob_is_full),
     .dec_valid_i        (dec_valid_q),
     .alu_valid_i        (alu_valid_q),
     .alu_instr_finishes_i (alu_instr_finishes),
@@ -226,6 +247,7 @@ module cpu (
     .instruction_i         (dec_instruction_q),
     .alu_valid_o           (alu_valid_d),
     .ex_valid_o            (ex1_valid_d),
+    .instr_is_wb_o         (dec_instr_is_wb),
     .shamt_o               (alu_shamt_d),
     .offset_sign_extend_o  (alu_offset_sign_extend_d),
     .wr_reg_o              (dec_wr_reg),
@@ -366,13 +388,19 @@ module cpu (
   );
 
   wb_arbiter #(
-    .DATA_WIDTH          (DATA_WIDTH)
+    .ROB_ENTRY_WIDTH    (ROB_ENTRY_WIDTH),
+    .REGISTER_WIDTH     (REGISTER_WIDTH),
+    .DATA_WIDTH         (DATA_WIDTH),
+    .ADDR_WIDTH         (ADDR_WIDTH)
   ) wb_arbiter (
     .alu_ready_i        (alu_instr_finishes),
     .alu_is_instr_wb_i  (alu_is_instr_wbalu),
     .mem_ready_i        (wb_valid_from_mem),
     .ex_ready_i         (wb_valid_from_ex),
     .mem_reg_wr_en_i    (wb_reg_wr_en_from_mem),
+    .alu_rob_idx_i      (alu_rob_instr_idx_q),
+    .mem_rob_idx_i      (mem_rob_instr_idx_q),
+    .ex_rob_idx_i       (ex5_rob_instr_idx_q),
     .alu_wr_reg_i       (alu_wr_reg_q),
     .mem_wr_reg_i       (wb_wr_reg_from_mem),
     .ex_wr_reg_i        (wb_wr_reg_from_ex),
@@ -393,6 +421,7 @@ module cpu (
     .alu_is_completed_o (alu_is_completed),
     .ex_allowed_wb_o    (ex_allowed_wb),
     .alu_allowed_wb_o   (alu_allowed_wb),
+    .rob_idx_o          (rob_instr_complete_idx),
     .wr_reg_o           (wb_wr_reg),
     .data_to_reg_o      (wb_data_to_reg),
 `ifndef SYNTHESIS
@@ -417,7 +446,7 @@ module cpu (
 `ifndef SYNTHESIS
     , .debug_regs_o (debug_future_file)
 `endif
-);
+  );
 
   register_file #(
     .REGISTER_WIDTH (REGISTER_WIDTH),
@@ -425,15 +454,47 @@ module cpu (
    ) architectural_file (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
-    .wr_en_i      (wb_reg_wr_en),
+    .wr_en_i      (rob_instr_commit_valid & rob_instr_commit_is_wb),
     .rd_reg_a_i   (),
     .rd_reg_b_i   (),
-    .wr_reg_i     (wb_wr_reg),
-    .wr_data_i    (wb_data_to_reg),
+    .wr_reg_i     (rob_instr_commit_reg_id),
+    .wr_data_i    (rob_instr_commit_data),
     .reg_a_data_o (),
     .reg_b_data_o (),
 `ifndef SYNTHESIS
     .debug_regs_o (debug_regs_o)
+`endif
+  );
+
+  reorder_buffer #(
+    .REGISTER_WIDTH         (REGISTER_WIDTH),
+    .ROB_ENTRIES            (ROB_ENTRIES),
+    .ROB_ENTRY_WIDTH        (ROB_ENTRY_WIDTH),
+    .ADDR_WIDTH             (ADDR_WIDTH),
+    .DATA_WIDTH             (DATA_WIDTH)
+  ) rob (
+    .clk_i                  (clk_i),
+    .rst_i                  (rst_i),
+    .new_instr_valid_i      (rob_new_instr_valid),
+    .new_instr_is_wb_i      (dec_instr_is_wb),
+    .instr_complete_valid_i (alu_is_completed | mem_is_completed | ex_is_completed),
+    .new_instr_reg_id_i     (dec_wr_reg),
+    .instr_complete_idx_i   (rob_instr_complete_idx),
+    .instr_excp_valid_i     (1'b0),
+    .new_instr_pc_i         (dec_pc_q),
+    .instr_complete_data_i  (wb_data_to_reg)
+`ifndef SYNTHESIS
+    , .new_instr_i          (dec_instruction_q)
+`endif
+    , .full_o               (rob_is_full),
+    .instr_commit_valid_o   (rob_instr_commit_valid),
+    .instr_commit_is_wb_o   (rob_instr_commit_is_wb),
+    .instr_commit_reg_id_o  (rob_instr_commit_reg_id),
+    .new_instr_idx_o        (dec_rob_new_instr_idx),
+    .instr_commit_data_o    (rob_instr_commit_data)
+`ifndef SYNTHESIS
+    , .instr_commit_pc_o    (debug_rob_instr_commit_pc),
+    .instr_commit_o         (debug_rob_instr_commit)
 `endif
   );
 
@@ -464,6 +525,7 @@ module cpu (
       end else if (!alu_stall) begin
         alu_valid_q              <= alu_valid_d;
         alu_pc_q                 <= dec_pc_q;
+        alu_rob_instr_idx_q      <= dec_rob_new_instr_idx;
         alu_wr_reg_q             <= dec_wr_reg;
         alu_rs1_data_q           <= alu_rs1_data_d;
         alu_rs2_data_q           <= alu_rs2_data_d;
@@ -477,6 +539,7 @@ module cpu (
         ex1_valid_q              <= 1'b0;
       end else if (!ex_stall) begin
         ex1_valid_q              <= ex1_valid_d;
+        ex1_rob_instr_idx_q      <= dec_rob_new_instr_idx;
         ex1_wr_reg_q             <= dec_wr_reg;
 `ifndef SYNTHESIS
         ex1_debug_pc_q           <= dec_pc_q;
@@ -485,51 +548,66 @@ module cpu (
       end
 
       // Internal EX flops
-      ex2_valid_q       <= ex2_valid_d;
-      ex3_valid_q       <= ex3_valid_d;
-      ex4_valid_q       <= ex4_valid_d;
-      ex5_valid_q       <= ex5_valid_d;
-      ex2_wr_reg_q      <= ex2_wr_reg_d;
-      ex3_wr_reg_q      <= ex3_wr_reg_d;
-      ex4_wr_reg_q      <= ex4_wr_reg_d;
-      ex5_wr_reg_q      <= ex5_wr_reg_d;
-      ex2_result_q      <= ex2_result_d;
-      ex3_result_q      <= ex3_result_d;
-      ex4_result_q      <= ex4_result_d;
-      ex5_result_q      <= ex5_result_d;
+      ex2_valid_q         <= ex2_valid_d;
+      ex3_valid_q         <= ex3_valid_d;
+      ex4_valid_q         <= ex4_valid_d;
+      ex5_valid_q         <= ex5_valid_d;
+      ex2_rob_instr_idx_q <= ex1_rob_instr_idx_q;
+      ex3_rob_instr_idx_q <= ex2_rob_instr_idx_q;
+      ex4_rob_instr_idx_q <= ex3_rob_instr_idx_q;
+      ex5_rob_instr_idx_q <= ex4_rob_instr_idx_q;
+      ex2_wr_reg_q        <= ex2_wr_reg_d;
+      ex3_wr_reg_q        <= ex3_wr_reg_d;
+      ex4_wr_reg_q        <= ex4_wr_reg_d;
+      ex5_wr_reg_q        <= ex5_wr_reg_d;
+      ex2_result_q        <= ex2_result_d;
+      ex3_result_q        <= ex3_result_d;
+      ex4_result_q        <= ex4_result_d;
+      ex5_result_q        <= ex5_result_d;
 `ifndef SYNTHESIS
-      ex2_debug_pc_q    <= ex2_debug_pc_d;
-      ex3_debug_pc_q    <= ex3_debug_pc_d;
-      ex4_debug_pc_q    <= ex4_debug_pc_d;
-      ex5_debug_pc_q    <= ex5_debug_pc_d;
-      ex2_debug_instr_q <= ex2_debug_instr_d;
-      ex3_debug_instr_q <= ex3_debug_instr_d;
-      ex4_debug_instr_q <= ex4_debug_instr_d;
-      ex5_debug_instr_q <= ex5_debug_instr_d;
+      ex2_debug_pc_q      <= ex2_debug_pc_d;
+      ex3_debug_pc_q      <= ex3_debug_pc_d;
+      ex4_debug_pc_q      <= ex4_debug_pc_d;
+      ex5_debug_pc_q      <= ex5_debug_pc_d;
+      ex2_debug_instr_q   <= ex2_debug_instr_d;
+      ex3_debug_instr_q   <= ex3_debug_instr_d;
+      ex4_debug_instr_q   <= ex4_debug_instr_d;
+      ex5_debug_instr_q   <= ex5_debug_instr_d;
 `endif
 
       // ALU -> MEM flops
       if (!mem_stall) begin
-        mem_valid_q       <= mem_valid_d;
-        mem_is_load_q     <= mem_is_load_d;
-        mem_is_store_q    <= mem_is_store_d;
-        mem_reg_wr_en_q   <= mem_reg_wr_en_d;
-        mem_wr_reg_q      <= alu_wr_reg_q;
-        mem_alu_result_q  <= mem_alu_result_d;
-        mem_rs2_data_q    <= mem_rs2_data_d;
-        mem_access_size_q <= mem_access_size_d;
+        mem_valid_q         <= mem_valid_d;
+        mem_is_load_q       <= mem_is_load_d;
+        mem_is_store_q      <= mem_is_store_d;
+        mem_reg_wr_en_q     <= mem_reg_wr_en_d;
+        mem_rob_instr_idx_q <= alu_rob_instr_idx_q;
+        mem_wr_reg_q        <= alu_wr_reg_q;
+        mem_alu_result_q    <= mem_alu_result_d;
+        mem_rs2_data_q      <= mem_rs2_data_d;
+        mem_access_size_q   <= mem_access_size_d;
 `ifndef SYNTHESIS
-        debug_mem_pc_q    <= alu_pc_q;
-        debug_mem_instr_q <= debug_mem_instr_d;
+        debug_mem_pc_q      <= alu_pc_q;
+        debug_mem_instr_q   <= debug_mem_instr_d;
 `endif
       end
 
 `ifndef SYNTHESIS
-      debug_instr_is_completed_o <= mem_is_completed | ex_is_completed | alu_is_completed;
-      debug_pc_o                 <= debug_wb_pc;
-      debug_instr_o              <= debug_wb_instr;
+      debug_instr_is_completed_o <= rob_instr_commit_valid;
+      debug_pc_o                 <= debug_rob_instr_commit_pc;
+      debug_instr_o              <= debug_rob_instr_commit;
 `endif
     end
+  end
+
+  always_comb begin : rob_new_instr
+    logic alu_can_be_issued;
+    logic ex_can_be_issued;
+
+    alu_can_be_issued = alu_valid_d && !alu_bubble && !alu_stall;
+    ex_can_be_issued  = ex1_valid_d && !ex_bubble && !ex_stall;
+
+    rob_new_instr_valid = alu_can_be_issued || ex_can_be_issued;
   end
 
   assign rd_req_valid_o    = fetch_rd_req_valid | mem_rd_req_valid;

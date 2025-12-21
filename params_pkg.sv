@@ -1,12 +1,14 @@
 package params_pkg;
 
-  parameter int OPCODE_WIDTH   = 4;
-  parameter int REGISTER_WIDTH = 5;
-  parameter int SHAMT_WIDTH    = 6;
-  parameter int INSTR_WIDTH    = 32;
-  parameter int ADDR_WIDTH     = 32;
-  parameter int DATA_WIDTH     = 32;
-  parameter int MEM_SIZE       = 200000;
+  parameter int OPCODE_WIDTH    = 4;
+  parameter int REGISTER_WIDTH  = 5;
+  parameter int SHAMT_WIDTH     = 6;
+  parameter int ROB_ENTRIES     = 4;
+  parameter int ROB_ENTRY_WIDTH = $clog2(ROB_ENTRIES);
+  parameter int INSTR_WIDTH     = 32;
+  parameter int ADDR_WIDTH      = 32;
+  parameter int DATA_WIDTH      = 32;
+  parameter int MEM_SIZE        = 200000;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,
