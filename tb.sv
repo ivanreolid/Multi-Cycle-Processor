@@ -259,7 +259,7 @@ module tb;
         model_regs[model_instr.rd] = offset_sign_extend;
       end
       AUIPC: begin
-        offset_sign_extend = {{model_instr[31]}, model_instr[31:12] << 12};
+        offset_sign_extend = {model_instr[31:12], 12'b0};
         model_regs[model_instr.rd] = model_pc + offset_sign_extend;
       end
     endcase

@@ -106,8 +106,7 @@ module decode_stage #(
                                          instruction_i[19:12], instruction_i[20],
                                          instruction_i[30:21], 1'b0};
       IMMEDIATE : offset_sign_extend_o = {{20{instruction_i[31]}}, instruction_i[31:20]};
-      LUI       : offset_sign_extend_o = {instruction_i[31:12], 12'b0};
-      AUIPC     : offset_sign_extend_o = {{instruction_i[31]}, instruction_i[31:12] << 12};
+      LUI, AUIPC: offset_sign_extend_o = {instruction_i[31:12], 12'b0};
       default   : offset_sign_extend_o = '0;
     endcase
   end
