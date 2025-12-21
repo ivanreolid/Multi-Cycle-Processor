@@ -135,10 +135,24 @@ module decode_stage #(
     is_bypass_wb_rs2  = hazard_signals_o.rs2_needed && wb_reg_wr_en_i &&
                         (instruction_i.rs2 == wb_wr_reg_i);
 
-    alu_rs1_data_o = is_bypass_mem_rs1 ? mem_stage_result_i : is_bypass_ex5_rs1 ? ex5_result_i :
-                     is_bypass_wb_rs1  ? wb_data_to_reg_i   : rs1_data_i;
-    alu_rs2_data_o = is_bypass_mem_rs2 ? mem_stage_result_i : is_bypass_ex5_rs2 ? ex5_result_i :
-                     is_bypass_wb_rs2  ? wb_data_to_reg_i   : rs2_data_i;
+    alu_rs1_data_o = rs1_data_i;
+    alu_rs2_data_o = rs2_data_i;
+
+    if (is_bypass_mem_rs1) begin
+      alu_rs1_data_o = mem_stage_result_i;
+    end else if (is_bypass_ex5_rs1) begin
+      alu_rs1_data_o = ex5_result_i;
+    end else if (is_bypass_wb_rs1) begin
+      alu_rs1_data_o = wb_data_to_reg_i;
+    end
+
+    if (is_bypass_mem_rs2) begin
+      alu_rs2_data_o = mem_stage_result_i;
+    end else if (is_bypass_ex5_rs2) begin
+      alu_rs2_data_o = ex5_result_i;
+    end else if (is_bypass_wb_rs2) begin
+      alu_rs2_data_o = wb_data_to_reg_i;
+    end
   end
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
