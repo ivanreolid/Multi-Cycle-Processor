@@ -242,6 +242,7 @@ module tb;
         model_regs[model_instr.rd] = model_pc + offset_sign_extend;
       end
     endcase
+    model_regs[0] = '0;
   endtask
 
   task print_check_result();
