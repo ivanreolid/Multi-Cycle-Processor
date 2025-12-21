@@ -94,7 +94,6 @@ module cpu (
   logic mem_valid_q;
   logic mem_rd_req_valid, mem_wr_req_valid;
   logic mem_stall;
-  logic mem_wb_is_next_cycle;
   logic [ADDR_WIDTH-1:0] mem_req_address;
   access_size_t mem_access_size_q, mem_req_access_size;
 `ifndef SYNTHESIS
@@ -169,7 +168,6 @@ module cpu (
     .mem_reg_wr_en_i    (mem_reg_wr_en_q),
     .ex_allowed_wb_i    (ex_allowed_wb),
     .alu_allowed_wb_i   (alu_allowed_wb),
-    .wb_is_next_cycle_i (mem_wb_is_next_cycle | wb_valid_from_ex),
     .ex1_valid_i        (ex1_valid_q),
     .ex2_valid_i        (ex2_valid_q),
     .ex3_valid_i        (ex3_valid_q),
@@ -314,7 +312,6 @@ module cpu (
     .rd_req_valid_o             (mem_rd_req_valid),
     .wr_req_valid_o             (mem_wr_req_valid),
     .stall_o                    (mem_stall),
-    .wb_is_next_cycle_o         (mem_wb_is_next_cycle),
     .wb_wr_reg_o                (wb_wr_reg_from_mem),
     .wb_data_from_mem_o         (wb_data_from_mem),
     .mem_req_address_o          (mem_req_address),

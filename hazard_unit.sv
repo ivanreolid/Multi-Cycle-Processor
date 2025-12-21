@@ -12,7 +12,6 @@ module hazard_unit #(
   input  logic mem_reg_wr_en_i,
   input  logic ex_allowed_wb_i,
   input  logic alu_allowed_wb_i,
-  input  logic wb_is_next_cycle_i,
   input  logic ex1_valid_i,
   input  logic ex2_valid_i,
   input  logic ex3_valid_i,

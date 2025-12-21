@@ -50,9 +50,6 @@ module decode_stage #(
     hazard_signals_o.rs1_needed      = 1'b0;
     hazard_signals_o.rs2_needed      = 1'b0;
     hazard_signals_o.is_mul          = 1'b0;
-    hazard_signals_o.is_instr_wb_alu = 1'b0;
-    hazard_signals_o.is_instr_mem    = 1'b0;
-    hazard_signals_o.is_branch       = 1'b0;
 
     instr_is_wb_o                    = 1'b0;
 
@@ -62,35 +59,28 @@ module decode_stage #(
         hazard_signals_o.rs2_needed      = 1'b1;
         hazard_signals_o.is_mul          = instruction_i.funct3 == 3'b000 &&
                                            instruction_i.funct7 == 7'b0000001;
-        hazard_signals_o.is_instr_wb_alu = instruction_i.funct7 != 7'b0000001;
         instr_is_wb_o                    = 1'b1;
       end
       LOAD: begin
         hazard_signals_o.rs1_needed      = 1'b1;
-        hazard_signals_o.is_instr_mem    = 1'b1;
         instr_is_wb_o                    = 1'b1;
       end
       STORE: begin
         hazard_signals_o.rs1_needed      = 1'b1;
         hazard_signals_o.rs2_needed      = 1'b1;
-        hazard_signals_o.is_instr_mem    = 1'b1;
       end
       BRANCH: begin
         hazard_signals_o.rs1_needed      = 1'b1;
         hazard_signals_o.rs2_needed      = 1'b1;
-        hazard_signals_o.is_branch       = 1'b1;
       end
       JAL: begin
-        hazard_signals_o.is_instr_wb_alu = 1'b1;
         instr_is_wb_o                    = 1'b1;
       end
       IMMEDIATE: begin
         hazard_signals_o.rs1_needed      = 1'b1;
-        hazard_signals_o.is_instr_wb_alu = 1'b1;
         instr_is_wb_o                    = 1'b1;
       end
       AUIPC: begin
-        hazard_signals_o.is_instr_wb_alu = 1'b1;
         instr_is_wb_o                    = 1'b1;
       end
       default;
