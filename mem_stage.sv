@@ -34,7 +34,6 @@ module mem_stage #(
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic stall_o,
-  output logic wb_is_next_cycle_o,
   output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
   output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
   output logic [ADDR_WIDTH-1:0] mem_req_address_o,
@@ -199,7 +198,5 @@ module mem_stage #(
       end
     endcase
   end
-
-  assign wb_is_next_cycle_o = wb_valid_o;
 
 endmodule : mem_stage
