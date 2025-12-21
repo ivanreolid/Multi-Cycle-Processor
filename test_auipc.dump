@@ -1,0 +1,44 @@
+
+test_auipc.elf:     formato del fichero elf32-littleriscv
+
+
+Desensamblado de la sección .text.init:
+
+00000000 <_start>:
+   0:	00000513          	li	a0,0
+   4:	0040006f          	j	8 <run_test>
+
+00000008 <run_test>:
+   8:	00200f13          	li	t5,2
+   c:	00000013          	nop
+  10:	00002517          	auipc	a0,0x2
+  14:	71c50513          	addi	a0,a0,1820 # 272c <_end+0x172c>
+  18:	004005ef          	jal	a1,1c <run_test+0x14>
+  1c:	40b50533          	sub	a0,a0,a1
+  20:	000023b7          	lui	t2,0x2
+  24:	71038393          	addi	t2,t2,1808 # 2710 <_end+0x1710>
+  28:	02751463          	bne	a0,t2,50 <fail>
+
+0000002c <test_3>:
+  2c:	00300f13          	li	t5,3
+  30:	ffffe517          	auipc	a0,0xffffe
+  34:	8fc50513          	addi	a0,a0,-1796 # ffffd92c <_end+0xffffc92c>
+  38:	004005ef          	jal	a1,3c <test_3+0x10>
+  3c:	40b50533          	sub	a0,a0,a1
+  40:	ffffe3b7          	lui	t2,0xffffe
+  44:	8f038393          	addi	t2,t2,-1808 # ffffd8f0 <_end+0xffffc8f0>
+  48:	00751463          	bne	a0,t2,50 <fail>
+  4c:	01e01663          	bne	zero,t5,58 <pass>
+
+00000050 <fail>:
+  50:	000f0513          	mv	a0,t5
+
+00000054 <fail_loop>:
+  54:	0000006f          	j	54 <fail_loop>
+
+00000058 <pass>:
+  58:	00100513          	li	a0,1
+
+0000005c <pass_loop>:
+  5c:	0000006f          	j	5c <pass_loop>
+  60:	00000013          	nop

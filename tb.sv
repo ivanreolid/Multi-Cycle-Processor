@@ -118,6 +118,9 @@ module tb;
     $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
+  int pc_repeat_count = 0;
+  logic [ADDR_WIDTH-1:0] last_wb_pc = '1;
+
   task automatic execute_and_compare();
     model_instr = { model_mem[model_pc + 3], model_mem[model_pc + 2], model_mem[model_pc + 1],
                     model_mem[model_pc] };
@@ -150,6 +153,37 @@ module tb;
       error_msg = {error_msg, $sformatf(" rd=0x%0h opcode=%s)\n", cpu_wb_instr.rd,
                    opcode_to_string(cpu_wb_instr.opcode))};
       error = 1'b1;
+    end
+
+   // --- DETECCIÓN DE FIN ---
+
+    // Si el PC es igual al anterior (Bucle Infinito detectado)
+    if (cpu_wb_pc == last_wb_pc) begin
+        pc_repeat_count++;
+    end else begin
+        pc_repeat_count = 0;
+        last_wb_pc = cpu_wb_pc;
+    end
+
+    // Si llevamos 10 ciclos en la misma instrucción, el test ha terminado.
+    if (pc_repeat_count > 10) begin
+
+        // MIRAMOS EL REGISTRO 10 (a0)
+        // cpu_regs[10] contiene el veredicto del test
+
+        if (cpu_regs[10] == 32'd1) begin
+             $display("\n=============================================");
+             $display("   RISC-V TEST RESULT: PASS (Success)        ");
+             $display("=============================================\n");
+        end else begin
+             // El código de error suele estar desplazado 1 bit a la izquierda
+             $display("\n=============================================");
+             $display("   RISC-V TEST RESULT: FAIL                  ");
+             $display("   Fallo en el sub-test numero: %0d", cpu_regs[10] >> 1);
+             $display("=============================================\n");
+        end
+
+        $finish; // Terminamos la simulación aquí
     end
   endtask
 

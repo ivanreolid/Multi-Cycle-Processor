@@ -178,7 +178,8 @@ module imem #(
   initial begin
     //$readmemh("buffer_sum.mem", mem);
     //$readmemh("mem_copy.mem", mem);
-    $readmemh("matrix_multiply.mem", mem);
+    //$readmemh("matrix_multiply.mem", mem);
+    $readmemh("../mis_tests/test_add.mem", mem);
   end
 
 endmodule
