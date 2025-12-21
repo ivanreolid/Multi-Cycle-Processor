@@ -79,47 +79,41 @@ module hazard_unit #(
   assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
 
   always_comb begin : alu_stall
-    stall_alu_o = mem_busy_i;
+    logic is_wb_conflict;
 
-    /*if (alu_valid_i) begin
-      if (stall_mem_o) begin
-        stall_alu_o = 1'b1;
-      end else if (!alu_allowed_wb_i) begin
-        stall_alu_o = alu_instr_finishes_i;
-      end
-    end*/
+    is_wb_conflict = !alu_allowed_wb_i && alu_instr_finishes_i;
+
+    stall_alu_o = alu_valid_i && (stall_mem_o || is_wb_conflict);
   end
 
   always_comb begin : decode_stall
-    stall_decode_o = 1'b0;
+    logic stall_reason_backpressure;
+    logic stall_reason_branch_ordering;
+    logic stall_reason_wb_contention;
+    logic stall_reason_mem_ordering;
+
+    stall_reason_backpressure    = stall_alu_o || stall_ex_o;
+    stall_reason_branch_ordering = hazard_signals_i.is_branch && ex_stage_is_busy;
+    stall_reason_wb_contention   = hazard_signals_i.is_instr_wb_alu && wb_is_next_cycle_i;
+    stall_reason_mem_ordering    = hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i);
+
+    stall_decode_o = stall_reason_backpressure ||
+                     any_raw_hazard ||
+                     stall_reason_branch_ordering ||
+                     stall_reason_wb_contention ||
+                     stall_reason_mem_ordering;
+
     alu_bubble_o   = 1'b0;
     ex_bubble_o    = 1'b0;
 
-    if (stall_alu_o || stall_ex_o) begin
-      stall_decode_o = 1'b1;
-      // TODO: remove as soon as we allow instructions to complete out of order
+    if (stall_reason_backpressure) begin
       alu_bubble_o   = !stall_alu_o;
       ex_bubble_o    = 1'b1;
     end else if (any_raw_hazard) begin
-      stall_decode_o = 1'b1;
       alu_bubble_o   = 1'b1;
       ex_bubble_o    = 1'b1;
-    end
-    // TODO: remove as soon as we allow instructions to complete out of order
-    else if (hazard_signals_i.is_branch && ex_stage_is_busy) begin
-      stall_decode_o = 1'b1;
+    end else if (stall_reason_branch_ordering || stall_reason_wb_contention) begin
       alu_bubble_o   = 1'b1;
-    end else if (hazard_signals_i.is_instr_wb_alu && wb_is_next_cycle_i) begin
-      stall_decode_o = 1'b1;
-      alu_bubble_o   = 1'b1;
-    end else if (hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i)) begin
-      stall_decode_o = 1'b1;
-    end else if (alu_valid_i && !alu_instr_finishes_i) begin
-      // TODO: remove as soon as we allow instructions to complete out of
-      // order
-      stall_decode_o = 1'b1;
-      alu_bubble_o   = 1'b1;
-      ex_bubble_o    = 1'b1;
     end
   end
 
