@@ -33,6 +33,7 @@ module decode_stage #(
   input  var   instruction_t instruction_i,
   output logic alu_valid_o,
   output logic ex_valid_o,
+  output logic instr_is_wb_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
@@ -53,6 +54,8 @@ module decode_stage #(
     hazard_signals_o.is_instr_mem    = 1'b0;
     hazard_signals_o.is_branch       = 1'b0;
 
+    instr_is_wb_o                    = 1'b0;
+
     case (instruction_i.opcode)
       R: begin
         hazard_signals_o.rs1_needed      = 1'b1;
@@ -60,10 +63,12 @@ module decode_stage #(
         hazard_signals_o.is_mul          = instruction_i.funct3 == 3'b000 &&
                                            instruction_i.funct7 == 7'b0000001;
         hazard_signals_o.is_instr_wb_alu = instruction_i.funct7 != 7'b0000001;
+        instr_is_wb_o                    = 1'b1;
       end
       LOAD: begin
         hazard_signals_o.rs1_needed      = 1'b1;
         hazard_signals_o.is_instr_mem    = 1'b1;
+        instr_is_wb_o                    = 1'b1;
       end
       STORE: begin
         hazard_signals_o.rs1_needed      = 1'b1;
@@ -77,13 +82,16 @@ module decode_stage #(
       end
       JAL: begin
         hazard_signals_o.is_instr_wb_alu = 1'b1;
+        instr_is_wb_o                    = 1'b1;
       end
       IMMEDIATE: begin
         hazard_signals_o.rs1_needed      = 1'b1;
         hazard_signals_o.is_instr_wb_alu = 1'b1;
+        instr_is_wb_o                    = 1'b1;
       end
       AUIPC: begin
         hazard_signals_o.is_instr_wb_alu = 1'b1;
+        instr_is_wb_o                    = 1'b1;
       end
       default;
     endcase

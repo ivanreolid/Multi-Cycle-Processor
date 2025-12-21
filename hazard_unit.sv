@@ -3,6 +3,7 @@ import params_pkg::*;
 module hazard_unit #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
 )(
+  input  logic rob_is_full_i,
   input  logic dec_valid_i,
   input  logic alu_valid_i,
   input  logic alu_instr_finishes_i,
@@ -97,7 +98,8 @@ module hazard_unit #(
     stall_reason_wb_contention   = hazard_signals_i.is_instr_wb_alu && wb_is_next_cycle_i;
     stall_reason_mem_ordering    = hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i);
 
-    stall_decode_o = stall_reason_backpressure ||
+    stall_decode_o = rob_is_full_i ||
+                     stall_reason_backpressure ||
                      any_raw_hazard ||
                      stall_reason_branch_ordering ||
                      stall_reason_wb_contention ||
