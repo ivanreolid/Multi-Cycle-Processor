@@ -1,5 +1,5 @@
 `include "cpu.sv"
-`include "imem.sv"
+`include "mem.sv"
 
 import params_pkg::*;
 
@@ -7,13 +7,21 @@ module tb;
   logic clk;
   logic rst;
 
-  // CPU - IMEM communication wires
-  logic mem_data_valid, mem_data_is_instr;
-  logic [DATA_WIDTH-1:0] mem_data;
-  logic rd_req_valid, wr_req_valid, req_is_instr;
-  logic [ADDR_WIDTH-1:0] req_address;
-  logic [DATA_WIDTH-1:0] wr_data;
-  access_size_t req_access_size;
+  // Instruction Cache - Memory Interface
+  logic                      icache_mem_req;
+  logic [ADDR_WIDTH-1:0]     icache_mem_addr;
+  logic                      icache_mem_gnt;
+  logic                      icache_mem_rvalid;
+  logic [127:0]              icache_mem_rdata;
+
+  // Data Cache - Memory Interface
+  logic                      dcache_mem_req;
+  logic                      dcache_mem_we;
+  logic [ADDR_WIDTH-1:0]     dcache_mem_addr;
+  logic [127:0]              dcache_mem_wdata;
+  logic                      dcache_mem_gnt;
+  logic                      dcache_mem_rvalid;
+  logic [127:0]              dcache_mem_rdata;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
@@ -41,37 +49,49 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    .mem_data_valid_i               (mem_data_valid),
-    .mem_data_is_instr_i            (mem_data_is_instr),
-    .mem_data_i                     (mem_data),
-    .rd_req_valid_o                 (rd_req_valid),
-    .wr_req_valid_o                 (wr_req_valid),
-    .req_is_instr_o                 (req_is_instr),
-    .req_address_o                  (req_address),
-    .wr_data_o                      (wr_data),
-    .req_access_size_o              (req_access_size),
+    // Instruction Cache Interface
+    .icache_mem_req_o               (icache_mem_req),
+    .icache_mem_addr_o              (icache_mem_addr),
+    .icache_mem_gnt_i               (icache_mem_gnt),
+    .icache_mem_rvalid_i            (icache_mem_rvalid),
+    .icache_mem_rdata_i             (icache_mem_rdata),
+    // Data Cache Interface
+    .dcache_mem_req_o               (dcache_mem_req),
+    .dcache_mem_we_o                (dcache_mem_we),
+    .dcache_mem_addr_o              (dcache_mem_addr),
+    .dcache_mem_wdata_o             (dcache_mem_wdata),
+    .dcache_mem_gnt_i               (dcache_mem_gnt),
+    .dcache_mem_rvalid_i            (dcache_mem_rvalid),
+    .dcache_mem_rdata_i             (dcache_mem_rdata),
+    // Debug Interface
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
     .debug_instr_o                  (cpu_wb_instr)
   );
 
-  imem #(
+  mem #(
     .MEM_SIZE                       (MEM_SIZE),
     .ADDR_WIDTH                     (ADDR_WIDTH),
-    .DATA_WIDTH                     (DATA_WIDTH)
-  ) imem (
-    .clk_i                          (clk),
-    .rst_i                          (rst),
-    .rd_req_valid_i                 (rd_req_valid),
-    .wr_req_valid_i                 (wr_req_valid),
-    .req_is_instr_i                 (req_is_instr),
-    .address_i                      (req_address),
-    .wr_data_i                      (wr_data),
-    .access_size_i                  (req_access_size),
-    .data_valid_o                   (mem_data_valid),
-    .data_is_instr_o                (mem_data_is_instr),
-    .data_o                         (mem_data),
+    .LINE_BYTES                     (16)
+  ) memory (
+    .clk                            (clk),
+    .rstn                           (rst),
+    // Instruction Cache Interface
+    .icache_req                     (icache_mem_req),
+    .icache_addr                    (icache_mem_addr),
+    .icache_gnt                     (icache_mem_gnt),
+    .icache_rvalid                  (icache_mem_rvalid),
+    .icache_rdata                   (icache_mem_rdata),
+    // Data Cache Interface
+    .dcache_req                     (dcache_mem_req),
+    .dcache_we                      (dcache_mem_we),
+    .dcache_addr                    (dcache_mem_addr),
+    .dcache_wdata                   (dcache_mem_wdata),
+    .dcache_gnt                     (dcache_mem_gnt),
+    .dcache_rvalid                  (dcache_mem_rvalid),
+    .dcache_rdata                   (dcache_mem_rdata),
+    // Debug Interface
     .debug_mem_o                    (cpu_mem)
   );
 

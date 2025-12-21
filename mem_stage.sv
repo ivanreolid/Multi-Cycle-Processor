@@ -33,6 +33,7 @@ module mem_stage #(
   output logic [ADDR_WIDTH-1:0] mem_req_address_o,
   output logic [DATA_WIDTH-1:0] wr_data_o,
   output access_size_t req_access_size_o,
+  output logic [3:0] wr_strb_o,
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
   output var instruction_t debug_wb_instr_o
@@ -65,6 +66,34 @@ module mem_stage #(
   assign debug_wb_pc_o      = debug_pc_i;
   assign debug_wb_instr_o   = debug_instr_i;
 `endif
+
+  // Write strobe generation for stores
+  always_comb begin
+    if (is_store_i) begin
+      case (access_size_i)
+        BYTE: begin
+          case (alu_result_i[1:0])
+            2'b00: wr_strb_o = 4'b0001;
+            2'b01: wr_strb_o = 4'b0010;
+            2'b10: wr_strb_o = 4'b0100;
+            2'b11: wr_strb_o = 4'b1000;
+          endcase
+        end
+        HALF: begin
+          case (alu_result_i[1])
+            1'b0: wr_strb_o = 4'b0011;
+            1'b1: wr_strb_o = 4'b1100;
+          endcase
+        end
+        WORD: begin
+          wr_strb_o = 4'b1111;
+        end
+        default: wr_strb_o = 4'b0000;
+      endcase
+    end else begin
+      wr_strb_o = 4'b0000;
+    end
+  end
 
   always_comb begin : state_update
     rd_req_valid_o     = 1'b0;

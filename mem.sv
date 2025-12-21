@@ -24,11 +24,12 @@ module mem #(
     input  logic [LINE_BYTES*8-1:0]   dcache_wdata,   // 128-bit line
     output logic                      dcache_gnt,      // Request granted
     output logic                      dcache_rvalid,
+    `ifndef SYNTHESIS
+    output [7:0] debug_mem_o [MEM_SIZE],
+    `endif
     output logic [LINE_BYTES*8-1:0]   dcache_rdata    // 128-bit line
 
-`ifndef SYNTHESIS
-    output [7:0] debug_mem_o [MEM_SIZE]
-`endif
+
 );
 
     logic [7:0] mem [MEM_SIZE];
