@@ -29,9 +29,6 @@ package params_pkg;
 
   typedef struct packed {
     logic is_mul;
-    logic is_instr_wb_alu;
-    logic is_instr_mem;
-    logic is_branch;
     logic rs1_needed;
     logic rs2_needed;
     logic [4:0] rs1;
