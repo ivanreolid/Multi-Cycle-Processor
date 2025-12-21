@@ -39,7 +39,7 @@ module alu #(
           default : result_o = a_i + b_i;
         endcase
       end
-      JAL, AUIPC: result_o = a_i + b_i;
+      JAL, LUI, AUIPC: result_o = a_i + b_i;
       default   : result_o = 0;
     endcase
   end

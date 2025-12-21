@@ -98,6 +98,12 @@ module alu_stage #(
           default : alu_data_b = offset_sign_extend_i;
         endcase
       end
+      LUI: begin
+        is_instr_wbalu_o = valid_i;
+        instr_finishes_o = valid_i;
+        alu_data_a       = 32'b0;
+        alu_data_b       = offset_sign_extend_i;
+      end
       AUIPC: begin
         is_instr_wbalu_o = valid_i;
         instr_finishes_o = valid_i;

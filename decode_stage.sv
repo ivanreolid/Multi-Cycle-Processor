@@ -80,7 +80,7 @@ module decode_stage #(
         hazard_signals_o.rs1_needed      = 1'b1;
         instr_is_wb_o                    = 1'b1;
       end
-      AUIPC: begin
+      LUI, AUIPC: begin
         instr_is_wb_o                    = 1'b1;
       end
       default;
@@ -106,6 +106,7 @@ module decode_stage #(
                                          instruction_i[19:12], instruction_i[20],
                                          instruction_i[30:21], 1'b0};
       IMMEDIATE : offset_sign_extend_o = {{20{instruction_i[31]}}, instruction_i[31:20]};
+      LUI       : offset_sign_extend_o = {instruction_i[31:12], 12'b0};
       AUIPC     : offset_sign_extend_o = {{instruction_i[31]}, instruction_i[31:12] << 12};
       default   : offset_sign_extend_o = '0;
     endcase
