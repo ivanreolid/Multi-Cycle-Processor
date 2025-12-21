@@ -3,10 +3,10 @@
 import params_pkg::*;
 
 module alu_stage #(
-  parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
-  parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH,
-  parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
+  parameter int SHAMT_WIDTH     = params_pkg::SHAMT_WIDTH,
+  parameter int DATA_WIDTH      = params_pkg::DATA_WIDTH,
+  parameter int OPCODE_WIDTH    = params_pkg::OPCODE_WIDTH,
+  parameter int REGISTER_WIDTH  = params_pkg::REGISTER_WIDTH
 )(
   input  logic valid_i,
   input  logic mem_stall_i,

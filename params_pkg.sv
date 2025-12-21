@@ -10,6 +10,9 @@ package params_pkg;
   parameter int DATA_WIDTH       = 32;
   parameter int MEM_SIZE         = 200000;
 
+  parameter int ROB_ENTRIES      = `ROB_ENTRIES_MACRO;
+  parameter int ROB_ENTRY_WIDTH  = $clog2(ROB_ENTRIES);
+
   parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;

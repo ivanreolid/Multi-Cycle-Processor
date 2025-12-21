@@ -1,15 +1,19 @@
 import params_pkg::*;
 
 module wb_arbiter #(
-  parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
-  parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH
+  parameter int ROB_ENTRY_WIDTH = params_pkg::ROB_ENTRY_WIDTH,
+  parameter int REGISTER_WIDTH  = params_pkg::REGISTER_WIDTH,
+  parameter int DATA_WIDTH      = params_pkg::DATA_WIDTH,
+  parameter int ADDR_WIDTH      = params_pkg::ADDR_WIDTH
 )(
   input  logic alu_ready_i,
   input  logic alu_is_instr_wb_i,
   input  logic mem_ready_i,
   input  logic ex_ready_i,
   input  logic mem_reg_wr_en_i,
+  input  logic [ROB_ENTRY_WIDTH-1:0] alu_rob_idx_i,
+  input  logic [ROB_ENTRY_WIDTH-1:0] mem_rob_idx_i,
+  input  logic [ROB_ENTRY_WIDTH-1:0] ex_rob_idx_i,
   input  logic [REGISTER_WIDTH-1:0] alu_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] mem_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex_wr_reg_i,
@@ -30,6 +34,7 @@ module wb_arbiter #(
   output logic alu_is_completed_o,
   output logic ex_allowed_wb_o,
   output logic alu_allowed_wb_o,
+  output logic [ROB_ENTRY_WIDTH-1:0] rob_idx_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
   output logic [DATA_WIDTH-1:0] data_to_reg_o,
 `ifndef SYNTHESIS
@@ -46,6 +51,7 @@ module wb_arbiter #(
     mem_is_completed_o = 1'b0;
     ex_is_completed_o  = 1'b0;
     alu_is_completed_o = 1'b0;
+    rob_idx_o          = '0;
 
     ex_allowed_wb_o    = 1'b1;
     alu_allowed_wb_o   = 1'b1;
@@ -57,6 +63,7 @@ module wb_arbiter #(
       mem_is_completed_o = 1'b1;
       ex_allowed_wb_o    = 1'b0;
       alu_allowed_wb_o   = 1'b0;
+      rob_idx_o          = mem_rob_idx_i;
 `ifndef SYNTHESIS
       debug_pc_o    = debug_mem_pc_i;
       debug_instr_o = debug_mem_instr_i;
@@ -67,6 +74,7 @@ module wb_arbiter #(
       data_to_reg_o     = ex_result_i;
       ex_is_completed_o = 1'b1;
       alu_allowed_wb_o  = 1'b0;
+      rob_idx_o         = ex_rob_idx_i;
 `ifndef SYNTHESIS
       debug_pc_o    = debug_ex_pc_i;
       debug_instr_o = debug_ex_instr_i;
@@ -76,6 +84,7 @@ module wb_arbiter #(
       wr_reg_o           = alu_wr_reg_i;
       data_to_reg_o      = alu_result_i;
       alu_is_completed_o = 1'b1;
+      rob_idx_o          = alu_rob_idx_i;
 `ifndef SYNTHESIS
       debug_pc_o    = debug_alu_pc_i;
       debug_instr_o = debug_alu_instr_i;
