@@ -66,7 +66,6 @@ module cpu (
   access_size_t fetch_req_access_size;
   instruction_t dec_instruction_d;
 
-  // Decode stage wires
   logic dec_valid_q;
   logic alu_valid_d;
   logic ex1_valid_d;

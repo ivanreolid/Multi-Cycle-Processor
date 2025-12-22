@@ -7,21 +7,14 @@ module tb;
   logic clk;
   logic rst;
 
-  // Instruction Cache - Memory Interface
-  logic                      icache_mem_req;
-  logic [ADDR_WIDTH-1:0]     icache_mem_addr;
-  logic                      icache_mem_gnt;
-  logic                      icache_mem_rvalid;
-  logic [127:0]              icache_mem_rdata;
-
-  // Data Cache - Memory Interface
-  logic                      dcache_mem_req;
-  logic                      dcache_mem_we;
-  logic [ADDR_WIDTH-1:0]     dcache_mem_addr;
-  logic [127:0]              dcache_mem_wdata;
-  logic                      dcache_mem_gnt;
-  logic                      dcache_mem_rvalid;
-  logic [127:0]              dcache_mem_rdata;
+  // unified memory interface 
+  logic                      mem_req;
+  logic                      mem_we;
+  logic [ADDR_WIDTH-1:0]     mem_addr;
+  logic [127:0]              mem_wdata;
+  logic                      mem_gnt;
+  logic                      mem_rvalid;
+  logic [127:0]              mem_rdata;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
@@ -49,20 +42,13 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    // Instruction Cache Interface
-    .icache_mem_req_o               (icache_mem_req),
-    .icache_mem_addr_o              (icache_mem_addr),
-    .icache_mem_gnt_i               (icache_mem_gnt),
-    .icache_mem_rvalid_i            (icache_mem_rvalid),
-    .icache_mem_rdata_i             (icache_mem_rdata),
-    // Data Cache Interface
-    .dcache_mem_req_o               (dcache_mem_req),
-    .dcache_mem_we_o                (dcache_mem_we),
-    .dcache_mem_addr_o              (dcache_mem_addr),
-    .dcache_mem_wdata_o             (dcache_mem_wdata),
-    .dcache_mem_gnt_i               (dcache_mem_gnt),
-    .dcache_mem_rvalid_i            (dcache_mem_rvalid),
-    .dcache_mem_rdata_i             (dcache_mem_rdata),
+    .mem_req_o                      (mem_req),
+    .mem_we_o                       (mem_we),
+    .mem_addr_o                     (mem_addr),
+    .mem_wdata_o                    (mem_wdata),
+    .mem_gnt_i                      (mem_gnt),
+    .mem_rvalid_i                   (mem_rvalid),
+    .mem_rdata_i                    (mem_rdata),
     // Debug Interface
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
@@ -77,21 +63,13 @@ module tb;
   ) memory (
     .clk                            (clk),
     .rstn                           (rst),
-    // Instruction Cache Interface
-    .icache_req                     (icache_mem_req),
-    .icache_addr                    (icache_mem_addr),
-    .icache_gnt                     (icache_mem_gnt),
-    .icache_rvalid                  (icache_mem_rvalid),
-    .icache_rdata                   (icache_mem_rdata),
-    // Data Cache Interface
-    .dcache_req                     (dcache_mem_req),
-    .dcache_we                      (dcache_mem_we),
-    .dcache_addr                    (dcache_mem_addr),
-    .dcache_wdata                   (dcache_mem_wdata),
-    .dcache_gnt                     (dcache_mem_gnt),
-    .dcache_rvalid                  (dcache_mem_rvalid),
-    .dcache_rdata                   (dcache_mem_rdata),
-    // Debug Interface
+    .mem_req                        (mem_req),
+    .mem_we                         (mem_we),
+    .mem_addr                       (mem_addr),
+    .mem_wdata                      (mem_wdata),
+    .mem_gnt                        (mem_gnt),
+    .mem_rvalid                     (mem_rvalid),
+    .mem_rdata                      (mem_rdata),
     .debug_mem_o                    (cpu_mem)
   );
 
