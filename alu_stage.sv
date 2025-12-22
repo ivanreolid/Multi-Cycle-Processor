@@ -94,7 +94,7 @@ module alu_stage #(
         is_instr_wbalu_o = valid_i;
         instr_finishes_o = valid_i;
         case (instruction_i.funct3)
-          3'b001  : alu_data_b = shamt_i;  // SLLI
+          3'b001, 3'b101 : alu_data_b = shamt_i;  // SLLI, SRLI, SRAI
           default : alu_data_b = offset_sign_extend_i;
         endcase
       end

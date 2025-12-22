@@ -16,11 +16,12 @@ module alu #(
 
   logic [DATA_WIDTH-1:0] sum_result;
   logic [DATA_WIDTH-1:0] sub_result;
-  logic [DATA_WIDTH-1:0] shift_left_result;
+  logic [DATA_WIDTH-1:0] srl_result, sra_result;
 
-  assign sum_result        = a_i + b_i;
-  assign sub_result        = a_i - b_i;
-  assign shift_left_result = a_i << b_i;
+  assign sum_result         = a_i + b_i;
+  assign sub_result         = a_i - b_i;
+  assign srl_result         = a_i >> b_i[4:0];
+  assign sra_result         = $signed(a_i) >>> b_i[4:0];
 
   logic overflow;
   assign overflow = (a_i[31] != b_i[31]) && (sub_result[31] != a_i[31]);
@@ -41,7 +42,8 @@ module alu #(
       IMMEDIATE: begin
         case (funct3_i)
           3'b000:  result_o = sum_result;
-          3'b001:  result_o = shift_left_result;
+          3'b001:  result_o = a_i << b_i[4:0];           // SLLI
+          3'b101:  result_o = funct7_i[5] ? sra_result : srl_result; // SRLI, SRAI
           default: result_o = sum_result;
         endcase
       end
