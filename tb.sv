@@ -251,6 +251,11 @@ module tb;
         case (model_instr.funct3)
           3'b000 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] + offset_sign_extend;
           3'b001 : model_regs[model_instr.rd] = model_regs[model_instr.rs1] << shamt;
+          3'b101: begin
+            model_regs[model_instr.rd] = model_instr.funct7[5] ?
+                                         $signed(model_regs[model_instr.rs1]) >>> shamt[4:0] :
+                                         model_regs[model_instr.rs1] << shamt[4:0];
+          end
           default: model_regs[model_instr.rd] = model_regs[model_instr.rd];
         endcase
       end
