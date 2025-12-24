@@ -111,9 +111,9 @@ module tb;
   endfunction
 
   function void initialize_memories();
-    //$readmemh("buffer_sum.mem", model_mem);
+    $readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    $readmemh("matrix_multiply.mem", model_mem);
+    //$readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -128,7 +128,7 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 224) begin
+    if (model_pc == 88) begin
       compare_memories();
       $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
