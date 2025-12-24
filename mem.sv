@@ -33,7 +33,6 @@ module mem #(
     logic                      pipe6_valid, pipe7_valid, pipe8_valid, pipe9_valid, pipe10_valid;
     logic [LINE_BYTES*8-1:0]   pipe6_rdata, pipe7_rdata, pipe8_rdata, pipe9_rdata, pipe10_rdata;
 
-
     logic [LINE_BYTES*8-1:0]   pipe6_rdata_temp;
     always_comb begin
         pipe6_rdata_temp = '0;
@@ -49,6 +48,7 @@ module mem #(
 
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
+            // Reset all pipeline stages
             pipe1_valid     <= 1'b0;
             pipe2_valid     <= 1'b0;
             pipe3_valid     <= 1'b0;
@@ -101,6 +101,7 @@ module mem #(
             
             pipe6_valid     <= pipe5_valid && !pipe5_is_write;
             pipe6_rdata     <= pipe6_rdata_temp;
+
             pipe7_valid     <= pipe6_valid;
             pipe7_rdata     <= pipe6_rdata;
             
@@ -132,6 +133,9 @@ module mem #(
 `endif
 
     initial begin
+        for (int i = 0; i < MEM_SIZE; i++) begin
+            mem[i] = 8'h00;
+        end
         $readmemh("buffer_sum.mem", mem);
         //$readmemh("mem_copy.mem", mem);
         //$readmemh("matrix_multiply.mem", mem);
