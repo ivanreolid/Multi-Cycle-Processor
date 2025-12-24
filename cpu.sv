@@ -175,26 +175,28 @@ module cpu (
     end
   end
   
-  // Memory request tracking
-  logic pending_is_dcache;
-  
+  logic [3:0] fifo_ptr; 
+  logic [7:0] request_fifo;
+
   always_ff @(posedge clk_i or negedge rst_i) begin
     if (!rst_i) begin
-      pending_is_dcache <= 1'b0;
+      fifo_ptr     <= 4'd0;
+      request_fifo <= 8'd0;
     end else begin
-      if (mem_gnt_i) begin
-        pending_is_dcache <= arb_dcache_grant;
+      if (mem_gnt_i && (arb_dcache_grant || arb_icache_grant)) begin
+        request_fifo[fifo_ptr] <= arb_dcache_grant; // 1 = DCache, 0 = ICache
+        fifo_ptr <= fifo_ptr + 1'b1;
+      end
+      
+      if (mem_rvalid_i) begin
+        request_fifo <= {1'b0, request_fifo[7:1]};
+        fifo_ptr     <= fifo_ptr - 1'b1;
       end
     end
   end
-  
-  // Grant signals to caches
-  assign dcache_mem_gnt = arb_dcache_grant && mem_gnt_i;
-  assign icache_mem_gnt = arb_icache_grant && mem_gnt_i;
-  
-  // Valid signals from memory to caches
-  assign dcache_mem_rvalid = mem_rvalid_i && pending_is_dcache;
-  assign icache_mem_rvalid = mem_rvalid_i && !pending_is_dcache;
+
+  assign dcache_mem_rvalid = mem_rvalid_i && (request_fifo[0] == 1'b1);
+  assign icache_mem_rvalid = mem_rvalid_i && (request_fifo[0] == 1'b0);
   
   assign dcache_mem_rdata = mem_rdata_i;
   assign icache_mem_rdata = mem_rdata_i;
@@ -374,7 +376,7 @@ module cpu (
     .clk(clk_i),
     .rstn(rst_i),
     
-    .cpu_req(dcache_cpu_req),
+    .cpu_req(dcache_cpu_req || dcache_cpu_wr),
     .cpu_wr(dcache_cpu_wr),
     .cpu_addr(dcache_cpu_addr),
     .cpu_wdata(dcache_cpu_wdata),

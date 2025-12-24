@@ -33,13 +33,15 @@ module mem #(
     logic                      pipe6_valid, pipe7_valid, pipe8_valid, pipe9_valid, pipe10_valid;
     logic [LINE_BYTES*8-1:0]   pipe6_rdata, pipe7_rdata, pipe8_rdata, pipe9_rdata, pipe10_rdata;
 
+
+    logic [LINE_BYTES*8-1:0]   pipe6_rdata_temp;
     always_comb begin
-        pipe6_rdata = '0;
+        pipe6_rdata_temp = '0;
 
         if (pipe5_valid && !pipe5_is_write) begin
             for (int i = 0; i < LINE_BYTES; i++) begin
                 if ((pipe5_addr + i) < MEM_SIZE) begin
-                    pipe6_rdata[(i*8) +: 8] = mem[pipe5_addr + i];
+                    pipe6_rdata_temp[(i*8) +: 8] = mem[pipe5_addr + i];
                 end
             end
         end
@@ -98,7 +100,7 @@ module mem #(
             pipe5_wdata     <= pipe4_wdata;
             
             pipe6_valid     <= pipe5_valid && !pipe5_is_write;
-            
+            pipe6_rdata     <= pipe6_rdata_temp;
             pipe7_valid     <= pipe6_valid;
             pipe7_rdata     <= pipe6_rdata;
             
@@ -130,9 +132,9 @@ module mem #(
 `endif
 
     initial begin
-        //$readmemh("buffer_sum.mem", mem);
+        $readmemh("buffer_sum.mem", mem);
         //$readmemh("mem_copy.mem", mem);
-        $readmemh("matrix_multiply.mem", mem);
+        //$readmemh("matrix_multiply.mem", mem);
     end
 
 endmodule
