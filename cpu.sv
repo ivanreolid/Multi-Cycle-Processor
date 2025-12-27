@@ -12,7 +12,8 @@ import params_pkg::*;
 
 module cpu #(
   parameter int CACHE_LINE_BYTES = 16,
-  parameter int CACHE_N_LINES = 4
+  parameter int ICACHE_N_LINES   = 4,
+  parameter int DCACHE_N_LINES   = 4
 )(
   input  logic clk_i,
   input  logic rst_i,
@@ -229,7 +230,7 @@ mem_arbiter #(
     .DATA_WIDTH         (DATA_WIDTH),
     .MEM_SIZE           (MEM_SIZE),
     .CACHE_LINE_BYTES   (CACHE_LINE_BYTES),
-    .CACHE_N_LINES      (CACHE_N_LINES)
+    .ICACHE_N_LINES     (ICACHE_N_LINES)
   ) fetch_stage (
     .clk_i               (clk_i),
     .rst_i               (rst_i),
@@ -344,7 +345,7 @@ mem_arbiter #(
     .DATA_WIDTH                 (DATA_WIDTH),
     .REGISTER_WIDTH             (REGISTER_WIDTH),
     .CACHE_LINE_BYTES           (CACHE_LINE_BYTES),
-    .CACHE_N_LINES              (CACHE_N_LINES)
+    .DCACHE_N_LINES             (DCACHE_N_LINES)
   ) mem_stage (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),

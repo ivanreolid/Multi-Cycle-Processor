@@ -9,10 +9,10 @@ module tb;
 
   // CPU - IMEM communication wires
   logic mem_data_valid, mem_data_is_instr;
-  logic [127:0] mem_data;
+  logic [CACHE_LINE_BYTES*8-1:0] mem_data;
   logic rd_req_valid, wr_req_valid, req_is_instr;
   logic [ADDR_WIDTH-1:0] req_address;
-  logic [127:0] wr_data;
+  logic [CACHE_LINE_BYTES*8-1:0] wr_data;
   access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
@@ -38,7 +38,11 @@ module tb;
   int total_cycles;
   int instructions_executed;
 
-  cpu i_cpu (
+  cpu #(
+    .CACHE_LINE_BYTES               (CACHE_LINE_BYTES),
+    .ICACHE_N_LINES                 (ICACHE_N_LINES),
+    .DCACHE_N_LINES                 (DCACHE_N_LINES)
+  ) i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
     .mem_data_valid_i               (mem_data_valid),
@@ -58,7 +62,7 @@ module tb;
   mem #(
     .MEM_SIZE                       (MEM_SIZE),
     .ADDR_WIDTH                     (ADDR_WIDTH),
-    .DATA_WIDTH                     (128)
+    .DATA_WIDTH                     (CACHE_LINE_BYTES*8)
   ) mem (
     .clk_i                          (clk),
     .rst_i                          (rst),
@@ -280,3 +284,4 @@ module tb;
   endtask
 
 endmodule
+

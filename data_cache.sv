@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
 
-module data_cache #(
-    parameter ADDR_WIDTH = 32,
-    parameter LINE_BYTES = 16,       
-    parameter N_LINES    = 4       
+module data_cache import params_pkg::*; #(
+    parameter int ADDR_WIDTH = 32,
+    parameter int LINE_BYTES = 16,
+    parameter int N_LINES    = 4
 ) (
     input  logic                      clk,
     input  logic                      rstn,
@@ -46,7 +46,6 @@ module data_cache #(
         S_REFILL     = 2'b10    // Fetch new line from memory
     } state_t;
 
-    
     logic [TAG_BITS-1:0]        tag_array   [N_LINES];
     logic                       valid_array [N_LINES];
     logic                       dirty_array [N_LINES];
@@ -63,13 +62,12 @@ module data_cache #(
 
     pending_req_t pending;
 
-    
     // Current request address breakdown
     wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
     wire [1:0]               curr_byte_off  = cpu_addr[1:0];
-    
+
     wire [IDX_BITS-1:0]      pend_index     = pending.addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      pend_tag       = pending.addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] pend_word_off  = pending.addr[OFFSET_BITS-1:2];
@@ -78,14 +76,12 @@ module data_cache #(
 
     assign curr_cache_hit      = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
     wire curr_need_writeback = valid_array[curr_index] && dirty_array[curr_index];
-    
+
     wire cache_hit       = valid_array[pend_index] && (tag_array[pend_index] == pend_tag);
     wire need_writeback  = valid_array[pend_index] && dirty_array[pend_index];
 
-    
     state_t state;
 
-    
     logic                      cpu_ready_r;
     logic [31:0]               cpu_rdata_r;
     logic                      cpu_rvalid_r;
@@ -104,7 +100,6 @@ module data_cache #(
     assign mem_addr  = mem_addr_r;
     assign mem_wdata = mem_wdata_r;
 
-
     function automatic [31:0] load_from_line(
         input [LINE_BYTES*8-1:0] line_data,
         input [WORD_OFF_BITS-1:0] word_idx,
@@ -115,7 +110,7 @@ module data_cache #(
         logic [31:0] result;
         begin
             word_data = line_data[(word_idx*32) +: 32];
-            
+
             case (size)
                 SIZE_BYTE: begin
                     case (byte_off)
@@ -136,7 +131,7 @@ module data_cache #(
                 end
                 default: result = word_data;
             endcase
-            
+
             return result;
         end
     endfunction
@@ -159,7 +154,6 @@ module data_cache #(
             return new_line;
         end
     endfunction
-
 
     function automatic [3:0] gen_wstrb(
         input [1:0] byte_off,
@@ -191,7 +185,6 @@ module data_cache #(
         end
     endfunction
 
-
     function automatic [ADDR_WIDTH-1:0] evicted_addr(
         input [IDX_BITS-1:0] idx
     );
@@ -202,25 +195,25 @@ module data_cache #(
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             state <= S_IDLE;
-            
+
             for (int i = 0; i < N_LINES; i++) begin
                 tag_array[i]   <= '0;
                 valid_array[i] <= 1'b0;
                 dirty_array[i] <= 1'b0;
                 data_array[i]  <= '0;
             end
-            
+
             pending.valid <= 1'b0;
             pending.wr    <= 1'b0;
             pending.addr  <= '0;
             pending.wdata <= '0;
             pending.wstrb <= '0;
             pending.size  <= SIZE_WORD;
-            
+
             cpu_ready_r  <= 1'b1;
             cpu_rdata_r  <= '0;
             cpu_rvalid_r <= 1'b0;
-            
+
             mem_req_r   <= 1'b0;
             mem_we_r    <= 1'b0;
             mem_addr_r  <= '0;
@@ -229,18 +222,17 @@ module data_cache #(
             cpu_rvalid_r <= 1'b0;
 
             case (state)
-                
+
                 S_IDLE: begin
                     mem_req_r <= 1'b0;
                     if (cpu_req && cpu_ready_r) begin
-                        
+
                         if (curr_cache_hit) begin
                             // HIT
                             if (cpu_wr) begin
                                 // STORE HIT
                                 logic [3:0] wstrb_to_use;
                                 wstrb_to_use = (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
-                                
                                 data_array[curr_index] <= store_to_line(
                                     data_array[curr_index],
                                     curr_word_off,
@@ -248,7 +240,7 @@ module data_cache #(
                                     wstrb_to_use
                                 );
                                 dirty_array[curr_index] <= 1'b1;
-                                
+
                             end else begin
                                 // LOAD HIT
                                 cpu_rdata_r  <= load_from_line(
@@ -261,7 +253,7 @@ module data_cache #(
                             end
                             cpu_ready_r <= 1'b1;
                             state <= S_IDLE;
-                            
+
                         end else begin
                             // MISS
                             pending.valid <= 1'b1;
@@ -269,7 +261,7 @@ module data_cache #(
                             pending.addr  <= cpu_addr;
                             pending.wdata <= cpu_wdata;
                             pending.size  <= cpu_size;
-                            
+
                             if (cpu_wr) begin
                                 pending.wstrb <= (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
                             end else begin
@@ -324,11 +316,11 @@ module data_cache #(
                         // refill granted stop request
                         mem_req_r <= 1'b0;
                     end
-                    
+
                     if (mem_rvalid) begin
                         tag_array[pend_index]   <= pend_tag;
                         valid_array[pend_index] <= 1'b1;
-                        
+
                         if (pending.wr) begin
                             data_array[pend_index] <= store_to_line(
                                 mem_rdata,
@@ -340,7 +332,7 @@ module data_cache #(
                         end else begin
                             data_array[pend_index]  <= mem_rdata;
                             dirty_array[pend_index] <= 1'b0;
-                            
+
                             cpu_rdata_r  <= load_from_line(
                                 mem_rdata,
                                 pend_word_off,

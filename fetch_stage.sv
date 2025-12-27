@@ -1,32 +1,34 @@
+`include "instr_cache.sv"
+
 import params_pkg::*;
 
 module fetch_stage #(
-  parameter int ADDR_WIDTH = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH = params_pkg::DATA_WIDTH,
-  parameter int MEM_SIZE   = params_pkg::MEM_SIZE,
+  parameter int ADDR_WIDTH       = params_pkg::ADDR_WIDTH,
+  parameter int DATA_WIDTH       = params_pkg::DATA_WIDTH,
+  parameter int MEM_SIZE         = params_pkg::MEM_SIZE,
   parameter int CACHE_LINE_BYTES = 16,
-  parameter int CACHE_N_LINES = 4
+  parameter int ICACHE_N_LINES   = 4
 )(
   input  logic clk_i,
   input  logic rst_i,
-  input  logic mem_req_i,           // CPU ana istek sinyali
+  input  logic mem_req_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
   input  logic dec_stall_i,
   input  logic mem_stall_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
-  
+
   // Memory interface (Cache to Memory)
   input  logic instr_valid_i,
   input  logic [CACHE_LINE_BYTES*8-1:0] instr_line_i,
   output logic rd_req_valid_o,
   output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
   output access_size_t req_access_size_o,
-  
+
   // Memory arbiter grant signal
   input  logic mem_gnt_i,
-  
+
   // Decode stage outputs
   output logic dec_valid_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
@@ -42,7 +44,7 @@ module fetch_stage #(
 
   state_t state, state_d;
   logic [ADDR_WIDTH-1:0] pc, pc_d;
-  
+
   // Stall Buffer
   logic [ADDR_WIDTH-1:0] pc_buffer;
   instruction_t instr_buffer;
@@ -58,13 +60,13 @@ module fetch_stage #(
   instr_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .LINE_BYTES(CACHE_LINE_BYTES),
-    .N_LINES(CACHE_N_LINES)
+    .N_LINES(ICACHE_N_LINES)
   ) i_cache (
     .clk(clk_i),
     .rstn(rst_i),
     .cpu_req(cache_req),
     .cpu_addr(pc),
-    .cpu_size(WORD), 
+    .cpu_size(WORD),
     .cpu_ready(cache_ready),
     .cpu_rdata(cache_rdata),
     .cpu_rvalid(cache_rvalid),
@@ -90,7 +92,7 @@ module fetch_stage #(
     if (alu_branch_taken_i || is_jump_i) begin
       pc_d = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
       state_d = MEM_REQ;
-    end 
+    end
     else begin
       case (state)
         IDLE: begin
@@ -111,7 +113,7 @@ module fetch_stage #(
               dec_valid_o = 1'b1;
               dec_instr_o = instruction_t'(cache_rdata);
               dec_pc_o    = pc;
-              
+
               pc_d        = (pc + 4) % MEM_SIZE;
               state_d     = MEM_REQ;
             end
@@ -153,3 +155,4 @@ module fetch_stage #(
   end
 
 endmodule : fetch_stage
+

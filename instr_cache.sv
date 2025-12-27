@@ -1,14 +1,13 @@
 `timescale 1ns / 1ps
 
-module instr_cache #(
-    parameter ADDR_WIDTH = 32,
-    parameter LINE_BYTES = 16,       // cache line byte 
-    parameter N_LINES    = 4         // line number
+module instr_cache import params_pkg::*; #(
+    parameter int ADDR_WIDTH = 32,
+    parameter int LINE_BYTES = 16,       // cache line byte
+    parameter int N_LINES    = 4         // line number
 ) (
     input  logic                      clk,
     input  logic                      rstn,
 
-   
     input  logic                      cpu_req,   // CPU req came
     input  logic [ADDR_WIDTH-1:0]     cpu_addr,      // Byte adres
     input  logic [1:0]                cpu_size,    // 00=byte, 01=half, 10=word
@@ -34,7 +33,7 @@ module instr_cache #(
     localparam SIZE_WORD = 2'b10;
 
     typedef enum logic {
-        S_IDLE       = 1'b0,    
+        S_IDLE       = 1'b0,
         S_REFILL     = 1'b1    //  fetch new line from memory
     } state_t;
 
@@ -63,7 +62,7 @@ module instr_cache #(
                                                 {OFFSET_BITS{1'b0}}};
 
     wire curr_cache_hit = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
-    
+
     wire cache_hit = valid_array[pend_index] && (tag_array[pend_index] == pend_tag);
 
     state_t state;
@@ -92,7 +91,7 @@ module instr_cache #(
         logic [31:0] result;
         begin
             word_data = line_data[(word_idx*32) +: 32];
-            
+
             case (size)
                 SIZE_BYTE: begin
                     case (byte_off)
@@ -113,7 +112,7 @@ module instr_cache #(
                 end
                 default: result = word_data;
             endcase
-            
+
             return result;
         end
     endfunction
@@ -121,30 +120,30 @@ module instr_cache #(
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             state <= S_IDLE;
-            
+
             for (int i = 0; i < N_LINES; i++) begin
                 tag_array[i]   <= '0;
                 valid_array[i] <= 1'b0;
                 data_array[i]  <= '0;
             end
-            
+
             pending.valid <= 1'b0;
             pending.addr  <= '0;
             pending.size  <= SIZE_WORD;
-            
+
             cpu_ready_r  <= 1'b1;
             cpu_rdata_r  <= '0;
             cpu_rvalid_r <= 1'b0;
-            
+
             mem_req_r   <= 1'b0;
             mem_addr_r  <= '0;
-            
+
         end else begin
             cpu_rvalid_r <= 1'b0;
             case (state)
                 S_IDLE: begin
                     mem_req_r <= 1'b0;
-                    if (cpu_req && cpu_ready_r) begin                        
+                    if (cpu_req && cpu_ready_r) begin
                         if (curr_cache_hit) begin
                             // HIT
                             cpu_rdata_r  <= load_from_line(
@@ -154,16 +153,16 @@ module instr_cache #(
                                 cpu_size
                             );
                             cpu_rvalid_r <= 1'b1;
-                            
+
                             cpu_ready_r <= 1'b1;
                             state <= S_IDLE;
-                            
+
                         end else begin
                             // MISS
                             pending.valid <= 1'b1;
                             pending.addr  <= cpu_addr;
                             pending.size  <= cpu_size;
-                            
+
                             cpu_ready_r <= 1'b0;
                             mem_req_r  <= 1'b1;
                             mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
@@ -190,7 +189,7 @@ module instr_cache #(
                         tag_array[pend_index]   <= pend_tag;
                         valid_array[pend_index] <= 1'b1;
                         data_array[pend_index]  <= mem_rdata;
-                        
+
                         cpu_rdata_r  <= load_from_line(
                             mem_rdata,
                             pend_word_off,
@@ -198,7 +197,7 @@ module instr_cache #(
                             pending.size
                         );
                         cpu_rvalid_r <= 1'b1;
-                        
+
                         cpu_ready_r   <= 1'b1;
                         pending.valid <= 1'b0;
                         state <= S_IDLE;

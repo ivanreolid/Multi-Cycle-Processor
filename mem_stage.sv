@@ -3,19 +3,19 @@
 import params_pkg::*;
 
 module mem_stage #(
-  parameter int MEM_SIZE       = params_pkg::MEM_SIZE,
-  parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
-  parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
+  parameter int MEM_SIZE         = params_pkg::MEM_SIZE,
+  parameter int ADDR_WIDTH       = params_pkg::ADDR_WIDTH,
+  parameter int DATA_WIDTH       = params_pkg::DATA_WIDTH,
+  parameter int REGISTER_WIDTH   = params_pkg::REGISTER_WIDTH,
   parameter int CACHE_LINE_BYTES = 16,
-  parameter int CACHE_N_LINES = 4
+  parameter int DCACHE_N_LINES   = 4
 )(
   input  logic clk_i,
   input  logic rst_i,
   input  logic [DATA_WIDTH-1:0] alu_result_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [REGISTER_WIDTH-1:0] wr_reg_i,
-  
+
   // Memory interface - cache line width
   input  logic [CACHE_LINE_BYTES*8-1:0] mem_line_data_i,
   input  logic mem_rvalid_i,
@@ -84,7 +84,7 @@ module mem_stage #(
   data_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .LINE_BYTES(CACHE_LINE_BYTES),
-    .N_LINES(CACHE_N_LINES)
+    .N_LINES(DCACHE_N_LINES)
   ) d_cache (
     .clk(clk_i),
     .rstn(rst_i),
