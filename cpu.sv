@@ -16,7 +16,7 @@ module cpu #(
 )(
   input  logic clk_i,
   input  logic rst_i,
-  
+
   input  logic mem_data_valid_i,
   input  logic [CACHE_LINE_BYTES*8-1:0] mem_data_i,
   output logic rd_req_valid_o,
@@ -35,7 +35,7 @@ module cpu #(
   logic icache_req, icache_gnt, icache_rvalid;
   logic [ADDR_WIDTH-1:0] icache_addr;
   logic [CACHE_LINE_BYTES*8-1:0] icache_rdata;
-  
+
   logic dcache_req, dcache_we, dcache_gnt, dcache_rvalid;
   logic [ADDR_WIDTH-1:0] dcache_addr;
   logic [CACHE_LINE_BYTES*8-1:0] dcache_wdata, dcache_rdata;
@@ -379,7 +379,7 @@ mem_arbiter #(
     .debug_wb_instr_o           (debug_wb_instr_from_mem)
 `endif
   );
-  
+
   assign dcache_req = mem_rd_req | mem_wr_req;
   assign dcache_we = mem_wr_req;
   assign dcache_addr = mem_req_addr;
@@ -500,12 +500,6 @@ mem_arbiter #(
 `endif
   );
 
-  logic blocked_by_alu;
-  assign blocked_by_alu = alu_stall;
-  logic next_cycle_is_mem;
-  assign next_cycle_is_mem = !mem_stall && mem_valid_d && (mem_is_load_d || mem_is_store_d);
-
-
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       dec_valid_q         <= 1'b0;
@@ -530,7 +524,7 @@ mem_arbiter #(
       // Decode -> ALU flops
       if (alu_bubble) begin
         alu_valid_q              <= 1'b0;
-      end else if (!blocked_by_alu && !next_cycle_is_mem) begin
+      end else if (!alu_stall) begin
         alu_valid_q              <= alu_valid_d;
         alu_pc_q                 <= alu_pc_d;
         alu_rs1_data_q           <= alu_rs1_data_d;
@@ -595,8 +589,6 @@ mem_arbiter #(
 `endif
       end
 
-
-
 `ifndef SYNTHESIS
       debug_instr_is_completed_o <= mem_is_completed | ex_is_completed | alu_is_completed;
       debug_pc_o                 <= debug_wb_pc;
@@ -605,10 +597,10 @@ mem_arbiter #(
     end
   end
 
+  assign rd_req_valid_o = mem_req & ~mem_we;
+  assign wr_req_valid_o = mem_req &  mem_we;
+  assign req_is_instr_o = (icache_gnt);
+  assign req_address_o  = mem_addr;
+  assign wr_data_o      = mem_wdata;
 
-assign rd_req_valid_o = mem_req & ~mem_we;
-assign wr_req_valid_o = mem_req &  mem_we;
-assign req_is_instr_o = (icache_gnt); 
-assign req_address_o  = mem_addr;
-assign wr_data_o      = mem_wdata;
 endmodule

@@ -88,7 +88,7 @@ module hazard_unit #(
         stall_alu_o = alu_instr_finishes_i;
       end
     end*/
-  end 
+  end
 
   always_comb begin : decode_stall
     stall_decode_o = 1'b0;
@@ -114,6 +114,11 @@ module hazard_unit #(
       alu_bubble_o   = 1'b1;
     end else if (hazard_signals_i.is_instr_mem && (ex1_valid_i || ex2_valid_i)) begin
       stall_decode_o = 1'b1;
+    end else if (alu_valid_i && !alu_instr_finishes_i) begin
+      // TODO: remove as soon as we allow instructions to complete out of
+      // order
+      stall_decode_o = 1'b1;
+      alu_bubble_o   = 1'b1;
     end
   end
 

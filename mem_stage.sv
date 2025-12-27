@@ -53,7 +53,7 @@ module mem_stage #(
   } state_t;
 
   state_t state, state_d;
-  
+
   // Cache signals
   logic cache_req;
   logic cache_wr;
@@ -61,27 +61,26 @@ module mem_stage #(
   logic cache_rvalid;
   logic [31:0] cache_rdata;
   logic [31:0] cache_wdata;
-  
+
   logic [3:0] cache_wstrb;
   logic [1:0] cache_size;
-  
+
   assign cache_size = (access_size_i == BYTE) ? 2'b00 :
                       (access_size_i == HALF) ? 2'b01 : 2'b10;
-  
-    // Generate write strobes
-    always_comb begin
-    case (req_access_size_o)
-        BYTE: cache_wstrb = 4'b0001;
-        HALF: cache_wstrb = 4'b0011;
-        WORD: cache_wstrb = 4'b1111;
-        default: cache_wstrb = 4'b1111;
-    endcase
-    end
 
+  // Generate write strobes
+  always_comb begin
+  case (req_access_size_o)
+      BYTE: cache_wstrb = 4'b0001;
+      HALF: cache_wstrb = 4'b0011;
+      WORD: cache_wstrb = 4'b1111;
+      default: cache_wstrb = 4'b1111;
+  endcase
+  end
 
-    logic cache_hit;
-
+  logic cache_hit;
   logic mem_req;
+
   data_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .LINE_BYTES(CACHE_LINE_BYTES),
@@ -109,7 +108,6 @@ module mem_stage #(
     .mem_rdata(mem_line_data_i)
   );
 
-
   assign rd_req_valid_o = mem_req && !wr_req_valid_o ;
 
   always_ff @(posedge clk_i) begin : flops
@@ -128,9 +126,7 @@ module mem_stage #(
   assign debug_wb_instr_o   = debug_instr_i;
 `endif
 
-
-
-always_comb begin : state_update
+  always_comb begin : state_update
     cache_req          = 1'b0;
     cache_wr           = 1'b0;
     wb_valid_o         = 1'b0;
@@ -146,7 +142,7 @@ always_comb begin : state_update
         if (valid_i) begin
           cache_req         = is_load_i | is_store_i;
           cache_wr          = is_store_i;
-          
+
           if (is_load_i) begin
               wb_reg_wr_en_o  = 1'b0;
               wb_valid_o      = 1'b0;
@@ -172,7 +168,7 @@ always_comb begin : state_update
           end
         end
       end
-      
+
       WAITING: begin
         stall_o              = 1'b1;
         if (cache_rvalid) begin
