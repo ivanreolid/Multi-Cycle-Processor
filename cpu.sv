@@ -1,18 +1,30 @@
+`include "hazard_unit.sv"
+`include "fetch_stage.sv"
+`include "decode_stage.sv"
+`include "alu_stage.sv"
+`include "mem_stage.sv"
+`include "ex_stages.sv"
+`include "wb_arbiter.sv"
+`include "rbank.sv"
+`include "mem_arbiter.sv"
+
 import params_pkg::*;
 
-module cpu (
+module cpu #(
+  parameter int CACHE_LINE_BYTES = 16,
+  parameter int CACHE_N_LINES = 4
+)(
   input  logic clk_i,
   input  logic rst_i,
   
-  // Unified memory
-  output logic                      mem_req_o,
-  output logic                      mem_we_o,
-  output logic [ADDR_WIDTH-1:0]     mem_addr_o,
-  output logic [127:0]              mem_wdata_o,
-  input  logic                      mem_gnt_i,
-  input  logic                      mem_rvalid_i,
-  input  logic [127:0]              mem_rdata_i,
-  
+  input  logic mem_data_valid_i,
+  input  logic [CACHE_LINE_BYTES*8-1:0] mem_data_i,
+  output logic rd_req_valid_o,
+  output logic wr_req_valid_o,
+  output logic req_is_instr_o,
+  output logic [ADDR_WIDTH-1:0] req_address_o,
+  output logic [CACHE_LINE_BYTES*8-1:0] wr_data_o,
+  output access_size_t req_access_size_o,
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -20,48 +32,22 @@ module cpu (
   output instruction_t debug_instr_o
 `endif
 );
-
-  // instruction cache - memory interface
-  logic                      icache_mem_req;
-  logic [ADDR_WIDTH-1:0]     icache_mem_addr;
-  logic                      icache_mem_gnt;
-  logic                      icache_mem_rvalid;
-  logic [127:0]              icache_mem_rdata;
+  logic icache_req, icache_gnt, icache_rvalid;
+  logic [ADDR_WIDTH-1:0] icache_addr;
+  logic [CACHE_LINE_BYTES*8-1:0] icache_rdata;
   
-  // Data cache - memory 
-  logic                      dcache_mem_req;
-  logic                      dcache_mem_we;
-  logic [ADDR_WIDTH-1:0]     dcache_mem_addr;
-  logic [127:0]              dcache_mem_wdata;
-  logic                      dcache_mem_gnt;
-  logic                      dcache_mem_rvalid;
-  logic [127:0]              dcache_mem_rdata;
+  logic dcache_req, dcache_we, dcache_gnt, dcache_rvalid;
+  logic [ADDR_WIDTH-1:0] dcache_addr;
+  logic [CACHE_LINE_BYTES*8-1:0] dcache_wdata, dcache_rdata;
 
-  // instruction cache - CPU 
-  logic                      icache_cpu_req;
-  logic [ADDR_WIDTH-1:0]     icache_cpu_addr;
-  logic                      icache_cpu_ready;
-  logic [31:0]               icache_cpu_rdata;
-  logic                      icache_cpu_rvalid;
-  
-  // data cache - cpu interface
-  logic                      dcache_cpu_req;
-  logic                      dcache_cpu_wr;
-  logic [ADDR_WIDTH-1:0]     dcache_cpu_addr;
-  logic [31:0]               dcache_cpu_wdata;
-  logic [3:0]                dcache_cpu_wstrb;
-  logic [1:0]                dcache_cpu_size;
-  logic                      dcache_cpu_ready;
-  logic [31:0]               dcache_cpu_rdata;
-  logic                      dcache_cpu_rvalid;
-
+  // Fetch stage wires
   logic fetch_stall;
   logic dec_valid_d;
   logic [ADDR_WIDTH-1:0] dec_pc_d;
-  logic [ADDR_WIDTH-1:0] fetch_req_address;
   access_size_t fetch_req_access_size;
   instruction_t dec_instruction_d;
 
+  // Decode stage wires
   logic dec_valid_q;
   logic alu_valid_d;
   logic ex1_valid_d;
@@ -122,6 +108,10 @@ module cpu (
   logic mem_stall;
   logic mem_wb_is_next_cycle;
   access_size_t mem_access_size_q;
+  logic mem_rd_req, mem_wr_req;
+  logic [ADDR_WIDTH-1:0] mem_req_addr;
+  logic [CACHE_LINE_BYTES*8-1:0] mem_wr_line;
+  access_size_t mem_req_access_size;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_mem_pc_q;
   instruction_t debug_mem_instr_q;
@@ -146,66 +136,61 @@ module cpu (
 
   // WB stage wires
   logic wb_valid_from_mem, wb_valid_from_ex;
-  logic wb_reg_wr_en_from_mem;
+  logic wb_reg_wr_en_from_mem, wb_reg_wr_en_from_ex_q;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem, wb_wr_reg_from_ex;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
   logic [DATA_WIDTH-1:0] wb_data_from_mem, wb_data_from_ex;
   logic wb_reg_wr_en;
   logic mem_is_completed, ex_is_completed, alu_is_completed;
   logic ex_allowed_wb, alu_allowed_wb;
+  logic wb_valid;
   logic [DATA_WIDTH-1:0] wb_data_to_reg;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem, debug_wb_pc_from_ex, debug_wb_pc;
   instruction_t debug_wb_instr_from_mem, debug_wb_instr_from_ex, debug_wb_instr;
 `endif
 
-  logic arb_dcache_grant, arb_icache_grant;
-  
-  // Arbiter: DCache has priority
-  always_comb begin
-    if (dcache_mem_req) begin
-      arb_dcache_grant = 1'b1;
-      arb_icache_grant = 1'b0;
-    end else if (icache_mem_req) begin
-      arb_dcache_grant = 1'b0;
-      arb_icache_grant = 1'b1;
-    end else begin
-      arb_dcache_grant = 1'b0;
-      arb_icache_grant = 1'b0;
-    end
-  end
-  
-  logic [3:0] fifo_ptr; 
-  logic [7:0] request_fifo;
+logic mem_req,mem_we;
+logic [ADDR_WIDTH-1:0] mem_addr;
+logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
-  always_ff @(posedge clk_i or negedge rst_i) begin
-    if (!rst_i) begin
-      fifo_ptr     <= 4'd0;
-      request_fifo <= 8'd0;
-    end else begin
-      if (mem_gnt_i && (arb_dcache_grant || arb_icache_grant)) begin
-        request_fifo[fifo_ptr] <= arb_dcache_grant; // 1 = DCache, 0 = ICache
-        fifo_ptr <= fifo_ptr + 1'b1;
-      end
-      
-      if (mem_rvalid_i) begin
-        request_fifo <= {1'b0, request_fifo[7:1]};
-        fifo_ptr     <= fifo_ptr - 1'b1;
-      end
-    end
-  end
+mem_arbiter #(
+  .ADDR_WIDTH (ADDR_WIDTH),
+  .DATA_WIDTH (CACHE_LINE_BYTES*8)
+) mem_arbiter (
+  .clk          (clk_i),
+  .rst          (rst_i),
 
-  assign dcache_mem_rvalid = mem_rvalid_i && (request_fifo[0] == 1'b1);
-  assign icache_mem_rvalid = mem_rvalid_i && (request_fifo[0] == 1'b0);
-  
-  assign dcache_mem_rdata = mem_rdata_i;
-  assign icache_mem_rdata = mem_rdata_i;
-  
-  assign mem_req_o   = dcache_mem_req | icache_mem_req;
-  assign mem_we_o    = dcache_mem_req ? dcache_mem_we : 1'b0;
-  assign mem_addr_o  = dcache_mem_req ? dcache_mem_addr : icache_mem_addr;
-  assign mem_wdata_o = dcache_mem_wdata;
+  // ======================
+  // I-CACHE
+  // ======================
+  .icache_req   (icache_req),
+  .icache_addr  (icache_addr),
+  .icache_gnt   (icache_gnt),
+  .icache_rdata (icache_rdata),
+  .icache_rvalid(icache_rvalid),
 
+  // ======================
+  // D-CACHE
+  // ======================
+  .dcache_req   (dcache_req),
+  .dcache_we    (dcache_we),
+  .dcache_addr  (dcache_addr),
+  .dcache_wdata (dcache_wdata),
+  .dcache_gnt   (dcache_gnt),
+  .dcache_rdata (dcache_rdata),
+  .dcache_rvalid(dcache_rvalid),
+
+  // ======================
+  // MEMORY
+  // ======================
+  .mem_req      (mem_req),
+  .mem_we       (mem_we),
+  .mem_addr     (mem_addr),
+  .mem_wdata    (mem_wdata),
+  .mem_rdata    (mem_data_i),
+  .mem_rvalid   (mem_data_valid_i)
+  );
 
   hazard_unit #(
     .REGISTER_WIDTH     (REGISTER_WIDTH)
@@ -242,45 +227,28 @@ module cpu (
   fetch_stage #(
     .ADDR_WIDTH         (ADDR_WIDTH),
     .DATA_WIDTH         (DATA_WIDTH),
-    .MEM_SIZE           (MEM_SIZE)
+    .MEM_SIZE           (MEM_SIZE),
+    .CACHE_LINE_BYTES   (CACHE_LINE_BYTES),
+    .CACHE_N_LINES      (CACHE_N_LINES)
   ) fetch_stage (
     .clk_i               (clk_i),
     .rst_i               (rst_i),
-    .mem_req_i           (1'b0), 
+    .mem_req_i           (dcache_req),
     .alu_branch_taken_i  (alu_branch_taken),
     .is_jump_i           (is_jump),
     .dec_stall_i         (dec_stall),
     .mem_stall_i         (mem_stall),
     .pc_branch_offset_i  (alu_pc_branch_offset),
     .jump_address_i      (jump_address),
-    .instr_valid_i       (icache_cpu_rvalid),  
-    .instr_i             (icache_cpu_rdata),        
-    .rd_req_valid_o      (icache_cpu_req),
-    .dec_valid_o         (dec_valid_d),
-    .mem_req_addr_o      (icache_cpu_addr),   
-    .dec_pc_o            (dec_pc_d),
+    .instr_valid_i       (icache_rvalid),
+    .instr_line_i        (icache_rdata),
+    .rd_req_valid_o      (icache_req),
+    .mem_req_addr_o      (icache_addr),
     .req_access_size_o   (fetch_req_access_size),
+    .mem_gnt_i           (icache_gnt),
+    .dec_valid_o         (dec_valid_d),
+    .dec_pc_o            (dec_pc_d),
     .dec_instr_o         (dec_instruction_d)
-  );
-
-  instr_cache #(
-    .ADDR_WIDTH(ADDR_WIDTH)
-  ) icache (
-    .clk(clk_i),
-    .rstn(rst_i),
-    
-    .cpu_req(icache_cpu_req),
-    .cpu_addr(icache_cpu_addr),
-    .cpu_size(2'b10),
-    .cpu_ready(icache_cpu_ready),
-    .cpu_rdata(icache_cpu_rdata),
-    .cpu_rvalid(icache_cpu_rvalid),
-    
-    .mem_req(icache_mem_req),
-    .mem_addr(icache_mem_addr),
-    .mem_gnt(icache_mem_gnt),
-    .mem_rvalid(icache_mem_rvalid),
-    .mem_rdata(icache_mem_rdata)
   );
 
   decode_stage #(
@@ -370,48 +338,26 @@ module cpu (
 `endif
   );
 
-  data_cache #(
-    .ADDR_WIDTH(ADDR_WIDTH)
-  ) dcache (
-    .clk(clk_i),
-    .rstn(rst_i),
-    
-    .cpu_req(dcache_cpu_req || dcache_cpu_wr),
-    .cpu_wr(dcache_cpu_wr),
-    .cpu_addr(dcache_cpu_addr),
-    .cpu_wdata(dcache_cpu_wdata),
-    .cpu_wstrb(dcache_cpu_wstrb),
-    .cpu_size(dcache_cpu_size),
-    .cpu_ready(dcache_cpu_ready),
-    .cpu_rdata(dcache_cpu_rdata),
-    .cpu_rvalid(dcache_cpu_rvalid),
-    
-    .mem_req(dcache_mem_req),
-    .mem_we(dcache_mem_we),
-    .mem_addr(dcache_mem_addr),
-    .mem_wdata(dcache_mem_wdata),
-    .mem_gnt(dcache_mem_gnt),
-    .mem_rvalid(dcache_mem_rvalid),
-    .mem_rdata(dcache_mem_rdata)
-  );
-
   mem_stage #(
     .MEM_SIZE                   (MEM_SIZE),
     .ADDR_WIDTH                 (ADDR_WIDTH),
     .DATA_WIDTH                 (DATA_WIDTH),
-    .REGISTER_WIDTH             (REGISTER_WIDTH)
+    .REGISTER_WIDTH             (REGISTER_WIDTH),
+    .CACHE_LINE_BYTES           (CACHE_LINE_BYTES),
+    .CACHE_N_LINES              (CACHE_N_LINES)
   ) mem_stage (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
     .alu_result_i               (mem_alu_result_q),
     .rs2_data_i                 (mem_rs2_data_q),
     .wr_reg_i                   (mem_wr_reg_q),
-    .mem_data_i                 (dcache_cpu_rdata),        
+    .mem_line_data_i            (dcache_rdata),
+    .mem_rvalid_i               (dcache_rvalid),
+    .mem_gnt_i                  (dcache_gnt),
     .valid_i                    (mem_valid_q),
     .is_load_i                  (mem_is_load_q),
     .is_store_i                 (mem_is_store_q),
     .reg_wr_en_i                (mem_reg_wr_en_q),
-    .mem_data_is_valid_i        (dcache_cpu_rvalid),
     .access_size_i              (mem_access_size_q),
 `ifndef SYNTHESIS
     .debug_pc_i                 (debug_mem_pc_q),
@@ -419,21 +365,25 @@ module cpu (
 `endif
     .wb_valid_o                 (wb_valid_from_mem),
     .wb_reg_wr_en_o             (wb_reg_wr_en_from_mem),
-    .rd_req_valid_o             (dcache_cpu_req),
-    .wr_req_valid_o             (dcache_cpu_wr),
+    .rd_req_valid_o             (mem_rd_req),
+    .wr_req_valid_o             (mem_wr_req),
     .stall_o                    (mem_stall),
     .wb_is_next_cycle_o         (mem_wb_is_next_cycle),
     .wb_wr_reg_o                (wb_wr_reg_from_mem),
     .wb_data_from_mem_o         (wb_data_from_mem),
-    .mem_req_address_o          (dcache_cpu_addr),  
-    .wr_data_o                  (dcache_cpu_wdata),
-    .req_access_size_o          (dcache_cpu_size),
-    .wr_strb_o                  (dcache_cpu_wstrb),
+    .mem_req_address_o          (mem_req_addr),
+    .wr_line_data_o             (mem_wr_line),
+    .req_access_size_o          (mem_req_access_size),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc_from_mem),
     .debug_wb_instr_o           (debug_wb_instr_from_mem)
 `endif
   );
+  
+  assign dcache_req = mem_rd_req | mem_wr_req;
+  assign dcache_we = mem_wr_req;
+  assign dcache_addr = mem_req_addr;
+  assign dcache_wdata = mem_wr_line;
 
   ex_stages #(
     .REGISTER_WIDTH     (REGISTER_WIDTH),
@@ -550,6 +500,12 @@ module cpu (
 `endif
   );
 
+  logic blocked_by_alu;
+  assign blocked_by_alu = alu_stall;
+  logic next_cycle_is_mem;
+  assign next_cycle_is_mem = !mem_stall && mem_valid_d && (mem_is_load_d || mem_is_store_d);
+
+
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       dec_valid_q         <= 1'b0;
@@ -574,7 +530,7 @@ module cpu (
       // Decode -> ALU flops
       if (alu_bubble) begin
         alu_valid_q              <= 1'b0;
-      end else if (!alu_stall) begin
+      end else if (!blocked_by_alu && !next_cycle_is_mem) begin
         alu_valid_q              <= alu_valid_d;
         alu_pc_q                 <= alu_pc_d;
         alu_rs1_data_q           <= alu_rs1_data_d;
@@ -639,6 +595,8 @@ module cpu (
 `endif
       end
 
+
+
 `ifndef SYNTHESIS
       debug_instr_is_completed_o <= mem_is_completed | ex_is_completed | alu_is_completed;
       debug_pc_o                 <= debug_wb_pc;
@@ -647,4 +605,10 @@ module cpu (
     end
   end
 
+
+assign rd_req_valid_o = mem_req & ~mem_we;
+assign wr_req_valid_o = mem_req &  mem_we;
+assign req_is_instr_o = (icache_gnt); 
+assign req_address_o  = mem_addr;
+assign wr_data_o      = mem_wdata;
 endmodule

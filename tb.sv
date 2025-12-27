@@ -7,14 +7,13 @@ module tb;
   logic clk;
   logic rst;
 
-  // unified memory interface 
-  logic                      mem_req;
-  logic                      mem_we;
-  logic [ADDR_WIDTH-1:0]     mem_addr;
-  logic [127:0]              mem_wdata;
-  logic                      mem_gnt;
-  logic                      mem_rvalid;
-  logic [127:0]              mem_rdata;
+  // CPU - IMEM communication wires
+  logic mem_data_valid, mem_data_is_instr;
+  logic [127:0] mem_data;
+  logic rd_req_valid, wr_req_valid, req_is_instr;
+  logic [ADDR_WIDTH-1:0] req_address;
+  logic [127:0] wr_data;
+  access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
 
@@ -42,14 +41,14 @@ module tb;
   cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
-    .mem_req_o                      (mem_req),
-    .mem_we_o                       (mem_we),
-    .mem_addr_o                     (mem_addr),
-    .mem_wdata_o                    (mem_wdata),
-    .mem_gnt_i                      (mem_gnt),
-    .mem_rvalid_i                   (mem_rvalid),
-    .mem_rdata_i                    (mem_rdata),
-    // Debug Interface
+    .mem_data_valid_i               (mem_data_valid),
+    .mem_data_i                     (mem_data),
+    .rd_req_valid_o                 (rd_req_valid),
+    .wr_req_valid_o                 (wr_req_valid),
+    .req_is_instr_o                 (req_is_instr),
+    .req_address_o                  (req_address),
+    .wr_data_o                      (wr_data),
+    .req_access_size_o              (req_access_size),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
@@ -59,17 +58,19 @@ module tb;
   mem #(
     .MEM_SIZE                       (MEM_SIZE),
     .ADDR_WIDTH                     (ADDR_WIDTH),
-    .LINE_BYTES                     (16)
-  ) memory (
-    .clk                            (clk),
-    .rstn                           (rst),
-    .mem_req                        (mem_req),
-    .mem_we                         (mem_we),
-    .mem_addr                       (mem_addr),
-    .mem_wdata                      (mem_wdata),
-    .mem_gnt                        (mem_gnt),
-    .mem_rvalid                     (mem_rvalid),
-    .mem_rdata                      (mem_rdata),
+    .DATA_WIDTH                     (128)
+  ) mem (
+    .clk_i                          (clk),
+    .rst_i                          (rst),
+    .rd_req_valid_i                 (rd_req_valid),
+    .wr_req_valid_i                 (wr_req_valid),
+    .req_is_instr_i                 (req_is_instr),
+    .address_i                      (req_address),
+    .wr_data_i                      (wr_data),
+    .access_size_i                  (req_access_size),
+    .data_valid_o                   (mem_data_valid),
+    .data_is_instr_o                (mem_data_is_instr),
+    .data_o                         (mem_data),
     .debug_mem_o                    (cpu_mem)
   );
 
@@ -111,9 +112,13 @@ module tb;
   endfunction
 
   function void initialize_memories();
-    $readmemh("buffer_sum.mem", model_mem);
+      integer i;
+    for (i = 0; i < MEM_SIZE; i = i + 1) begin
+      model_mem[i] = 8'b0;
+    end
+    //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    //$readmemh("matrix_multiply.mem", model_mem);
+    $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -128,7 +133,7 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 88) begin
+    if (model_pc ==224) begin
       compare_memories();
       $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,

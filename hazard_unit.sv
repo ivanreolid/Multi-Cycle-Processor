@@ -79,16 +79,16 @@ module hazard_unit #(
   assign ex_stage_is_busy = ex1_valid_i | ex2_valid_i | ex3_valid_i | ex4_valid_i | ex5_valid_i;
 
   always_comb begin : alu_stall
-    stall_alu_o = 1'b0;
+    stall_alu_o = mem_busy_i;
 
-    if (alu_valid_i) begin
+    /*if (alu_valid_i) begin
       if (stall_mem_o) begin
         stall_alu_o = 1'b1;
       end else if (!alu_allowed_wb_i) begin
         stall_alu_o = alu_instr_finishes_i;
       end
-    end
-  end
+    end*/
+  end 
 
   always_comb begin : decode_stall
     stall_decode_o = 1'b0;

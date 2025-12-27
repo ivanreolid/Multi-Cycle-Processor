@@ -18,6 +18,7 @@ module data_cache #(
     output logic                      cpu_ready,     // Cache ready for new req
     output logic [31:0]               cpu_rdata,  // Read data
     output logic                      cpu_rvalid,   // Read data valid
+    output logic                      curr_cache_hit,
 
     // Memory
     output logic                      mem_req,    // Memory request valid
@@ -75,7 +76,7 @@ module data_cache #(
     wire [1:0]               pend_byte_off  = pending.addr[1:0];
     wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
 
-    wire curr_cache_hit      = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
+    assign curr_cache_hit      = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
     wire curr_need_writeback = valid_array[curr_index] && dirty_array[curr_index];
     
     wire cache_hit       = valid_array[pend_index] && (tag_array[pend_index] == pend_tag);
