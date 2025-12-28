@@ -51,16 +51,9 @@ module mem #(
   always_comb begin : memory_operation
     pipe6_read_data_d = '0;
     if (pipe5_valid && !pipe5_is_wr) begin
-      pipe6_read_data_d = {
-        mem[pipe5_addr + 15], mem[pipe5_addr + 14],
-        mem[pipe5_addr + 13], mem[pipe5_addr + 12],
-        mem[pipe5_addr + 11], mem[pipe5_addr + 10],
-        mem[pipe5_addr + 9],  mem[pipe5_addr + 8],
-        mem[pipe5_addr + 7],  mem[pipe5_addr + 6],
-        mem[pipe5_addr + 5],  mem[pipe5_addr + 4],
-        mem[pipe5_addr + 3],  mem[pipe5_addr + 2],
-        mem[pipe5_addr + 1],  mem[pipe5_addr]
-      };
+      for (int i = 0; i < DATA_WIDTH/8; i++) begin
+        pipe6_read_data_d[8*i +: 8] = mem[pipe5_addr+i];
+      end
     end
   end
 
@@ -144,22 +137,9 @@ module mem #(
       pipe10_access_size <= pipe9_access_size;
 
       if (pipe5_valid && pipe5_is_wr) begin
-        mem[pipe5_addr]      <= pipe5_write_data[7:0];
-        mem[pipe5_addr + 1]  <= pipe5_write_data[15:8];
-        mem[pipe5_addr + 2]  <= pipe5_write_data[23:16];
-        mem[pipe5_addr + 3]  <= pipe5_write_data[31:24];
-        mem[pipe5_addr + 4]  <= pipe5_write_data[39:32];
-        mem[pipe5_addr + 5]  <= pipe5_write_data[47:40];
-        mem[pipe5_addr + 6]  <= pipe5_write_data[55:48];
-        mem[pipe5_addr + 7]  <= pipe5_write_data[63:56];
-        mem[pipe5_addr + 8]  <= pipe5_write_data[71:64];
-        mem[pipe5_addr + 9]  <= pipe5_write_data[79:72];
-        mem[pipe5_addr + 10] <= pipe5_write_data[87:80];
-        mem[pipe5_addr + 11] <= pipe5_write_data[95:88];
-        mem[pipe5_addr + 12] <= pipe5_write_data[103:96];
-        mem[pipe5_addr + 13] <= pipe5_write_data[111:104];
-        mem[pipe5_addr + 14] <= pipe5_write_data[119:112];
-        mem[pipe5_addr + 15] <= pipe5_write_data[127:120];
+        for (int i = 0; i < DATA_WIDTH/8; i++) begin
+          mem[pipe5_addr+i] <= pipe5_write_data[i*8 +: 8];
+        end
       end
     end
   end
