@@ -82,18 +82,12 @@ module data_cache import params_pkg::*; #(
 
     state_t state;
 
-    logic                      cpu_ready_r;
-    logic [31:0]               cpu_rdata_r;
-    logic                      cpu_rvalid_r;
 
     logic                      mem_req_r;
     logic                      mem_we_r;
     logic [ADDR_WIDTH-1:0]     mem_addr_r;
     logic [LINE_BYTES*8-1:0]   mem_wdata_r;
 
-    assign cpu_ready  = cpu_ready_r;
-    assign cpu_rdata  = cpu_rdata_r;
-    assign cpu_rvalid = cpu_rvalid_r;
 
     assign mem_req   = mem_req_r;
     assign mem_we    = mem_we_r;
@@ -192,6 +186,30 @@ module data_cache import params_pkg::*; #(
     endfunction
 
 
+    logic [31:0] load_hit_rdata;
+    logic        load_hit_valid;
+
+    assign load_hit_valid =
+    cpu_req && !cpu_wr && curr_cache_hit && (state == S_IDLE);
+
+    assign load_hit_rdata =
+        load_from_line(
+            data_array[curr_index],
+            curr_word_off,
+            curr_byte_off,
+            cpu_size
+        );
+
+    logic                      cpu_ready_r;
+    logic [31:0]               cpu_rdata_r;
+    logic                      cpu_rvalid_r;
+
+    assign cpu_rvalid   = load_hit_valid | cpu_rvalid_r;
+
+    assign cpu_rdata    = load_hit_valid ? load_hit_rdata : cpu_rdata_r;
+
+    assign cpu_ready     = load_hit_valid ? 1'b1 : cpu_ready_r;
+
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             state <= S_IDLE;
@@ -240,16 +258,6 @@ module data_cache import params_pkg::*; #(
                                     wstrb_to_use
                                 );
                                 dirty_array[curr_index] <= 1'b1;
-
-                            end else begin
-                                // LOAD HIT
-                                cpu_rdata_r  <= load_from_line(
-                                    data_array[curr_index],
-                                    curr_word_off,
-                                    curr_byte_off,
-                                    cpu_size
-                                );
-                                cpu_rvalid_r <= 1'b1;
                             end
                             cpu_ready_r <= 1'b1;
                             state <= S_IDLE;

@@ -144,10 +144,17 @@ module mem_stage #(
           cache_wr          = is_store_i;
 
           if (is_load_i) begin
-              wb_reg_wr_en_o  = 1'b0;
+            if (cache_hit && cache_rvalid) begin
+              wb_valid_o      = 1'b1;
+              wb_reg_wr_en_o  = 1'b1;
+              stall_o         = 1'b0;
+              state_d         = READY;
+            end else begin
               wb_valid_o      = 1'b0;
+              wb_reg_wr_en_o  = 1'b0;
               stall_o         = 1'b1;
               state_d         = WAITING;
+            end
           end else if (is_store_i) begin
             if (cache_hit) begin
               wb_reg_wr_en_o  = reg_wr_en_i;
