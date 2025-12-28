@@ -165,8 +165,8 @@ module mem #(
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", mem);
-    //$readmemh("mem_copy.mem", mem);
+    //$readmemh("buffer_sum.mem", mem);
+    $readmemh("mem_copy.mem", mem);
     //$readmemh("matrix_multiply.mem", mem);
   end
 

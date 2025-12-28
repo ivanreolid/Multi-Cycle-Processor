@@ -40,6 +40,9 @@ module mem_stage #(
   output logic [ADDR_WIDTH-1:0] mem_req_address_o,
   output logic [CACHE_LINE_BYTES*8-1:0] wr_line_data_o,
   output access_size_t req_access_size_o,
+
+    input  logic finish,   // flush request
+    output logic done,     // flush completed
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
   output var instruction_t debug_wb_instr_o
@@ -81,6 +84,7 @@ module mem_stage #(
   logic cache_hit;
   logic mem_req;
 
+
   data_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .LINE_BYTES(CACHE_LINE_BYTES),
@@ -105,7 +109,10 @@ module mem_stage #(
     .mem_wdata(wr_line_data_o),
     .mem_gnt(mem_gnt_i),
     .mem_rvalid(mem_rvalid_i),
-    .mem_rdata(mem_line_data_i)
+    .mem_rdata(mem_line_data_i),
+
+    .finish(finish),
+    .done(done)   
   );
 
   assign rd_req_valid_o = mem_req && !wr_req_valid_o ;

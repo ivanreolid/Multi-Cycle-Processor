@@ -12,8 +12,8 @@ Z0 d/home/rdemiray/pa
 valu
 Z1 DXx6 sv_std 3 std 0 22 VYECXdT12H8WgbUP_5Y6:3
 Z2 DXx4 work 10 params_pkg 0 22 Sf;LOJfiInA3HP=oe0cC?3
-Z3 DXx4 work 10 tb_sv_unit 0 22 95=lKhah7kSZ>6UjJEPWm0
-Z4 !s110 1766939248
+Z3 DXx4 work 10 tb_sv_unit 0 22 WT:>ei_?nJF>=MmTG>[VI0
+Z4 !s110 1766964506
 Z5 VDg1SIo80bB@j0V0VzS_@n1
 r1
 !s85 0
@@ -26,11 +26,11 @@ R0
 Z7 w1766588250
 Z8 8alu.sv
 Z9 Falu.sv
-!i122 154
+!i122 160
 L0 3 48
 Z10 OV;L;2020.1;71
 31
-Z11 !s108 1766939248.000000
+Z11 !s108 1766964506.000000
 !s107 mem.sv|mem_arbiter.sv|rbank.sv|wb_arbiter.sv|ex_stages.sv|data_cache.sv|mem_stage.sv|alu.sv|alu_stage.sv|decode_stage.sv|instr_cache.sv|fetch_stage.sv|hazard_unit.sv|cpu.sv|tb.sv|
 Z12 !s90 -reportprogress|300|-sv|tb.sv|
 !i113 1
@@ -53,7 +53,7 @@ R0
 R7
 Z14 8alu_stage.sv
 Z15 Falu_stage.sv
-!i122 154
+!i122 160
 L0 5 139
 R10
 31
@@ -66,7 +66,7 @@ R13
 Xalu_stage_sv_unit
 R1
 R2
-Z17 !s110 1766939247
+Z17 !s110 1766964505
 V]]F0Q7z9Md8dReV23]WNU0
 r1
 !s85 0
@@ -80,11 +80,11 @@ R7
 R14
 R15
 R9
-!i122 149
+!i122 155
 Z18 L0 1 0
 R10
 31
-Z19 !s108 1766939247.000000
+Z19 !s108 1766964505.000000
 Z20 !s107 rbank.sv|alu_stage.sv|alu.sv|
 Z21 !s90 -reportprogress|300|-sv|alu.sv|alu_stage.sv|rbank.sv|
 !i113 1
@@ -106,7 +106,7 @@ R0
 R7
 R8
 R9
-!i122 149
+!i122 155
 R18
 R10
 31
@@ -125,16 +125,16 @@ R5
 r1
 !s85 0
 !i10b 1
-!s100 329OT;0V:ob2OV`Sb5?>60
-IOAIMUebKUmoXlS2L7gcDB1
+!s100 `=KT=[IDj`cCSi8HzFb3n2
+IAX:zYo;G[KRQ3LoTK]X<11
 R6
 S1
 R0
-Z22 w1766927918
-Z23 8cpu.sv
-Z24 Fcpu.sv
-!i122 154
-L0 13 595
+w1766962274
+Z22 8cpu.sv
+Z23 Fcpu.sv
+!i122 160
+L0 13 601
 R10
 31
 R11
@@ -147,31 +147,31 @@ Xcpu_sv_unit
 R1
 R2
 R4
-VVAHSg8g]gOBozD<:Wle^B1
+VND70]RmPM6NV3mXz]fTbb3
 r1
 !s85 0
 !i10b 1
-!s100 eAjIDmCJoo<Yg7:jYSlXo2
-IVAHSg8g]gOBozD<:Wle^B1
+!s100 YLPd>D]=L9@^k<Z@cKnLD3
+IND70]RmPM6NV3mXz]fTbb3
 !i103 1
 S1
 R0
-Z25 w1766939239
+Z24 w1766963206
+R22
 R23
-R24
-Z26 Fhazard_unit.sv
-Z27 Ffetch_stage.sv
-Z28 Finstr_cache.sv
-Z29 Fdecode_stage.sv
+Z25 Fhazard_unit.sv
+Z26 Ffetch_stage.sv
+Z27 Finstr_cache.sv
+Z28 Fdecode_stage.sv
 R15
 R9
-Z30 Fmem_stage.sv
-Z31 Fdata_cache.sv
-Z32 Fex_stages.sv
-Z33 Fwb_arbiter.sv
-Z34 Frbank.sv
-Z35 Fmem_arbiter.sv
-!i122 153
+Z29 Fmem_stage.sv
+Z30 Fdata_cache.sv
+Z31 Fex_stages.sv
+Z32 Fwb_arbiter.sv
+Z33 Frbank.sv
+Z34 Fmem_arbiter.sv
+!i122 159
 R18
 R10
 31
@@ -190,16 +190,16 @@ R5
 r1
 !s85 0
 !i10b 1
-!s100 5M`YFTcX_OYDNV7?OgPXP1
-IFO9zAZ_MU:eja4`QKIdeE2
+!s100 YTn6B11n^lmzK9om7g>bR0
+I>@Tgz_7Q<QiMIKXCYHaa]3
 R6
 S1
 R0
-R25
+R24
 8data_cache.sv
-R31
-!i122 154
-L0 3 366
+R30
+!i122 160
+L0 3 421
 R10
 31
 R11
@@ -223,9 +223,9 @@ R6
 S1
 R0
 R7
-Z36 8decode_stage.sv
-R29
-!i122 154
+Z35 8decode_stage.sv
+R28
+!i122 160
 L0 3 163
 R10
 31
@@ -249,15 +249,15 @@ IPK=h6@Vf=NO=^bJ]Z^4_@2
 S1
 R0
 R7
-R36
-R29
-!i122 150
+R35
+R28
+!i122 156
 R18
 R10
 31
 R19
-Z37 !s107 instr_cache.sv|ex_stages.sv|decode_stage.sv|fetch_stage.sv|
-Z38 !s90 -reportprogress|300|-sv|fetch_stage.sv|decode_stage.sv|ex_stages.sv|
+Z36 !s107 instr_cache.sv|ex_stages.sv|decode_stage.sv|fetch_stage.sv|
+Z37 !s90 -reportprogress|300|-sv|fetch_stage.sv|decode_stage.sv|ex_stages.sv|
 !i113 1
 o-sv
 R13
@@ -276,9 +276,9 @@ R6
 S1
 R0
 R7
-Z39 8ex_stages.sv
-R32
-!i122 154
+Z38 8ex_stages.sv
+R31
+!i122 160
 L0 3 95
 R10
 31
@@ -302,15 +302,15 @@ In@1AC[L7FLhngDQ7iBE7i0
 S1
 R0
 R7
-R39
-R32
-!i122 150
+R38
+R31
+!i122 156
 R18
 R10
 31
 R19
+R36
 R37
-R38
 !i113 1
 o-sv
 R13
@@ -328,10 +328,10 @@ IXJ:SHJ]9KWXBbIO0dNE4`1
 R6
 S1
 R0
-R22
-Z40 8fetch_stage.sv
-R27
-!i122 154
+w1766961566
+Z39 8fetch_stage.sv
+R26
+!i122 160
 L0 5 153
 R10
 31
@@ -345,26 +345,26 @@ Xfetch_stage_sv_unit
 R1
 R2
 R17
-Vg4BW>]1jQE_ed>D`@SZR32
+VY;???YcL3KlmJhdYeh4Fc2
 r1
 !s85 0
 !i10b 1
-!s100 NZkXGB78Rnhl=HMcSdYE`0
-Ig4BW>]1jQE_ed>D`@SZR32
+!s100 55FbN9I6ePU5jCAX43P3c0
+IY;???YcL3KlmJhdYeh4Fc2
 !i103 1
 S1
 R0
-R22
-R40
+Z40 w1766961636
+R39
+R26
 R27
-R28
-!i122 150
+!i122 156
 Z41 L0 3 0
 R10
 31
 R19
+R36
 R37
-R38
 !i113 1
 o-sv
 R13
@@ -384,8 +384,8 @@ S1
 R0
 Z42 w1766869871
 Z43 8hazard_unit.sv
-R26
-!i122 154
+R25
+!i122 160
 L0 3 125
 R10
 31
@@ -410,8 +410,8 @@ S1
 R0
 R42
 R43
-R26
-!i122 152
+R25
+!i122 158
 R18
 R10
 31
@@ -435,10 +435,10 @@ INgn3:c@9RVnk:CCRlAC^C2
 R6
 S1
 R0
-R22
+R40
 8instr_cache.sv
-R28
-!i122 154
+R27
+!i122 160
 L0 3 215
 R10
 31
@@ -457,15 +457,15 @@ R5
 r1
 !s85 0
 !i10b 1
-!s100 1H]chO7;zZHAmBk1^_`dA3
-IgIB?4OJ:C9];4H<d1FdHh3
+!s100 :I3ZS[nbTNJP>SBW7UegA2
+I73nz`Wf2EY4eM;1l[Ya:V3
 R6
 S1
 R0
-Z46 w1766931897
+Z46 w1766964501
 Z47 8mem.sv
 Z48 Fmem.sv
-!i122 154
+!i122 160
 L0 3 171
 R10
 31
@@ -491,8 +491,8 @@ S1
 R0
 w1766781468
 8mem_arbiter.sv
-R35
-!i122 154
+R34
+!i122 160
 L0 1 126
 R10
 31
@@ -511,16 +511,16 @@ R5
 r1
 !s85 0
 !i10b 1
-!s100 PPdDX3n9_f;o0oFJFGj5Q1
-I0]N<MWCO@Ua6fnbACDejA1
+!s100 JdRFlV]<62XMbWCQHkG]o0
+IjjA^04i?^UX]YQ@?hfiF^2
 R6
 S1
 R0
-w1766938792
+w1766962198
 Z49 8mem_stage.sv
-R30
-!i122 154
-L0 5 194
+R29
+!i122 160
+L0 5 201
 R10
 31
 R11
@@ -533,20 +533,20 @@ Xmem_stage_sv_unit
 R1
 R2
 R17
-V9<?^cbIbFWJ:i<0@LIB_K2
+V4H>1UNEb=fL`8d3>Jj;?j1
 r1
 !s85 0
 !i10b 1
-!s100 8=lnQ8@dJU1AnDU:^Y]Qb1
-I9<?^cbIbFWJ:i<0@LIB_K2
+!s100 2[Y1SWXKX5_azJ8e;C2Sm0
+I4H>1UNEb=fL`8d3>Jj;?j1
 !i103 1
 S1
 R0
-R25
+R24
 R49
+R29
 R30
-R31
-!i122 151
+!i122 157
 R41
 R10
 31
@@ -572,7 +572,7 @@ R0
 R46
 R47
 R48
-!i122 151
+!i122 157
 R18
 R10
 31
@@ -592,10 +592,10 @@ ISf;LOJfiInA3HP=oe0cC?3
 VSf;LOJfiInA3HP=oe0cC?3
 S1
 R0
-R22
+w1766927918
 8params_pkg.sv
 Fparams_pkg.sv
-!i122 148
+!i122 154
 R41
 R10
 r1
@@ -623,8 +623,8 @@ S1
 R0
 R7
 Z52 8rbank.sv
-R34
-!i122 154
+R33
+!i122 160
 L0 3 40
 R10
 31
@@ -649,8 +649,8 @@ S1
 R0
 R7
 R52
-R34
-!i122 149
+R33
+!i122 155
 R18
 R10
 31
@@ -669,16 +669,16 @@ R5
 r1
 !s85 0
 !i10b 1
-!s100 >99MZZC9Lb:WU5c`^WgPK3
-IQVkAJnQf[O5e]]E3UJlIA3
+!s100 BYYeekn?A5=1X3;c^R@1A3
+I>JDd2`>dN4DDcn:jkdK8B2
 R6
 S1
 R0
-w1766933115
+w1766964485
 Z53 8tb.sv
 Z54 Ftb.sv
-!i122 154
-L0 6 284
+!i122 160
+L0 6 289
 R10
 31
 R11
@@ -691,33 +691,33 @@ Xtb_sv_unit
 R1
 R2
 R4
-V95=lKhah7kSZ>6UjJEPWm0
+VWT:>ei_?nJF>=MmTG>[VI0
 r1
 !s85 0
 !i10b 1
-!s100 PFl1cC_Wmi`8:SEcU4be]1
-I95=lKhah7kSZ>6UjJEPWm0
+!s100 P>OoNlhcZ5E5`1[JEgg^e2
+IWT:>ei_?nJF>=MmTG>[VI0
 !i103 1
 S1
 R0
-R25
+R46
 R53
 R54
-R24
+R23
+R25
 R26
 R27
 R28
-R29
 R15
 R9
+R29
 R30
 R31
 R32
 R33
 R34
-R35
 R48
-!i122 154
+!i122 160
 R18
 R10
 31
@@ -743,8 +743,8 @@ S1
 R0
 R7
 Z55 8wb_arbiter.sv
-R33
-!i122 154
+R32
+!i122 160
 L0 3 84
 R10
 31
@@ -769,8 +769,8 @@ S1
 R0
 R7
 R55
-R33
-!i122 152
+R32
+!i122 158
 R18
 R10
 31

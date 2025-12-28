@@ -155,4 +155,3 @@ module fetch_stage #(
   end
 
 endmodule : fetch_stage
-

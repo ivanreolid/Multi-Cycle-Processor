@@ -36,6 +36,7 @@ module tb;
   string error_msg;
 
   logic finish;
+  logic done;
 
   int total_cycles;
   int instructions_executed;
@@ -58,7 +59,9 @@ module tb;
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
-    .debug_instr_o                  (cpu_wb_instr)
+    .debug_instr_o                  (cpu_wb_instr),
+    .finish(finish),
+    .done(done)   
   );
 
   mem #(
@@ -122,8 +125,8 @@ module tb;
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       model_mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", model_mem);
-    //$readmemh("mem_copy.mem", model_mem);
+    //$readmemh("buffer_sum.mem", model_mem);
+    $readmemh("mem_copy.mem", model_mem);
     //$readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
@@ -139,15 +142,17 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc ==88) begin
+    if (model_pc == 88) begin
       finish = 1;
-      compare_memories();
-      $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
-               real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
-               instructions_executed);
-      $finish;
+      wait (done == 1'b1); 
+        $display("a");
+        compare_memories();
+        $display("b");
+        $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
+                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
+                instructions_executed);
+        $finish;
     end
-
     model_pc = new_model_pc;
   endtask
 

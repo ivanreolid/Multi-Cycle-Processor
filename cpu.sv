@@ -26,6 +26,9 @@ module cpu #(
   output logic [ADDR_WIDTH-1:0] req_address_o,
   output logic [CACHE_LINE_BYTES*8-1:0] wr_data_o,
   output access_size_t req_access_size_o,
+
+  input  logic finish,   // flush request
+  output logic done,     // flush completed
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -375,6 +378,9 @@ mem_arbiter #(
     .mem_req_address_o          (mem_req_addr),
     .wr_line_data_o             (mem_wr_line),
     .req_access_size_o          (mem_req_access_size),
+
+    .finish(finish),
+    .done(done),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc_from_mem),
     .debug_wb_instr_o           (debug_wb_instr_from_mem)

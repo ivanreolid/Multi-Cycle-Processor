@@ -27,7 +27,10 @@ module data_cache import params_pkg::*; #(
     output logic [LINE_BYTES*8-1:0]   mem_wdata,  // Full line write data
     input  logic                      mem_gnt,    // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid, // Memory read valid
-    input  logic [LINE_BYTES*8-1:0]   mem_rdata   // Full line read data
+    input  logic [LINE_BYTES*8-1:0]   mem_rdata,   // Full line read data
+
+    input  logic finish,   // flush request
+    output logic done      // flush completed
 );
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
@@ -40,11 +43,17 @@ module data_cache import params_pkg::*; #(
     localparam SIZE_HALF = 2'b01;
     localparam SIZE_WORD = 2'b10;
 
-    typedef enum logic [1:0] {
-        S_IDLE       = 2'b00,   // Ready for new CPU req
-        S_WRITEBACK  = 2'b01,   // Evict dirty line to memory
-        S_REFILL     = 2'b10    // Fetch new line from memory
+    typedef enum logic [2:0] {
+        S_IDLE       = 3'b000,   // Ready for new CPU req
+        S_WRITEBACK  = 3'b001,   // Evict dirty line to memory
+        S_REFILL     = 3'b010,    // Fetch new line from memory
+        S_FLUSH      = 3'b011,  // choose 
+        S_FLUSH_WB   = 3'b100,  // send writeback
+        S_FLUSH_DONE = 3'b101
     } state_t;
+
+    logic [IDX_BITS:0] flush_idx;
+
 
     logic [TAG_BITS-1:0]        tag_array   [N_LINES];
     logic                       valid_array [N_LINES];
@@ -236,64 +245,76 @@ module data_cache import params_pkg::*; #(
             mem_we_r    <= 1'b0;
             mem_addr_r  <= '0;
             mem_wdata_r <= '0;
+
+            flush_idx <= '0;
+            done      <= 1'b0;
         end else begin
             cpu_rvalid_r <= 1'b0;
 
             case (state)
 
                 S_IDLE: begin
-                    mem_req_r <= 1'b0;
-                    if (cpu_req && cpu_ready_r) begin
+                    done <= 1'b0;
+                    if (finish) begin
+                        flush_idx <= '0;
+                        cpu_ready_r <= 1'b0; // CPU’yu durdur
+                        state <= S_FLUSH;
+                    end
+                    else begin
+                        mem_req_r <= 1'b0;
 
-                        if (curr_cache_hit) begin
-                            // HIT
-                            if (cpu_wr) begin
-                                // STORE HIT
-                                logic [3:0] wstrb_to_use;
-                                wstrb_to_use = (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
-                                data_array[curr_index] <= store_to_line(
-                                    data_array[curr_index],
-                                    curr_word_off,
-                                    cpu_wdata,
-                                    wstrb_to_use
-                                );
-                                dirty_array[curr_index] <= 1'b1;
-                            end
-                            cpu_ready_r <= 1'b1;
-                            state <= S_IDLE;
+                        if (cpu_req && cpu_ready_r) begin
 
-                        end else begin
-                            // MISS
-                            pending.valid <= 1'b1;
-                            pending.wr    <= cpu_wr;
-                            pending.addr  <= cpu_addr;
-                            pending.wdata <= cpu_wdata;
-                            pending.size  <= cpu_size;
+                            if (curr_cache_hit) begin
+                                // HIT
+                                if (cpu_wr) begin
+                                    // STORE HIT
+                                    logic [3:0] wstrb_to_use;
+                                    wstrb_to_use = (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
+                                    data_array[curr_index] <= store_to_line(
+                                        data_array[curr_index],
+                                        curr_word_off,
+                                        cpu_wdata,
+                                        wstrb_to_use
+                                    );
+                                    dirty_array[curr_index] <= 1'b1;
+                                end
+                                cpu_ready_r <= 1'b1;
+                                state <= S_IDLE;
 
-                            if (cpu_wr) begin
-                                pending.wstrb <= (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
                             end else begin
-                                pending.wstrb <= 4'b0000;
+                                // MISS
+                                pending.valid <= 1'b1;
+                                pending.wr    <= cpu_wr;
+                                pending.addr  <= cpu_addr;
+                                pending.wdata <= cpu_wdata;
+                                pending.size  <= cpu_size;
+
+                                if (cpu_wr) begin
+                                    pending.wstrb <= (cpu_wstrb != 4'b0000) ? cpu_wstrb : gen_wstrb(curr_byte_off, cpu_size);
+                                end else begin
+                                    pending.wstrb <= 4'b0000;
+                                end
+                                cpu_ready_r <= 1'b0;
+                                if (curr_need_writeback) begin
+                                    // Dirty line 
+                                    mem_req_r   <= 1'b1;
+                                    mem_we_r    <= 1'b1;
+                                    mem_addr_r  <= evicted_addr(curr_index);
+                                    mem_wdata_r <= data_array[curr_index];
+                                    state <= S_WRITEBACK;
+                                end else begin // line is clean: directly refill
+                                    mem_req_r  <= 1'b1;
+                                    mem_we_r   <= 1'b0;
+                                    mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
+                                    state <= S_REFILL;
+                                end
                             end
-                            cpu_ready_r <= 1'b0;
-                            if (curr_need_writeback) begin
-                                // Dirty line 
-                                mem_req_r   <= 1'b1;
-                                mem_we_r    <= 1'b1;
-                                mem_addr_r  <= evicted_addr(curr_index);
-                                mem_wdata_r <= data_array[curr_index];
-                                state <= S_WRITEBACK;
-                            end else begin // line is clean: directly refill
-                                mem_req_r  <= 1'b1;
-                                mem_we_r   <= 1'b0;
-                                mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
-                                state <= S_REFILL;
-                            end
+                        end else begin
+                            // No request or not ready
+                            cpu_ready_r <= (state == S_IDLE) ? 1'b1 : cpu_ready_r;
+                            state <= S_IDLE;
                         end
-                    end else begin
-                        // No request or not ready
-                        cpu_ready_r <= (state == S_IDLE) ? 1'b1 : cpu_ready_r;
-                        state <= S_IDLE;
                     end
                 end
 
@@ -358,6 +379,40 @@ module data_cache import params_pkg::*; #(
                     end
                 end
 
+                S_FLUSH: begin
+                    if (flush_idx == N_LINES) begin
+                        state <= S_FLUSH_DONE;
+                        done <= 1'b1;
+                    end
+                    else if (valid_array[flush_idx] && dirty_array[flush_idx]) begin
+                        mem_req_r   <= 1'b1;
+                        mem_we_r    <= 1'b1;
+                        mem_addr_r  <= evicted_addr(flush_idx);
+                        mem_wdata_r <= data_array[flush_idx];
+                        state <= S_FLUSH_WB;
+                    end
+                    else begin
+                        flush_idx <= flush_idx + 1'b1;
+                        state <= S_FLUSH;
+                    end
+                end
+
+                S_FLUSH_WB: begin
+                    if (mem_req_r && !mem_gnt) begin
+                        mem_req_r <= 1'b1;
+                    end
+                    else if (mem_gnt) begin
+                        mem_req_r <= 1'b0;
+                        dirty_array[flush_idx] <= 1'b0;
+                        valid_array[flush_idx] <= 1'b0;
+                        flush_idx <= flush_idx + 1'b1;
+                        state <= S_FLUSH;
+                    end
+                end
+                S_FLUSH_DONE: begin
+                    done <= 1'b1;
+                    cpu_ready_r <= 1'b1;
+                end
                 default: begin
                     state <= S_IDLE;
                 end
