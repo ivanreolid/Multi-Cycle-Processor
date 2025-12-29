@@ -119,6 +119,7 @@ module hazard_unit #(
       // order
       stall_decode_o = 1'b1;
       alu_bubble_o   = 1'b1;
+      ex_bubble_o    = 1'b1;
     end
   end
 
