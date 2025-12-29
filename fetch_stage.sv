@@ -51,7 +51,9 @@ module fetch_stage #(
   logic buffer_wr_en;
 
   // Cache signals
+  logic cache_state_reset;
   logic cache_req;
+  logic cache_hit;
   logic cache_ready;
   logic cache_rvalid;
   logic [31:0] cache_rdata;
@@ -64,12 +66,14 @@ module fetch_stage #(
   ) i_cache (
     .clk(clk_i),
     .rstn(rst_i),
+    .state_reset(cache_state_reset),
     .cpu_req(cache_req),
     .cpu_addr(pc),
     .cpu_size(WORD),
     .cpu_ready(cache_ready),
     .cpu_rdata(cache_rdata),
     .cpu_rvalid(cache_rvalid),
+    .curr_cache_hit(cache_hit),
     .mem_req(rd_req_valid_o),
     .mem_addr(mem_req_addr_o),
     .mem_gnt(mem_gnt_i),
@@ -82,7 +86,10 @@ module fetch_stage #(
     // Default values
     state_d      = state;
     pc_d         = pc;
-    cache_req    = 1'b0;
+
+    cache_req         = 1'b0;
+    cache_state_reset = 1'b0;
+
     buffer_wr_en = 1'b0;
     dec_valid_o  = 1'b0;
     dec_pc_o     = pc;
@@ -90,8 +97,9 @@ module fetch_stage #(
     req_access_size_o = WORD;
 
     if (alu_branch_taken_i || is_jump_i) begin
-      pc_d = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
-      state_d = MEM_REQ;
+      cache_state_reset = 1'b1;
+      pc_d              = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
+      state_d           = MEM_REQ;
     end
     else begin
       case (state)
@@ -99,8 +107,20 @@ module fetch_stage #(
           state_d = MEM_REQ;
         end
         MEM_REQ: begin
-          if (cache_ready) begin
-            cache_req = 1'b1;
+          cache_req   = 1'b1;
+          if (cache_hit && cache_rvalid) begin
+            if (dec_stall_i) begin
+              buffer_wr_en = 1'b1;
+              state_d      = STALL;
+            end else begin
+              dec_valid_o = 1'b1;
+              dec_instr_o = instruction_t'(cache_rdata);
+              dec_pc_o    = pc;
+
+              pc_d        = (pc + 4) % MEM_SIZE;
+              state_d     = MEM_REQ;
+            end
+          end else begin
             state_d   = MEM_WAIT;
           end
         end

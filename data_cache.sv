@@ -258,7 +258,7 @@ module data_cache import params_pkg::*; #(
                     done <= 1'b0;
                     if (finish) begin
                         flush_idx <= '0;
-                        cpu_ready_r <= 1'b0; // CPU’yu durdur
+                        cpu_ready_r <= 1'b0;
                         state <= S_FLUSH;
                     end
                     else begin

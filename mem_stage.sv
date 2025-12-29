@@ -60,12 +60,12 @@ module mem_stage #(
 
   // Cache signals
   logic cache_req;
+  logic cache_hit;
   logic cache_wr;
   logic cache_ready;
   logic cache_rvalid;
   logic [31:0] cache_rdata;
   logic [31:0] cache_wdata;
-
   logic [3:0] cache_wstrb;
   logic [1:0] cache_size;
 
@@ -82,9 +82,7 @@ module mem_stage #(
   endcase
   end
 
-  logic cache_hit;
   logic mem_req;
-
 
   data_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),

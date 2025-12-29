@@ -8,18 +8,20 @@ module instr_cache import params_pkg::*; #(
     input  logic                      clk,
     input  logic                      rstn,
 
-    input  logic                      cpu_req,   // CPU req came
+    input  logic                      state_reset,
+    input  logic                      cpu_req,       // CPU req came
     input  logic [ADDR_WIDTH-1:0]     cpu_addr,      // Byte adres
-    input  logic [1:0]                cpu_size,    // 00=byte, 01=half, 10=word
-    output logic                      cpu_ready,    // cache ready for another req
-    output logic [31:0]               cpu_rdata,       // read data
-    output logic                      cpu_rvalid,  // read valid result
+    input  logic [1:0]                cpu_size,      // 00=byte, 01=half, 10=word
+    output logic                      cpu_ready,     // cache ready for another req
+    output logic [31:0]               cpu_rdata,     // read data
+    output logic                      cpu_rvalid,    // read valid result
+    output logic                      curr_cache_hit,
 
-    output logic                      mem_req,     // mem req
-    output logic [ADDR_WIDTH-1:0]     mem_addr,   // Line-aligned adres
-    input  logic                      mem_gnt,     // Request granted (accepted by arbiter)
-    input  logic                      mem_rvalid, // mem read
-    input  logic [LINE_BYTES*8-1:0]   mem_rdata   // full line
+    output logic                      mem_req,       // mem req
+    output logic [ADDR_WIDTH-1:0]     mem_addr,      // Line-aligned address
+    input  logic                      mem_gnt,       // Request granted (accepted by arbiter)
+    input  logic                      mem_rvalid,    // mem read
+    input  logic [LINE_BYTES*8-1:0]   mem_rdata      // full line
 );
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
@@ -58,25 +60,17 @@ module instr_cache import params_pkg::*; #(
     wire [TAG_BITS-1:0]      pend_tag       = pending.addr[ADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] pend_word_off  = pending.addr[OFFSET_BITS-1:2];
     wire [1:0]               pend_byte_off  = pending.addr[1:0];
-    wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[ADDR_WIDTH-1:OFFSET_BITS], 
+    wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[ADDR_WIDTH-1:OFFSET_BITS],
                                                 {OFFSET_BITS{1'b0}}};
 
-    wire curr_cache_hit = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
+    assign curr_cache_hit = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
 
     wire cache_hit = valid_array[pend_index] && (tag_array[pend_index] == pend_tag);
 
     state_t state;
 
-    logic                      cpu_ready_r;
-    logic [31:0]               cpu_rdata_r;
-    logic                      cpu_rvalid_r;
-
     logic                      mem_req_r;
     logic [ADDR_WIDTH-1:0]     mem_addr_r;
-
-    assign cpu_ready  = cpu_ready_r;
-    assign cpu_rdata  = cpu_rdata_r;
-    assign cpu_rvalid = cpu_rvalid_r;
 
     assign mem_req   = mem_req_r;
     assign mem_addr  = mem_addr_r;
@@ -117,6 +111,27 @@ module instr_cache import params_pkg::*; #(
         end
     endfunction
 
+    logic [31:0] load_hit_rdata;
+    logic        load_hit_valid;
+
+    assign load_hit_valid = cpu_req && curr_cache_hit && (state == S_IDLE);
+
+    assign load_hit_rdata =
+        load_from_line(
+            data_array[curr_index],
+            curr_word_off,
+            curr_byte_off,
+            cpu_size
+        );
+
+    logic                      cpu_ready_r;
+    logic [31:0]               cpu_rdata_r;
+    logic                      cpu_rvalid_r;
+
+    assign cpu_rvalid = load_hit_valid | cpu_rvalid_r;
+    assign cpu_rdata  = load_hit_valid ? load_hit_rdata : cpu_rdata_r;
+    assign cpu_ready  = load_hit_valid ? 1'b1 : cpu_ready_r;
+
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             state <= S_IDLE;
@@ -146,17 +161,8 @@ module instr_cache import params_pkg::*; #(
                     if (cpu_req && cpu_ready_r) begin
                         if (curr_cache_hit) begin
                             // HIT
-                            cpu_rdata_r  <= load_from_line(
-                                data_array[curr_index],
-                                curr_word_off,
-                                curr_byte_off,
-                                cpu_size
-                            );
-                            cpu_rvalid_r <= 1'b1;
-
                             cpu_ready_r <= 1'b1;
                             state <= S_IDLE;
-
                         end else begin
                             // MISS
                             pending.valid <= 1'b1;
@@ -175,36 +181,42 @@ module instr_cache import params_pkg::*; #(
                 end
 
                 S_REFILL: begin
-                    if (mem_req_r && !mem_gnt) begin
-                        // request not grnted, keep trying
-                        mem_req_r  <= 1'b1;
-                        mem_addr_r <= pend_line_addr;
-                    end else if (mem_gnt) begin
-                        // request grntd, stop request
-                        mem_req_r <= 1'b0;
-                    end
-                    // wait for mem resp
-                    if (mem_rvalid) begin
-                        // refill complete
-                        tag_array[pend_index]   <= pend_tag;
-                        valid_array[pend_index] <= 1'b1;
-                        data_array[pend_index]  <= mem_rdata;
-
-                        cpu_rdata_r  <= load_from_line(
-                            mem_rdata,
-                            pend_word_off,
-                            pend_byte_off,
-                            pending.size
-                        );
-                        cpu_rvalid_r <= 1'b1;
-
-                        cpu_ready_r   <= 1'b1;
-                        pending.valid <= 1'b0;
-                        state <= S_IDLE;
+                    if (state_reset) begin
+                      cpu_ready_r <= 1'b1;
+                      mem_req_r   <= 1'b0;
+                      state       <= S_IDLE;
                     end else begin
-                        // waiting mem
-                        cpu_ready_r <= 1'b0;
-                        state <= S_REFILL;
+                      if (mem_req_r && !mem_gnt) begin
+                          // request not grnted, keep trying
+                          mem_req_r  <= 1'b1;
+                          mem_addr_r <= pend_line_addr;
+                      end else if (mem_gnt) begin
+                          // request grntd, stop request
+                          mem_req_r <= 1'b0;
+                      end
+                      // wait for mem resp
+                      if (mem_rvalid) begin
+                          // refill complete
+                          tag_array[pend_index]   <= pend_tag;
+                          valid_array[pend_index] <= 1'b1;
+                          data_array[pend_index]  <= mem_rdata;
+
+                          cpu_rdata_r  <= load_from_line(
+                              mem_rdata,
+                              pend_word_off,
+                              pend_byte_off,
+                              pending.size
+                          );
+                          cpu_rvalid_r <= 1'b1;
+
+                          cpu_ready_r   <= 1'b1;
+                          pending.valid <= 1'b0;
+                          state <= S_IDLE;
+                      end else begin
+                          // waiting mem
+                          cpu_ready_r <= 1'b0;
+                          state <= S_REFILL;
+                      end
                     end
                 end
 
