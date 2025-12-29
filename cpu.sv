@@ -29,6 +29,7 @@ module cpu #(
 
   input  logic finish,   // flush request
   output logic done,     // flush completed
+  input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -381,6 +382,7 @@ mem_arbiter #(
 
     .finish(finish),
     .done(done),
+    .write_done_o(write_done_o),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc_from_mem),
     .debug_wb_instr_o           (debug_wb_instr_from_mem)

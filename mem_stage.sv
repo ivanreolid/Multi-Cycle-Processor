@@ -43,6 +43,7 @@ module mem_stage #(
 
     input  logic finish,   // flush request
     output logic done,     // flush completed
+    input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
   output var instruction_t debug_wb_instr_o
@@ -112,7 +113,8 @@ module mem_stage #(
     .mem_rdata(mem_line_data_i),
 
     .finish(finish),
-    .done(done)   
+    .done(done) ,
+    .write_done_o(write_done_o)    
   );
 
   assign rd_req_valid_o = mem_req && !wr_req_valid_o ;

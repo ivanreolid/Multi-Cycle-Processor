@@ -30,7 +30,8 @@ module data_cache import params_pkg::*; #(
     input  logic [LINE_BYTES*8-1:0]   mem_rdata,   // Full line read data
 
     input  logic finish,   // flush request
-    output logic done      // flush completed
+    output logic done,      // flush completed
+    input write_done_o   //mem finished writing
 );
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
@@ -381,8 +382,11 @@ module data_cache import params_pkg::*; #(
 
                 S_FLUSH: begin
                     if (flush_idx == N_LINES) begin
-                        state <= S_FLUSH_DONE;
-                        done <= 1'b1;
+                        if (write_done_o == 1) begin
+                            state <= S_FLUSH_DONE;
+                            done <= 1'b1;
+                        end
+                        flush_idx <= flush_idx;
                     end
                     else if (valid_array[flush_idx] && dirty_array[flush_idx]) begin
                         mem_req_r   <= 1'b1;

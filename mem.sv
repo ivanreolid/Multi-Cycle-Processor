@@ -16,6 +16,8 @@ module mem #(
   output logic data_valid_o,
   output logic data_is_instr_o,
   output logic [DATA_WIDTH-1:0] data_o,
+  output logic write_done_o,
+  input logic finish,
 `ifndef SYNTHESIS
   output [7:0] debug_mem_o [MEM_SIZE]
 `endif
@@ -48,6 +50,34 @@ module mem #(
   logic [DATA_WIDTH-1:0] pipe1_write_data_d;
   logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data, pipe5_write_data;
 
+  
+
+parameter int MAX_WRITE_CYCLES = 4; // Cache line sayısı kadar
+parameter int COUNTER_WIDTH = $clog2(MAX_WRITE_CYCLES);
+
+logic [COUNTER_WIDTH:0] write_cycle_counter;
+logic write_done_pulse;
+
+always_ff @(posedge clk_i) begin
+  if (!rst_i) begin
+    write_cycle_counter <= '0;
+    write_done_pulse <= 1'b0;
+  end else begin
+    write_done_pulse <= 1'b0;
+    
+    if (pipe5_valid && pipe5_is_wr && finish == 1'b1) begin
+      write_cycle_counter <= write_cycle_counter + 1'b1;
+      
+      if (write_cycle_counter == (MAX_WRITE_CYCLES + 2)) begin
+        write_done_pulse <= 1'b1;
+        write_cycle_counter <= '0; // Reset counter
+      end
+    end
+  end
+end
+
+assign write_done_o = write_done_pulse;
+  
   always_comb begin : memory_operation
     pipe6_read_data_d = '0;
     if (pipe5_valid && !pipe5_is_wr) begin
@@ -56,6 +86,8 @@ module mem #(
       end
     end
   end
+
+
 
   always_ff @(posedge clk_i) begin : pipeline
     if (!rst_i) begin
@@ -165,8 +197,8 @@ module mem #(
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       mem[i] = 8'b0;
     end
-    //$readmemh("buffer_sum.mem", mem);
-    $readmemh("mem_copy.mem", mem);
+    $readmemh("buffer_sum.mem", mem);
+    //$readmemh("mem_copy.mem", mem);
     //$readmemh("matrix_multiply.mem", mem);
   end
 
