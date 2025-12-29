@@ -1,12 +1,12 @@
 93
 00
-80
-3e  // addi x1, x0, 1000 (la x1, a)
+00
+40  // addi x1, x0, 0x400 (la x1, a)
 
 13
 01
-80
-5e // addi x2, x0, 1512 (la x2, sum)
+00
+61 // addi x2, x0, 0x610 (la x2, sum)
 
 93
 01

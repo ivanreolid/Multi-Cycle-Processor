@@ -1,5 +1,5 @@
-&a = 1000
-&b = 1512
+&a = 0x400
+&b = 0x610
 
 main:
     la x1, a            # x1 = &a
@@ -45,13 +45,13 @@ The program must finish with both vectors equal (each element with value 5)
 
     mem[0] = 8'h93;
     mem[1] = 8'h00;
-    mem[2] = 8'h80;
-    mem[3] = 8'h3e;  // addi x1, x0, 1000 (la x1, a)
+    mem[2] = 8'h00;
+    mem[3] = 8'h40;  // addi x1, x0, 0x400 (la x1, a)
 
     mem[4] = 8'h13;
     mem[5] = 8'h01;
-    mem[6] = 8'h80;
-    mem[7] = 8'h5e; // addi x2, x0, 1512 (la x2, sum)
+    mem[6] = 8'h00;
+    mem[7] = 8'h61; // addi x2, x0, 0x610 (la x2, sum)
 
     mem[8] = 8'h93;
     mem[9] = 8'h01;
