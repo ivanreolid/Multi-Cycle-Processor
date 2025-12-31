@@ -90,21 +90,72 @@ module data_cache import params_pkg::*; #(
 
     state_t state;
 
-    logic                      mem_req_c;
-    logic                      mem_we_c;
-    logic [ADDR_WIDTH-1:0]     mem_addr_c;
-    logic [LINE_BYTES*8-1:0]   mem_wdata_c;
+    logic                      cpu_ready_r;
+    logic [31:0]               cpu_rdata_r;
+    logic                      cpu_rvalid_r;
+    
+    wire miss_now;
+    assign miss_now = cpu_req && cpu_ready_r && !curr_cache_hit;
 
-    logic                      mem_req_r;
-    logic                      mem_we_r;
-    logic [ADDR_WIDTH-1:0]     mem_addr_r;
-    logic [LINE_BYTES*8-1:0]   mem_wdata_r;
+    always_comb begin
+        mem_req   = 1'b0;
+        mem_we    = 1'b0;
+        mem_addr  = '0;
+        mem_wdata = '0;
 
+        case (state)
+            S_IDLE: begin
+                if (cpu_req && cpu_ready_r && !curr_cache_hit) begin
+                    mem_req = 1'b1;
+                    if (curr_need_writeback) begin
+                        mem_we    = 1'b1;
+                        mem_addr  = evicted_addr(curr_index);
+                        mem_wdata = data_array[curr_index];
+                    end else begin
+                        mem_we   = 1'b0;
+                        mem_addr = {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
+                    end
+                end
+            end
 
-    assign mem_req   = mem_req_c | mem_req_r;
-    assign mem_we    = mem_req_c ? mem_we_c : mem_we_r;
-    assign mem_addr  = mem_req_c ? mem_addr_c : mem_addr_r;
-    assign mem_wdata = mem_req_c ? mem_wdata_c : mem_wdata_r;
+            S_WRITEBACK: begin
+                mem_req   = 1'b1;
+                mem_we    = 1'b1;
+                mem_addr  = evicted_addr(pend_index);
+                mem_wdata = data_array[pend_index];
+            end
+
+            S_REFILL: begin
+                if (!mem_gnt) begin
+                    mem_req  = 1'b1;
+                    mem_we   = 1'b0;
+                    mem_addr = pend_line_addr;
+                end
+            end
+
+            S_FLUSH: begin
+                if (flush_idx < N_LINES && valid_array[flush_idx] && dirty_array[flush_idx]) begin
+                    mem_req   = 1'b1;
+                    mem_we    = 1'b1;
+                    mem_addr  = evicted_addr(flush_idx);
+                    mem_wdata = data_array[flush_idx];
+                end
+            end
+
+            S_FLUSH_WB: begin
+                if (!mem_gnt) begin
+                    mem_req   = 1'b1;
+                    mem_we    = 1'b1;
+                    mem_addr  = evicted_addr(flush_idx);
+                    mem_wdata = data_array[flush_idx];
+                end
+            end
+
+            default: begin
+                mem_req = 1'b0;
+            end
+        endcase
+    end
 
     function automatic [31:0] load_from_line(
         input [LINE_BYTES*8-1:0] line_data,
@@ -210,41 +261,10 @@ module data_cache import params_pkg::*; #(
             cpu_size
         );
 
-    logic                      cpu_ready_r;
-    logic [31:0]               cpu_rdata_r;
-    logic                      cpu_rvalid_r;
 
     assign cpu_rvalid   = load_hit_valid | cpu_rvalid_r;
     assign cpu_rdata    = load_hit_valid ? load_hit_rdata : cpu_rdata_r;
     assign cpu_ready    = load_hit_valid ? 1'b1 : cpu_ready_r;
-
-    wire miss_now;
-    assign miss_now =
-    (state == S_IDLE) &&
-    cpu_req &&
-    !curr_cache_hit &&
-    !finish;
-
-    always_comb begin
-        mem_req_c   = 1'b0;
-        mem_we_c    = 1'b0;
-        mem_addr_c  = '0;
-        mem_wdata_c = '0;
-
-        if (state == S_IDLE && cpu_req && cpu_ready_r && !curr_cache_hit && !finish) begin
-            if (curr_need_writeback) begin
-                mem_req_c   = 1'b1;
-                mem_we_c    = 1'b1;
-                mem_addr_c  = evicted_addr(curr_index);
-                mem_wdata_c = data_array[curr_index];
-            end else begin
-                mem_req_c   = 1'b1;
-                mem_we_c    = 1'b0;
-                mem_addr_c  = {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
-                mem_wdata_c = '0;
-            end
-        end
-    end
 
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
@@ -268,11 +288,6 @@ module data_cache import params_pkg::*; #(
             cpu_rdata_r  <= '0;
             cpu_rvalid_r <= 1'b0;
 
-            mem_req_r   <= 1'b0;
-            mem_we_r    <= 1'b0;
-            mem_addr_r  <= '0;
-            mem_wdata_r <= '0;
-
             flush_idx <= '0;
             done      <= 1'b0;
         end else begin
@@ -285,7 +300,6 @@ module data_cache import params_pkg::*; #(
                     if (finish) begin
                         flush_idx <= '0;
                         cpu_ready_r <= 1'b0;
-                        mem_req_r <= 1'b0;
                         state <= S_FLUSH;
                     end
                     else begin
@@ -304,7 +318,6 @@ module data_cache import params_pkg::*; #(
                                     dirty_array[curr_index] <= 1'b1;
                                 end
                                 cpu_ready_r <= 1'b1;
-                                mem_req_r <= 1'b0;
                                 state <= S_IDLE;
 
                             end else begin
@@ -322,57 +335,25 @@ module data_cache import params_pkg::*; #(
                                 end
                                 cpu_ready_r <= 1'b0;
                                 if (curr_need_writeback) begin
-                                    mem_req_r <= 1'b0;
                                     state <= S_WRITEBACK;
                                 end else begin
-                                    mem_req_r <= 1'b0;
                                     state <= S_REFILL;
                                 end
                             end
                         end else begin
-                            cpu_ready_r <= 1'b1;
-                            mem_req_r <= 1'b0;
+                            cpu_ready_r <= (state == S_IDLE) ? 1'b1 : cpu_ready_r;
                             state <= S_IDLE;
                         end
                     end
                 end
 
                 S_WRITEBACK: begin
-                    if (mem_req_r && !mem_gnt) begin
-                        // keep trying
-                        mem_req_r   <= 1'b1;
-                        mem_we_r    <= 1'b1;
-                        mem_addr_r  <= evicted_addr(pend_index);
-                        mem_wdata_r <= data_array[pend_index];
-                    end else if (mem_gnt && mem_we_r) begin
-                        mem_req_r  <= 1'b1;
-                        mem_we_r   <= 1'b0;
-                        mem_addr_r <= pend_line_addr;
+                    if (mem_gnt) begin
                         state <= S_REFILL;
-                    end else if (!mem_req_r) begin
-                        mem_req_r   <= 1'b1;
-                        mem_we_r    <= 1'b1;
-                        mem_addr_r  <= evicted_addr(pend_index);
-                        mem_wdata_r <= data_array[pend_index];
                     end
                 end
 
                 S_REFILL: begin
-                    // keep requesting refill until granted
-                    if (mem_req_r && !mem_gnt) begin
-                        // refill not granted keep trying
-                        mem_req_r  <= 1'b1;
-                        mem_we_r   <= 1'b0;
-                        mem_addr_r <= pend_line_addr;
-                    end else if (mem_gnt) begin
-                        // refill granted stop request
-                        mem_req_r <= 1'b0;
-                    end else if (!mem_req_r && !mem_req_c) begin
-                        mem_req_r  <= 1'b1;
-                        mem_we_r   <= 1'b0;
-                        mem_addr_r <= pend_line_addr;
-                    end
-
                     if (mem_rvalid) begin
                         tag_array[pend_index]   <= pend_tag;
                         valid_array[pend_index] <= 1'b1;
@@ -399,11 +380,7 @@ module data_cache import params_pkg::*; #(
                         end
                         cpu_ready_r   <= 1'b1;
                         pending.valid <= 1'b0;
-                        mem_req_r <= 1'b0;
-                        state <= S_IDLE; //done
-                    end else begin
-                        cpu_ready_r <= 1'b0;
-                        state <= S_REFILL;
+                        state <= S_IDLE;
                     end
                 end
 
@@ -413,29 +390,17 @@ module data_cache import params_pkg::*; #(
                             state <= S_FLUSH_DONE;
                             done <= 1'b1;
                         end
-                        flush_idx <= flush_idx;
-                        mem_req_r <= 1'b0;
                     end
                     else if (valid_array[flush_idx] && dirty_array[flush_idx]) begin
-                        mem_req_r   <= 1'b1;
-                        mem_we_r    <= 1'b1;
-                        mem_addr_r  <= evicted_addr(flush_idx);
-                        mem_wdata_r <= data_array[flush_idx];
                         state <= S_FLUSH_WB;
                     end
                     else begin
                         flush_idx <= flush_idx + 1'b1;
-                        mem_req_r <= 1'b0;
-                        state <= S_FLUSH;
                     end
                 end
 
                 S_FLUSH_WB: begin
-                    if (mem_req_r && !mem_gnt) begin
-                        mem_req_r <= 1'b1;
-                    end
-                    else if (mem_gnt) begin
-                        mem_req_r <= 1'b0;
+                    if (mem_gnt) begin
                         dirty_array[flush_idx] <= 1'b0;
                         valid_array[flush_idx] <= 1'b0;
                         flush_idx <= flush_idx + 1'b1;
@@ -445,11 +410,9 @@ module data_cache import params_pkg::*; #(
                 S_FLUSH_DONE: begin
                     done <= 1'b1;
                     cpu_ready_r <= 1'b1;
-                    mem_req_r <= 1'b0;
                 end
                 default: begin
                     state <= S_IDLE;
-                    mem_req_r <= 1'b0;
                 end
             endcase
         end

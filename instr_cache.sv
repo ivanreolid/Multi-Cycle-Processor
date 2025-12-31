@@ -67,13 +67,17 @@ module instr_cache import params_pkg::*; #(
 
     wire cache_hit = valid_array[pend_index] && (tag_array[pend_index] == pend_tag);
 
+
+
     state_t state;
 
-    logic                      mem_req_r;
-    logic [ADDR_WIDTH-1:0]     mem_addr_r;
+    logic miss_now;
+    assign miss_now = cpu_req && (state == S_IDLE) && !curr_cache_hit;
 
-    assign mem_req   = mem_req_r;
-    assign mem_addr  = mem_addr_r;
+    assign mem_req  = miss_now || (state == S_REFILL && !mem_gnt);
+    assign mem_addr = miss_now
+                    ? {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}}
+                    : pend_line_addr;
 
    function automatic [31:0] load_from_line(
         input [LINE_BYTES*8-1:0] line_data,
@@ -150,50 +154,26 @@ module instr_cache import params_pkg::*; #(
             cpu_rdata_r  <= '0;
             cpu_rvalid_r <= 1'b0;
 
-            mem_req_r   <= 1'b0;
-            mem_addr_r  <= '0;
-
         end else begin
             cpu_rvalid_r <= 1'b0;
             case (state)
                 S_IDLE: begin
-                    mem_req_r <= 1'b0;
-                    if (cpu_req && cpu_ready_r) begin
-                        if (curr_cache_hit) begin
-                            // HIT
-                            cpu_ready_r <= 1'b1;
-                            state <= S_IDLE;
-                        end else begin
-                            // MISS
-                            pending.valid <= 1'b1;
-                            pending.addr  <= cpu_addr;
-                            pending.size  <= cpu_size;
-
-                            cpu_ready_r <= 1'b0;
-                            mem_req_r  <= 1'b1;
-                            mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
-                            state <= S_REFILL;
-                        end
+                    if (miss_now) begin
+                        pending.valid <= 1'b1;
+                        pending.addr  <= cpu_addr;
+                        pending.size  <= cpu_size;              
+                        cpu_ready_r <= 1'b0;
+                        state <= S_REFILL;
                     end else begin
-                        cpu_ready_r <= (state == S_IDLE) ? 1'b1 : cpu_ready_r;
+                        cpu_ready_r <= 1'b1;
                         state <= S_IDLE;
                     end
                 end
-
                 S_REFILL: begin
                     if (state_reset) begin
                       cpu_ready_r <= 1'b1;
-                      mem_req_r   <= 1'b0;
                       state       <= S_IDLE;
                     end else begin
-                      if (mem_req_r && !mem_gnt) begin
-                          // request not grnted, keep trying
-                          mem_req_r  <= 1'b1;
-                          mem_addr_r <= pend_line_addr;
-                      end else if (mem_gnt) begin
-                          // request grntd, stop request
-                          mem_req_r <= 1'b0;
-                      end
                       // wait for mem resp
                       if (mem_rvalid) begin
                           // refill complete

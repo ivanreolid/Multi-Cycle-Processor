@@ -108,7 +108,7 @@ module fetch_stage #(
         end
         MEM_REQ: begin
           cache_req   = 1'b1;
-          if (cache_hit && cache_rvalid) begin
+          if (cache_rvalid) begin
             if (dec_stall_i) begin
               buffer_wr_en = 1'b1;
               state_d      = STALL;
@@ -116,7 +116,6 @@ module fetch_stage #(
               dec_valid_o = 1'b1;
               dec_instr_o = instruction_t'(cache_rdata);
               dec_pc_o    = pc;
-
               pc_d        = (pc + 4) % MEM_SIZE;
               state_d     = MEM_REQ;
             end

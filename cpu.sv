@@ -166,18 +166,12 @@ mem_arbiter #(
   .clk          (clk_i),
   .rst          (rst_i),
 
-  // ======================
-  // I-CACHE
-  // ======================
   .icache_req   (icache_req),
   .icache_addr  (icache_addr),
   .icache_gnt   (icache_gnt),
   .icache_rdata (icache_rdata),
   .icache_rvalid(icache_rvalid),
 
-  // ======================
-  // D-CACHE
-  // ======================
   .dcache_req   (dcache_req),
   .dcache_we    (dcache_we),
   .dcache_addr  (dcache_addr),
@@ -186,9 +180,6 @@ mem_arbiter #(
   .dcache_rdata (dcache_rdata),
   .dcache_rvalid(dcache_rvalid),
 
-  // ======================
-  // MEMORY
-  // ======================
   .mem_req      (mem_req),
   .mem_we       (mem_we),
   .mem_addr     (mem_addr),

@@ -41,11 +41,9 @@ module mem_arbiter #(
 
   logic serving_write;
 
-  assign mem_req = (state == IDLE) && (dcache_req || icache_req);
-
   always_ff @(posedge clk or negedge rst) begin
     if (!rst) begin
-      state <= IDLE;
+      state         <= IDLE;
       serving_write <= 1'b0;
     end else begin
       state <= next_state;
@@ -83,21 +81,43 @@ module mem_arbiter #(
   end
 
   always_comb begin
+    mem_req   = 1'b0;
     mem_we    = 1'b0;
     mem_addr  = '0;
     mem_wdata = '0;
 
-    if (state == IDLE) begin
-      if (dcache_req) begin
-        mem_we    = dcache_we;
-        mem_addr  = dcache_addr;
-        mem_wdata = dcache_wdata;
-      end else if (icache_req) begin
-        mem_addr  = icache_addr;
+    case (state)
+      IDLE: begin
+        if (dcache_req) begin
+          mem_req   = 1'b1;
+          mem_we    = dcache_we;
+          mem_addr  = dcache_addr;
+          mem_wdata = dcache_wdata;
+        end else if (icache_req) begin
+          mem_req  = 1'b1;
+          mem_we   = 1'b0;
+          mem_addr  = icache_addr;
+        end
       end
-    end
-  end
 
+      SERVE_DCACHE: begin
+        if (!serving_write && !mem_rvalid) begin
+          mem_req   = 1'b1;
+          mem_we    = 1'b0;
+          mem_addr  = dcache_addr;
+          mem_wdata = dcache_wdata;
+        end
+      end
+
+      SERVE_ICACHE: begin
+        if (!mem_rvalid) begin
+          mem_req  = 1'b1;
+          mem_we   = 1'b0;
+          mem_addr = icache_addr;
+        end
+      end
+    endcase
+  end
 
   assign dcache_gnt = (state == IDLE && dcache_req) || (state == SERVE_DCACHE);
   assign icache_gnt = (state == IDLE && icache_req && !dcache_req) || (state == SERVE_ICACHE);
@@ -105,7 +125,7 @@ module mem_arbiter #(
   assign dcache_rdata  = mem_rdata;
   assign icache_rdata  = mem_rdata;
 
-  assign dcache_rvalid = (state == SERVE_DCACHE) & mem_rvalid;
-  assign icache_rvalid = (state == SERVE_ICACHE) & mem_rvalid;
+  assign dcache_rvalid = (state == SERVE_DCACHE) && mem_rvalid;
+  assign icache_rvalid = (state == SERVE_ICACHE) && mem_rvalid;
 
 endmodule
