@@ -43,3 +43,20 @@ Matrix multiply
   - Total cycles = 373.450.536
   - Instructions executed = 29.689.746
   - CPI = 12.58
+
+With both caches
+
+Buffer sum
+  - Total cycles = 4226
+  - Instructions = 1676
+  - CPI = 2.523
+
+Mem copy
+  - Total cycles = 5039
+  - Instructions = 1803
+  - CPI = 2.796
+
+Matrix multiply (20 iterations)
+  - Total cycles = 623161
+  - Instructions = 120318
+  - CPI = 5.179

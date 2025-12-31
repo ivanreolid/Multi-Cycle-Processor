@@ -1,12 +1,18 @@
+`include "config.svh"
+
 package params_pkg;
 
-  parameter int OPCODE_WIDTH   = 4;
-  parameter int REGISTER_WIDTH = 5;
-  parameter int SHAMT_WIDTH    = 6;
-  parameter int INSTR_WIDTH    = 32;
-  parameter int ADDR_WIDTH     = 32;
-  parameter int DATA_WIDTH     = 32;
-  parameter int MEM_SIZE       = 200000;
+  parameter int OPCODE_WIDTH     = 4;
+  parameter int REGISTER_WIDTH   = 5;
+  parameter int SHAMT_WIDTH      = 6;
+  parameter int INSTR_WIDTH      = 32;
+  parameter int ADDR_WIDTH       = 32;
+  parameter int DATA_WIDTH       = 32;
+  parameter int MEM_SIZE         = 200000;
+
+  parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
+  parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
+  parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,

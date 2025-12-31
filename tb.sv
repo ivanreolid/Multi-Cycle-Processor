@@ -1,5 +1,5 @@
 `include "cpu.sv"
-`include "imem.sv"
+`include "mem.sv"
 
 import params_pkg::*;
 
@@ -9,10 +9,10 @@ module tb;
 
   // CPU - IMEM communication wires
   logic mem_data_valid, mem_data_is_instr;
-  logic [DATA_WIDTH-1:0] mem_data;
+  logic [CACHE_LINE_BYTES*8-1:0] mem_data;
   logic rd_req_valid, wr_req_valid, req_is_instr;
   logic [ADDR_WIDTH-1:0] req_address;
-  logic [DATA_WIDTH-1:0] wr_data;
+  logic [CACHE_LINE_BYTES*8-1:0] wr_data;
   access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
@@ -35,14 +35,21 @@ module tb;
   bit error;
   string error_msg;
 
+  logic finish;
+  logic done;
+  logic write_done_o;
+
   int total_cycles;
   int instructions_executed;
 
-  cpu i_cpu (
+  cpu #(
+    .CACHE_LINE_BYTES               (CACHE_LINE_BYTES),
+    .ICACHE_N_LINES                 (ICACHE_N_LINES),
+    .DCACHE_N_LINES                 (DCACHE_N_LINES)
+  ) i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
     .mem_data_valid_i               (mem_data_valid),
-    .mem_data_is_instr_i            (mem_data_is_instr),
     .mem_data_i                     (mem_data),
     .rd_req_valid_o                 (rd_req_valid),
     .wr_req_valid_o                 (wr_req_valid),
@@ -53,14 +60,17 @@ module tb;
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
-    .debug_instr_o                  (cpu_wb_instr)
+    .debug_instr_o                  (cpu_wb_instr),
+    .finish(finish),
+    .done(done),
+    .write_done_o(write_done_o)   
   );
 
-  imem #(
+  mem #(
     .MEM_SIZE                       (MEM_SIZE),
     .ADDR_WIDTH                     (ADDR_WIDTH),
-    .DATA_WIDTH                     (DATA_WIDTH)
-  ) imem (
+    .DATA_WIDTH                     (CACHE_LINE_BYTES*8)
+  ) mem (
     .clk_i                          (clk),
     .rst_i                          (rst),
     .rd_req_valid_i                 (rd_req_valid),
@@ -72,6 +82,8 @@ module tb;
     .data_valid_o                   (mem_data_valid),
     .data_is_instr_o                (mem_data_is_instr),
     .data_o                         (mem_data),
+    .write_done_o                   (write_done_o),
+    .finish(finish),
     .debug_mem_o                    (cpu_mem)
   );
 
@@ -113,9 +125,13 @@ module tb;
   endfunction
 
   function void initialize_memories();
-    //$readmemh("buffer_sum.mem", model_mem);
+      integer i;
+    for (i = 0; i < MEM_SIZE; i = i + 1) begin
+      model_mem[i] = 8'b0;
+    end
+    $readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    $readmemh("matrix_multiply.mem", model_mem);
+    //$readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -130,14 +146,15 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 224) begin
-      compare_memories();
-      $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
-               real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
-               instructions_executed);
-      $finish;
+    if (model_pc == 88) begin
+      finish = 1;
+      wait (done == 1'b1); 
+        compare_memories();
+        $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
+                real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
+                instructions_executed);
+        $finish;
     end
-
     model_pc = new_model_pc;
   endtask
 
@@ -277,3 +294,4 @@ module tb;
   endtask
 
 endmodule
+
