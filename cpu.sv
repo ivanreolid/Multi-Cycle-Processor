@@ -54,6 +54,7 @@ module cpu #(
   instruction_t dec_instruction_d;
 
   // Decode stage wires
+  logic flush;
   logic dec_valid_q;
   logic dec_instr_is_wb;
   logic alu_valid_d;
@@ -219,6 +220,8 @@ mem_arbiter #(
     .dec_valid_i        (dec_valid_q),
     .alu_valid_i        (alu_valid_q),
     .alu_instr_finishes_i (alu_instr_finishes),
+    .alu_branch_taken_i (alu_branch_taken),
+    .alu_is_jump_i      (is_jump),
     .mem_valid_i        (mem_valid_q),
     .mem_busy_i         (mem_stall),
     .mem_reg_wr_en_i    (mem_reg_wr_en_q),
@@ -235,6 +238,7 @@ mem_arbiter #(
     .ex3_wr_reg_i       (ex3_wr_reg_q),
     .ex4_wr_reg_i       (ex4_wr_reg_q),
     .hazard_signals_i   (hazard_signals),
+    .flush_o            (flush),
     .stall_ex_o         (ex_stall),
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
@@ -582,7 +586,9 @@ mem_arbiter #(
     end else begin
 
       // Fetch -> Decode flops
-      if (!dec_stall) begin
+      if (flush) begin
+        dec_valid_q       <= 1'b0;
+      end else if (!dec_stall) begin
         dec_valid_q       <= dec_valid_d;
         dec_pc_q          <= dec_pc_d;
         dec_instruction_q <= dec_instruction_d;

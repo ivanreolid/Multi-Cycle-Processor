@@ -7,6 +7,8 @@ module hazard_unit #(
   input  logic dec_valid_i,
   input  logic alu_valid_i,
   input  logic alu_instr_finishes_i,
+  input  logic alu_branch_taken_i,
+  input  logic alu_is_jump_i,
   input  logic mem_valid_i,
   input  logic mem_busy_i,
   input  logic mem_reg_wr_en_i,
@@ -23,6 +25,7 @@ module hazard_unit #(
   input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
   input  var   hazard_ctrl_t hazard_signals_i,
+  output logic flush_o,
   output logic stall_ex_o,
   output logic stall_mem_o,
   output logic stall_alu_o,
@@ -105,6 +108,8 @@ module hazard_unit #(
     alu_bubble_o   = stall_decode_o && !stall_reason_alu_backpressure;
     ex_bubble_o    = stall_decode_o && !stall_reason_ex_backpressure;
   end
+
+  assign flush_o = alu_branch_taken_i | alu_is_jump_i;
 
   assign stall_fetch_o = stall_decode_o;
 
