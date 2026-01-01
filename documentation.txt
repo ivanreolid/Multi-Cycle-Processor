@@ -61,3 +61,21 @@ Matrix multiply (20 iterations)
   - Total cycles = 623161
   - Instructions = 120318
   - CPI = 5.179
+
+Future file + Architectural file + ROB
+
+Buffer sum
+  - Total cycles = 3898
+  - Instructions = 1676
+  - CPI = 2.327
+
+Mem copy
+  - Total cycles = 4554
+  - Instructions = 1803
+  - CPI = 2.527
+
+Matrix multiply (20 iterations)
+  - Total cycles = 586192
+  - Instructions = 120318
+  - CPI = 4.872
+
