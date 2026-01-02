@@ -11,7 +11,7 @@ module tb;
   logic mem_data_valid, mem_data_is_instr;
   logic [CACHE_LINE_BYTES*8-1:0] mem_data;
   logic rd_req_valid, wr_req_valid, req_is_instr;
-  logic [ADDR_WIDTH-1:0] req_address;
+  logic [PADDR_WIDTH-1:0] req_address;
   logic [CACHE_LINE_BYTES*8-1:0] wr_data;
   access_size_t req_access_size;
 
@@ -42,11 +42,7 @@ module tb;
   int total_cycles;
   int instructions_executed;
 
-  cpu #(
-    .CACHE_LINE_BYTES               (CACHE_LINE_BYTES),
-    .ICACHE_N_LINES                 (ICACHE_N_LINES),
-    .DCACHE_N_LINES                 (DCACHE_N_LINES)
-  ) i_cpu (
+  cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
     .mem_data_valid_i               (mem_data_valid),
@@ -61,14 +57,14 @@ module tb;
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
     .debug_instr_o                  (cpu_wb_instr),
-    .finish(finish),
-    .done(done),
-    .write_done_o(write_done_o)   
+    .finish                         (finish),
+    .done                           (done),
+    .write_done_o                   (write_done_o)
   );
 
   mem #(
     .MEM_SIZE                       (MEM_SIZE),
-    .ADDR_WIDTH                     (ADDR_WIDTH),
+    .ADDR_WIDTH                     (PADDR_WIDTH),
     .DATA_WIDTH                     (CACHE_LINE_BYTES*8)
   ) mem (
     .clk_i                          (clk),
@@ -96,7 +92,7 @@ module tb;
 
   always_ff @(posedge clk) begin : check
     if (!rst) begin
-      model_pc <= '0;
+      model_pc <= 4096;
     end else if (cpu_instr_is_completed) begin
         execute_and_compare();
     end
@@ -129,9 +125,15 @@ module tb;
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       model_mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
     //$readmemh("matrix_multiply.mem", model_mem);
+
+    // Boot at PC = 0x1000
+    model_mem[4096] = 8'h93; // addi x1, x0, 0
+
+    model_mem[4100] = 8'h13;
+    model_mem[4101] = 8'h01; // addi x2, x0, 0x1000
   endfunction
 
   task automatic execute_and_compare();

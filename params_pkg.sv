@@ -13,6 +13,14 @@ package params_pkg;
   parameter int ROB_ENTRIES      = `ROB_ENTRIES_MACRO;
   parameter int ROB_ENTRY_WIDTH  = $clog2(ROB_ENTRIES);
 
+  parameter int VADDR_WIDTH       = 32;
+  parameter int PADDR_WIDTH       = 20;
+  parameter int PAGE_OFFSET_WIDTH = 12;
+  parameter int VPN_WIDTH         = VADDR_WIDTH - PAGE_OFFSET_WIDTH;
+  parameter int PPN_WIDTH         = PADDR_WIDTH - PAGE_OFFSET_WIDTH;
+
+  parameter int ITLB_DEPTH       = `ITLB_DEPTH_MACRO;
+
   parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;

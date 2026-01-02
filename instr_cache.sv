@@ -1,24 +1,25 @@
 `timescale 1ns / 1ps
 
 module instr_cache import params_pkg::*; #(
-    parameter int ADDR_WIDTH = 32,
-    parameter int LINE_BYTES = 16,       // cache line byte
-    parameter int N_LINES    = 4         // line number
+    parameter int ADDR_WIDTH  = params_pkg::ADDR_WIDTH,
+    parameter int PADDR_WIDTH = params_pkg::PADDR_WIDTH,
+    parameter int LINE_BYTES  = params_pkg::CACHE_LINE_BYTES, // cache line byte
+    parameter int N_LINES     = params_pkg::ICACHE_N_LINES    // line number
 ) (
     input  logic                      clk,
     input  logic                      rstn,
 
     input  logic                      state_reset,
     input  logic                      cpu_req,       // CPU req came
-    input  logic [ADDR_WIDTH-1:0]     cpu_addr,      // Byte adres
+    input  logic [PADDR_WIDTH-1:0]    cpu_addr,      // Byte adres
     input  logic [1:0]                cpu_size,      // 00=byte, 01=half, 10=word
     output logic                      cpu_ready,     // cache ready for another req
-    output logic [31:0]               cpu_rdata,     // read data
+    output logic [ADDR_WIDTH-1:0]     cpu_rdata,     // read data
     output logic                      cpu_rvalid,    // read valid result
     output logic                      curr_cache_hit,
 
     output logic                      mem_req,       // mem req
-    output logic [ADDR_WIDTH-1:0]     mem_addr,      // Line-aligned address
+    output logic [PADDR_WIDTH-1:0]    mem_addr,      // Line-aligned address
     input  logic                      mem_gnt,       // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid,    // mem read
     input  logic [LINE_BYTES*8-1:0]   mem_rdata      // full line
@@ -26,7 +27,7 @@ module instr_cache import params_pkg::*; #(
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
     localparam IDX_BITS       = $clog2(N_LINES);
-    localparam TAG_BITS       = ADDR_WIDTH - OFFSET_BITS - IDX_BITS;
+    localparam TAG_BITS       = PADDR_WIDTH - OFFSET_BITS - IDX_BITS;
     localparam WORDS_PER_LINE = LINE_BYTES / 4;
     localparam WORD_OFF_BITS  = $clog2(WORDS_PER_LINE);
 
@@ -45,23 +46,33 @@ module instr_cache import params_pkg::*; #(
 
     typedef struct packed {
         logic                   valid;
-        logic [ADDR_WIDTH-1:0]  addr;
+        logic [PADDR_WIDTH-1:0] addr;
         logic [1:0]             size;
     } pending_req_t;
 
     pending_req_t pending;
 
-    wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
-    wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
-    wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
-    wire [1:0]               curr_byte_off  = cpu_addr[1:0];
+    logic [IDX_BITS-1:0]      curr_index;
+    logic [TAG_BITS-1:0]      curr_tag;
+    logic [WORD_OFF_BITS-1:0] curr_word_off;
+    logic [1:0]               curr_byte_off;
 
-    wire [IDX_BITS-1:0]      pend_index     = pending.addr[OFFSET_BITS +: IDX_BITS];
-    wire [TAG_BITS-1:0]      pend_tag       = pending.addr[ADDR_WIDTH-1 -: TAG_BITS];
-    wire [WORD_OFF_BITS-1:0] pend_word_off  = pending.addr[OFFSET_BITS-1:2];
-    wire [1:0]               pend_byte_off  = pending.addr[1:0];
-    wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[ADDR_WIDTH-1:OFFSET_BITS],
-                                                {OFFSET_BITS{1'b0}}};
+    logic [IDX_BITS-1:0]      pend_index;
+    logic [TAG_BITS-1:0]      pend_tag;
+    logic [WORD_OFF_BITS-1:0] pend_word_off;
+    logic [1:0]               pend_byte_off;
+    logic [PADDR_WIDTH-1:0]   pend_line_addr;
+
+    assign curr_index    = cpu_addr[OFFSET_BITS +: IDX_BITS];
+    assign curr_tag      = cpu_addr[PADDR_WIDTH-1 -: TAG_BITS];
+    assign curr_word_off = cpu_addr[OFFSET_BITS-1:2];
+    assign curr_byte_off = cpu_addr[1:0];
+
+    assign pend_index     = pending.addr[OFFSET_BITS +: IDX_BITS];
+    assign pend_tag       = pending.addr[PADDR_WIDTH-1 -: TAG_BITS];
+    assign pend_word_off  = pending.addr[OFFSET_BITS-1:2];
+    assign pend_byte_off  = pending.addr[1:0];
+    assign pend_line_addr = {pending.addr[PADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
 
     assign curr_cache_hit = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
 
@@ -70,16 +81,16 @@ module instr_cache import params_pkg::*; #(
     state_t state;
 
     logic                      mem_req_r;
-    logic [ADDR_WIDTH-1:0]     mem_addr_r;
+    logic [PADDR_WIDTH-1:0]    mem_addr_r;
 
     assign mem_req   = mem_req_r;
     assign mem_addr  = mem_addr_r;
 
    function automatic [31:0] load_from_line(
-        input [LINE_BYTES*8-1:0] line_data,
+        input [LINE_BYTES*8-1:0]  line_data,
         input [WORD_OFF_BITS-1:0] word_idx,
-        input [1:0]              byte_off,
-        input [1:0]              size
+        input [1:0]               byte_off,
+        input [1:0]               size
     );
         logic [31:0] word_data;
         logic [31:0] result;
@@ -171,7 +182,7 @@ module instr_cache import params_pkg::*; #(
 
                             cpu_ready_r <= 1'b0;
                             mem_req_r  <= 1'b1;
-                            mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
+                            mem_addr_r <= {cpu_addr[PADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
                             state <= S_REFILL;
                         end
                     end else begin

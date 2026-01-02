@@ -5,16 +5,16 @@
 `include "mem_stage.sv"
 `include "ex_stages.sv"
 `include "wb_arbiter.sv"
+`include "csr_regfile.sv"
 `include "register_file.sv"
 `include "mem_arbiter.sv"
 `include "reorder_buffer.sv"
 
-import params_pkg::*;
-
-module cpu #(
-  parameter int CACHE_LINE_BYTES = 16,
-  parameter int ICACHE_N_LINES   = 4,
-  parameter int DCACHE_N_LINES   = 4
+module cpu import params_pkg::*; #(
+  parameter int PADDR_WIDTH       = params_pkg::PADDR_WIDTH,
+  parameter int CACHE_LINE_BYTES  = params_pkg::CACHE_LINE_BYTES,
+  parameter int ICACHE_N_LINES    = params_pkg::ICACHE_N_LINES,
+  parameter int DCACHE_N_LINES    = params_pkg::DCACHE_N_LINES
 )(
   input  logic clk_i,
   input  logic rst_i,
@@ -24,7 +24,7 @@ module cpu #(
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic req_is_instr_o,
-  output logic [ADDR_WIDTH-1:0] req_address_o,
+  output logic [PADDR_WIDTH-1:0] req_address_o,
   output logic [CACHE_LINE_BYTES*8-1:0] wr_data_o,
   output access_size_t req_access_size_o,
 
@@ -39,7 +39,7 @@ module cpu #(
 `endif
 );
   logic icache_req, icache_gnt, icache_rvalid;
-  logic [ADDR_WIDTH-1:0] icache_addr;
+  logic [PADDR_WIDTH-1:0] icache_addr;
   logic [CACHE_LINE_BYTES*8-1:0] icache_rdata;
 
   logic dcache_req, dcache_we, dcache_gnt, dcache_rvalid;
@@ -49,6 +49,7 @@ module cpu #(
   // Fetch stage wires
   logic fetch_stall;
   logic dec_valid_d;
+  logic [DATA_WIDTH-1:0] satp_data;
   logic [ADDR_WIDTH-1:0] dec_pc_d;
   access_size_t fetch_req_access_size;
   instruction_t dec_instruction_d;
@@ -172,12 +173,13 @@ module cpu #(
 `endif
 
 logic mem_req,mem_we;
-logic [ADDR_WIDTH-1:0] mem_addr;
+logic [PADDR_WIDTH-1:0] mem_addr;
 logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
 mem_arbiter #(
-  .ADDR_WIDTH (ADDR_WIDTH),
-  .DATA_WIDTH (CACHE_LINE_BYTES*8)
+  .ADDR_WIDTH   (ADDR_WIDTH),
+  .PADDR_WIDTH  (PADDR_WIDTH),
+  .DATA_WIDTH   (CACHE_LINE_BYTES*8)
 ) mem_arbiter (
   .clk          (clk_i),
   .rst          (rst_i),
@@ -250,13 +252,7 @@ mem_arbiter #(
     .ex_bubble_o        (ex_bubble)
   );
 
-  fetch_stage #(
-    .ADDR_WIDTH         (ADDR_WIDTH),
-    .DATA_WIDTH         (DATA_WIDTH),
-    .MEM_SIZE           (MEM_SIZE),
-    .CACHE_LINE_BYTES   (CACHE_LINE_BYTES),
-    .ICACHE_N_LINES     (ICACHE_N_LINES)
-  ) fetch_stage (
+  fetch_stage fetch_stage (
     .clk_i               (clk_i),
     .rst_i               (rst_i),
     .mem_req_i           (dcache_req),
@@ -264,6 +260,7 @@ mem_arbiter #(
     .is_jump_i           (is_jump),
     .dec_stall_i         (dec_stall),
     .mem_stall_i         (mem_stall),
+    .satp_data_i         (satp_data),
     .pc_branch_offset_i  (alu_pc_branch_offset),
     .jump_address_i      (jump_address),
     .instr_valid_i       (icache_rvalid),
@@ -503,6 +500,15 @@ mem_arbiter #(
     .debug_pc_o         (debug_wb_pc),
     .debug_instr_o      (debug_wb_instr)
 `endif
+  );
+
+  csr_regfile csr_file (
+    .clk_i      (clk_i),
+    .rst_i      (rst_i),
+    .wr_en_i    (),
+    .wr_addr_i  (),
+    .wr_data_i  (),
+    .satp_o     (satp_data)
   );
 
   register_file #(

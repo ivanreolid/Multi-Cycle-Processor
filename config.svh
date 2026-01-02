@@ -17,5 +17,9 @@
     `define ROB_ENTRIES_MACRO 4
   `endif
 
+  `ifndef ITLB_DEPTH_MACRO
+    `define ITLB_DEPTH_MACRO 4
+  `endif
+
 `endif
 

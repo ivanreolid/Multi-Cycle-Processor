@@ -1,13 +1,14 @@
+`include "tlb.sv"
+`include "ptw.sv"
 `include "instr_cache.sv"
 
-import params_pkg::*;
-
-module fetch_stage #(
-  parameter int ADDR_WIDTH       = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH       = params_pkg::DATA_WIDTH,
-  parameter int MEM_SIZE         = params_pkg::MEM_SIZE,
-  parameter int CACHE_LINE_BYTES = 16,
-  parameter int ICACHE_N_LINES   = 4
+module fetch_stage import params_pkg::*; #(
+  parameter int PADDR_WIDTH       = params_pkg::PADDR_WIDTH,
+  parameter int ADDR_WIDTH        = params_pkg::ADDR_WIDTH,
+  parameter int DATA_WIDTH        = params_pkg::DATA_WIDTH,
+  parameter int PPN_WIDTH         = params_pkg::PPN_WIDTH,
+  parameter int MEM_SIZE          = params_pkg::MEM_SIZE,
+  parameter int CACHE_LINE_BYTES  = params_pkg::CACHE_LINE_BYTES
 )(
   input  logic clk_i,
   input  logic rst_i,
@@ -16,6 +17,7 @@ module fetch_stage #(
   input  logic is_jump_i,
   input  logic dec_stall_i,
   input  logic mem_stall_i,
+  input  logic [DATA_WIDTH-1:0] satp_data_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
 
@@ -23,7 +25,7 @@ module fetch_stage #(
   input  logic instr_valid_i,
   input  logic [CACHE_LINE_BYTES*8-1:0] instr_line_i,
   output logic rd_req_valid_o,
-  output logic [ADDR_WIDTH-1:0] mem_req_addr_o,
+  output logic [PADDR_WIDTH-1:0] mem_req_addr_o,
   output access_size_t req_access_size_o,
 
   // Memory arbiter grant signal
@@ -44,11 +46,22 @@ module fetch_stage #(
 
   state_t state, state_d;
   logic [ADDR_WIDTH-1:0] pc, pc_d;
+  logic [PADDR_WIDTH-1:0] paddr;
 
   // Stall Buffer
   logic [ADDR_WIDTH-1:0] pc_buffer;
   instruction_t instr_buffer;
   logic buffer_wr_en;
+
+  // ITLB wires
+  logic itlb_hit;
+  logic itlb_wr_en;
+  logic [PPN_WIDTH-1:0] itlb_ppn;
+
+  // IPTW wires
+  logic iptw_req;
+  logic iptw_valid;
+  logic [PADDR_WIDTH-1:0] iptw_paddr;
 
   // Cache signals
   logic cache_state_reset;
@@ -58,17 +71,33 @@ module fetch_stage #(
   logic cache_rvalid;
   logic [31:0] cache_rdata;
 
+  tlb i_tlb (
+    .clk_i     (clk_i),
+    .rst_i     (rst_i),
+    .flush_i   (1'b0),
+    .wr_en_i   (itlb_wr_en),
+    .vpn_i     (pc[31:12]),
+    .ppn_i     (iptw_paddr[19:12]),
+    .hit_o     (itlb_hit),
+    .ppn_o     (itlb_ppn)
+  );
+
+  ptw i_ptw (
+    .req_i       (iptw_req),
+    .vaddr_i     (pc),
+    .satp_data_i (satp_data_i),
+    .valid_o     (iptw_valid),
+    .error_o     (),
+    .paddr_o     (iptw_paddr)
+  );
+
   // --- Cache Instantiation ---
-  instr_cache #(
-    .ADDR_WIDTH(ADDR_WIDTH),
-    .LINE_BYTES(CACHE_LINE_BYTES),
-    .N_LINES(ICACHE_N_LINES)
-  ) i_cache (
+  instr_cache i_cache (
     .clk(clk_i),
     .rstn(rst_i),
     .state_reset(cache_state_reset),
     .cpu_req(cache_req),
-    .cpu_addr(pc),
+    .cpu_addr(paddr),
     .cpu_size(WORD),
     .cpu_ready(cache_ready),
     .cpu_rdata(cache_rdata),
@@ -86,6 +115,10 @@ module fetch_stage #(
     // Default values
     state_d      = state;
     pc_d         = pc;
+
+    itlb_wr_en    = 1'b0;
+
+    iptw_req      = 1'b0;
 
     cache_req         = 1'b0;
     cache_state_reset = 1'b0;
@@ -107,7 +140,19 @@ module fetch_stage #(
           state_d = MEM_REQ;
         end
         MEM_REQ: begin
+          if (itlb_hit) begin
+            paddr = {itlb_ppn, pc[11:0]};
+          end else begin
+            iptw_req = 1'b1;
+
+            if (iptw_valid) begin
+              paddr      = iptw_paddr;
+              itlb_wr_en = 1'b1;
+            end
+          end
+
           cache_req   = 1'b1;
+
           if (cache_hit && cache_rvalid) begin
             if (dec_stall_i) begin
               buffer_wr_en = 1'b1;
@@ -160,7 +205,7 @@ module fetch_stage #(
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       state        <= IDLE;
-      pc           <= '0;
+      pc           <= 4096;
       instr_buffer <= '0;
       pc_buffer    <= '0;
     end else begin
