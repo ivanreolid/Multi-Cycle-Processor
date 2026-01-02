@@ -1,6 +1,7 @@
-module mem_arbiter #(
-  parameter ADDR_WIDTH = 32,
-  parameter DATA_WIDTH = 128
+module mem_arbiter import params_pkg::*; #(
+  parameter int ADDR_WIDTH  = 32,
+  parameter int PADDR_WIDTH = 20,
+  parameter int DATA_WIDTH  = 128
 )(
   input  logic clk,
   input  logic rst,
@@ -8,11 +9,11 @@ module mem_arbiter #(
   // ======================
   // I-CACHE INTERFACE
   // ======================
-  input  logic                  icache_req,
-  input  logic [ADDR_WIDTH-1:0]  icache_addr,
-  output logic                  icache_gnt,
+  input  logic                   icache_req,
+  input  logic [PADDR_WIDTH-1:0] icache_addr,
+  output logic                   icache_gnt,
   output logic [DATA_WIDTH-1:0]  icache_rdata,
-  output logic                  icache_rvalid,
+  output logic                   icache_rvalid,
 
   // ======================
   // D-CACHE INTERFACE
@@ -28,12 +29,12 @@ module mem_arbiter #(
   // ======================
   // MEMORY INTERFACE
   // ======================
-  output logic                  mem_req,
-  output logic                  mem_we,
-  output logic [ADDR_WIDTH-1:0]  mem_addr,
+  output logic                   mem_req,
+  output logic                   mem_we,
+  output logic [PADDR_WIDTH-1:0] mem_addr,
   output logic [DATA_WIDTH-1:0]  mem_wdata,
   input  logic [DATA_WIDTH-1:0]  mem_rdata,
-  input  logic                  mem_rvalid
+  input  logic                   mem_rvalid
   );
 
   // ============================================================
@@ -84,7 +85,7 @@ module mem_arbiter #(
   end
 
   // ============================================================
-  // MEMORY OUTPUT MUX (KARISMA YOK)
+  // EMORY OUTPUT MUX
   // ============================================================
   always_comb begin
     mem_req   = 1'b0;
@@ -109,7 +110,7 @@ module mem_arbiter #(
   end
 
   // ============================================================
-  // GRANT SIGNALS (SADECE OWNER GÖRÜR)
+  // GRANT SIGNALS
   // ============================================================
   assign dcache_gnt = (state == SERVE_DCACHE);
   assign icache_gnt = (state == SERVE_ICACHE);

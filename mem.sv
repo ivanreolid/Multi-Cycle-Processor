@@ -1,8 +1,6 @@
-import params_pkg::*;
-
-module mem #(
-  parameter int MEM_SIZE   = params_pkg::MEM_SIZE,
-  parameter int ADDR_WIDTH = params_pkg::ADDR_WIDTH,
+module mem import params_pkg::*; #(
+  parameter int MEM_SIZE   = 4096,
+  parameter int ADDR_WIDTH = 20,
   parameter int DATA_WIDTH = 128
 )(
   input  logic clk_i,
@@ -45,12 +43,12 @@ module mem #(
   logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
 
   logic [DATA_WIDTH-1:0] pipe6_read_data_d;
-  logic [DATA_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data, pipe10_read_data;
+  logic [DATA_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data,
+                         pipe10_read_data;
 
   logic [DATA_WIDTH-1:0] pipe1_write_data_d;
-  logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data, pipe5_write_data;
-
-  
+  logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
+                         pipe5_write_data;
 
 parameter int MAX_WRITE_CYCLES = 4; // Cache line sayısı kadar
 parameter int COUNTER_WIDTH = $clog2(MAX_WRITE_CYCLES);
@@ -197,9 +195,15 @@ assign write_done_o = write_done_pulse;
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", mem);
+    //$readmemh("buffer_sum.mem", mem);
     //$readmemh("mem_copy.mem", mem);
     //$readmemh("matrix_multiply.mem", mem);
+
+    // Boot at PC = 0x1000
+    mem[4096] = 8'h93; // addi x1, x0, 0
+
+    mem[4100] = 8'h13;
+    mem[4101] = 8'h01; // addi x2, x0, 0x1000
   end
 
 endmodule
