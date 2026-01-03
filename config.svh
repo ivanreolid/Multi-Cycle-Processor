@@ -13,5 +13,9 @@
     `define CACHE_LINE_BYTES_MACRO 16
   `endif
 
+  `ifndef ROB_ENTRIES_MACRO
+    `define ROB_ENTRIES_MACRO 4
+  `endif
+
 `endif
 
