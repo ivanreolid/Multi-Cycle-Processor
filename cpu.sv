@@ -57,7 +57,6 @@ module cpu import params_pkg::*; #(
   instruction_t dec_instruction_d;
 
   // Decode stage wires
-  logic flush;
   logic dec_valid_q;
   logic dec_instr_is_wb, dec_instr_is_csr_wb;
   logic alu_valid_d;
@@ -165,6 +164,7 @@ module cpu import params_pkg::*; #(
 
   // Reorder buffer wires
   logic rob_is_full;
+  logic flush;
   logic rob_new_instr_valid;
   logic rob_instr_commit_valid;
   logic rob_instr_commit_is_wb, rob_instr_commit_is_csr_wb;
@@ -172,8 +172,8 @@ module cpu import params_pkg::*; #(
   logic [REGISTER_WIDTH-1:0] rob_instr_commit_reg_id;
   logic [CSR_ADDR_WIDTH-1:0] rob_instr_commit_csr_addr;
   logic [DATA_WIDTH-1:0] rob_instr_commit_data, rob_instr_commit_csr_data;
+  logic [ADDR_WIDTH-1:0] rob_instr_commit_pc;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_rob_instr_commit_pc;
   instruction_t debug_rob_instr_commit;
 `endif
 
@@ -247,7 +247,6 @@ mem_arbiter #(
     .ex3_wr_reg_i       (ex3_wr_reg_q),
     .ex4_wr_reg_i       (ex4_wr_reg_q),
     .hazard_signals_i   (hazard_signals),
-    .flush_o            (flush),
     .stall_ex_o         (ex_stall),
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
@@ -261,11 +260,13 @@ mem_arbiter #(
     .clk_i               (clk_i),
     .rst_i               (rst_i),
     .mem_req_i           (dcache_req),
+    .flush_i             (flush),
     .alu_branch_taken_i  (alu_branch_taken),
     .is_jump_i           (is_jump),
     .dec_stall_i         (dec_stall),
     .mem_stall_i         (mem_stall),
     .satp_data_i         (satp_data),
+    .last_committed_pc_i (rob_instr_commit_pc),
     .pc_branch_offset_i  (alu_pc_branch_offset),
     .jump_address_i      (jump_address),
     .instr_valid_i       (icache_rvalid),
@@ -580,6 +581,7 @@ mem_arbiter #(
     , .new_instr_i          (dec_instruction_q)
 `endif
     , .full_o               (rob_is_full),
+    .flush_o                (flush),
     .instr_commit_valid_o   (rob_instr_commit_valid),
     .instr_commit_is_wb_o   (rob_instr_commit_is_wb),
     .instr_commit_is_csr_wb_o (rob_instr_commit_is_csr_wb),
@@ -587,10 +589,10 @@ mem_arbiter #(
     .instr_commit_csr_addr_o (rob_instr_commit_csr_addr),
     .new_instr_idx_o        (dec_rob_new_instr_idx),
     .instr_commit_data_o    (rob_instr_commit_data),
-    .instr_commit_csr_data_o (rob_instr_commit_csr_data)
+    .instr_commit_csr_data_o (rob_instr_commit_csr_data),
+    .instr_commit_pc_o       (rob_instr_commit_pc)
 `ifndef SYNTHESIS
-    , .instr_commit_pc_o    (debug_rob_instr_commit_pc),
-    .instr_commit_o         (debug_rob_instr_commit)
+    , .instr_commit_o         (debug_rob_instr_commit)
 `endif
   );
 
@@ -609,7 +611,7 @@ mem_arbiter #(
     end else begin
 
       // Fetch -> Decode flops
-      if (flush) begin
+      if (flush || alu_branch_taken || is_jump) begin
         dec_valid_q       <= 1'b0;
       end else if (!dec_stall) begin
         dec_valid_q       <= dec_valid_d;
@@ -618,7 +620,7 @@ mem_arbiter #(
       end
 
       // Decode -> ALU flops
-      if (alu_bubble) begin
+      if (flush || alu_bubble) begin
         alu_valid_q              <= 1'b0;
       end else if (!alu_stall) begin
         alu_valid_q              <= alu_valid_d;
@@ -692,7 +694,7 @@ mem_arbiter #(
 
 `ifndef SYNTHESIS
       debug_instr_is_completed_o <= rob_instr_commit_valid;
-      debug_pc_o                 <= debug_rob_instr_commit_pc;
+      debug_pc_o                 <= rob_instr_commit_pc;
       debug_instr_o              <= debug_rob_instr_commit;
 `endif
     end

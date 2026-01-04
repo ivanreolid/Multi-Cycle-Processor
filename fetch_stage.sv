@@ -13,11 +13,13 @@ module fetch_stage import params_pkg::*; #(
   input  logic clk_i,
   input  logic rst_i,
   input  logic mem_req_i,
+  input  logic flush_i,
   input  logic alu_branch_taken_i,
   input  logic is_jump_i,
   input  logic dec_stall_i,
   input  logic mem_stall_i,
   input  logic [DATA_WIDTH-1:0] satp_data_i,
+  input  logic [ADDR_WIDTH-1:0] last_committed_pc_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
 
@@ -74,7 +76,7 @@ module fetch_stage import params_pkg::*; #(
   tlb i_tlb (
     .clk_i     (clk_i),
     .rst_i     (rst_i),
-    .flush_i   (1'b0),
+    .flush_i   (flush_i),
     .wr_en_i   (itlb_wr_en),
     .vpn_i     (pc[31:12]),
     .ppn_i     (iptw_paddr[19:12]),
@@ -129,12 +131,14 @@ module fetch_stage import params_pkg::*; #(
     dec_instr_o  = instruction_t'('0);
     req_access_size_o = WORD;
 
-    if (alu_branch_taken_i || is_jump_i) begin
+    if (flush_i) begin
+      pc_d    = (last_committed_pc_i + 4) % MEM_SIZE;
+      state_d = MEM_REQ;
+    end else if (alu_branch_taken_i || is_jump_i) begin
       cache_state_reset = 1'b1;
       pc_d              = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
       state_d           = MEM_REQ;
-    end
-    else begin
+    end else begin
       case (state)
         IDLE: begin
           state_d = MEM_REQ;

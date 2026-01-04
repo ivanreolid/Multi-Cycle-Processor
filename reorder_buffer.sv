@@ -23,6 +23,7 @@ module reorder_buffer import params_pkg::*; #(
   input  var instruction_t new_instr_i,
 `endif
   output logic full_o,
+  output logic flush_o,
   output logic instr_commit_valid_o,
   output logic instr_commit_is_wb_o,
   output logic instr_commit_is_csr_wb_o,
@@ -30,10 +31,10 @@ module reorder_buffer import params_pkg::*; #(
   output logic [CSR_ADDR_WIDTH-1:0] instr_commit_csr_addr_o,
   output logic [ROB_ENTRY_WIDTH-1:0] new_instr_idx_o,
   output logic [DATA_WIDTH-1:0] instr_commit_data_o,
-  output logic [DATA_WIDTH-1:0] instr_commit_csr_data_o
+  output logic [DATA_WIDTH-1:0] instr_commit_csr_data_o,
+  output logic [ADDR_WIDTH-1:0] instr_commit_pc_o
 `ifndef SYNTHESIS
-  , output logic [ADDR_WIDTH-1:0] instr_commit_pc_o,
-  output var instruction_t instr_commit_o
+  , output var instruction_t instr_commit_o
 `endif
 );
 
@@ -63,6 +64,7 @@ module reorder_buffer import params_pkg::*; #(
     rob_d                    = rob_q;
     head_d                   = head_q;
     tail_d                   = tail_q;
+    flush_o                  = 1'b0;
     instr_commit_valid_o     = 1'b0;
     instr_commit_is_wb_o     = 1'b0;
     instr_commit_is_csr_wb_o = 1'b0;
@@ -93,18 +95,23 @@ module reorder_buffer import params_pkg::*; #(
 
     if (rob_q[head_q].valid) begin
       instr_commit_valid_o     = 1'b1;
+      flush_o                  = rob_q[head_q].csr_wb;
       instr_commit_is_wb_o     = rob_q[head_q].wb;
       instr_commit_is_csr_wb_o = rob_q[head_q].csr_wb;
       instr_commit_reg_id_o    = rob_q[head_q].reg_id;
       instr_commit_csr_addr_o  = rob_q[head_q].csr_addr;
       instr_commit_data_o      = rob_q[head_q].data;
       instr_commit_csr_data_o  = rob_q[head_q].csr_data;
+      instr_commit_pc_o        = rob_q[head_q].pc;
 `ifndef SYNTHESIS
-      instr_commit_pc_o     = rob_q[head_q].pc;
       instr_commit_o        = rob_q[head_q].instr;
 `endif
       rob_d[head_q].valid   = 1'b0;
       head_d                = (head_q + 1) % ROB_ENTRIES;
+    end
+
+    if (flush_o) begin
+      tail_d = head_d;
     end
   end
 
@@ -116,7 +123,14 @@ module reorder_buffer import params_pkg::*; #(
     end else begin
       head_q                <= head_d;
       tail_q                <= tail_d;
+
       rob_q                 <= rob_d;
+
+      if (flush_o) begin
+        for (int i = 0; i < ROB_ENTRIES; i++) begin
+          rob_q[i].valid <= 1'b0;
+        end
+      end
     end
   end
 
