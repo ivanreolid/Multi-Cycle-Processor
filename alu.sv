@@ -47,7 +47,7 @@ module alu #(
           default: result_o = sum_result;
         endcase
       end
-      LOAD, STORE, JAL, LUI, AUIPC: result_o = sum_result;
+      LOAD, STORE, JAL, LUI, AUIPC, SYSTEM: result_o = sum_result;
       default;
     endcase
   end

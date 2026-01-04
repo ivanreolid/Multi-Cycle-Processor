@@ -5,6 +5,7 @@ package params_pkg;
   parameter int OPCODE_WIDTH     = 4;
   parameter int REGISTER_WIDTH   = 5;
   parameter int SHAMT_WIDTH      = 6;
+  parameter int CSR_ADDR_WIDTH   = 12;
   parameter int INSTR_WIDTH      = 32;
   parameter int ADDR_WIDTH       = 32;
   parameter int DATA_WIDTH       = 32;
@@ -25,6 +26,9 @@ package params_pkg;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
 
+  // CSRS
+  parameter int CSR_SATP = 12'h180;
+
   typedef enum logic[6:0] {
     R         = 7'b0110011,
     LOAD      = 7'b0000011,
@@ -33,8 +37,13 @@ package params_pkg;
     JAL       = 7'b1101111,
     IMMEDIATE = 7'b0010011,
     LUI       = 7'b0110111,
-    AUIPC     = 7'b0010111
+    AUIPC     = 7'b0010111,
+    SYSTEM    = 7'b1110011
   } opcode;
+
+  typedef enum logic [2:0] {
+    CSRRW = 3'b001
+  } csr_op_t;
 
   typedef struct packed {
     logic is_mul;
@@ -58,7 +67,9 @@ package params_pkg;
       BRANCH    : opcode_to_string = "BRANCH";
       JAL       : opcode_to_string = "JAL";
       IMMEDIATE : opcode_to_string = "IMMEDIATE";
+      LUI       : opcode_to_string = "LUI";
       AUIPC     : opcode_to_string = "AUIPC";
+      SYSTEM    : opcode_to_string = "SYSTEM";
       default   : opcode_to_string = "???";
     endcase
   endfunction
