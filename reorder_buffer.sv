@@ -1,19 +1,23 @@
 module reorder_buffer import params_pkg::*; #(
-  parameter int REGISTER_WIDTH  = 32,
-  parameter int ROB_ENTRIES     = 4,
-  parameter int ROB_ENTRY_WIDTH = 2,
-  parameter int ADDR_WIDTH      = 32,
-  parameter int DATA_WIDTH      = 32
+  parameter int REGISTER_WIDTH  = params_pkg::REGISTER_WIDTH,
+  parameter int ROB_ENTRIES     = params_pkg::ROB_ENTRIES,
+  parameter int ROB_ENTRY_WIDTH = params_pkg::ROB_ENTRY_WIDTH,
+  parameter int CSR_ADDR_WIDTH  = params_pkg::CSR_ADDR_WIDTH,
+  parameter int ADDR_WIDTH      = params_pkg::ADDR_WIDTH,
+  parameter int DATA_WIDTH      = params_pkg::DATA_WIDTH
 )(
   input  logic clk_i,
   input  logic rst_i,
   input  logic new_instr_valid_i,
   input  logic new_instr_is_wb_i,
+  input  logic new_instr_is_csr_wb_i,
   input  logic instr_complete_valid_i,
   input  logic instr_excp_valid_i,
   input  logic [REGISTER_WIDTH-1:0] new_instr_reg_id_i,
+  input  logic [CSR_ADDR_WIDTH-1:0] new_instr_csr_addr_i,
   input  logic [ROB_ENTRY_WIDTH-1:0] instr_complete_idx_i,
   input  logic [ADDR_WIDTH-1:0] new_instr_pc_i,
+  input  logic [DATA_WIDTH-1:0] new_instr_csr_data_i,
   input  logic [DATA_WIDTH-1:0] instr_complete_data_i,
 `ifndef SYNTHESIS
   input  var instruction_t new_instr_i,
@@ -21,9 +25,12 @@ module reorder_buffer import params_pkg::*; #(
   output logic full_o,
   output logic instr_commit_valid_o,
   output logic instr_commit_is_wb_o,
+  output logic instr_commit_is_csr_wb_o,
   output logic [REGISTER_WIDTH-1:0] instr_commit_reg_id_o,
+  output logic [CSR_ADDR_WIDTH-1:0] instr_commit_csr_addr_o,
   output logic [ROB_ENTRY_WIDTH-1:0] new_instr_idx_o,
-  output logic [DATA_WIDTH-1:0] instr_commit_data_o
+  output logic [DATA_WIDTH-1:0] instr_commit_data_o,
+  output logic [DATA_WIDTH-1:0] instr_commit_csr_data_o
 `ifndef SYNTHESIS
   , output logic [ADDR_WIDTH-1:0] instr_commit_pc_o,
   output var instruction_t instr_commit_o
@@ -32,8 +39,11 @@ module reorder_buffer import params_pkg::*; #(
 
   typedef struct packed {
     logic [DATA_WIDTH-1:0] data;
+    logic [DATA_WIDTH-1:0] csr_data;
     logic [REGISTER_WIDTH-1:0] reg_id;
+    logic [CSR_ADDR_WIDTH-1:0] csr_addr;
     logic wb;
+    logic csr_wb;
     logic excp;
     logic valid;
     logic [ADDR_WIDTH-1:0] pc;
@@ -50,25 +60,24 @@ module reorder_buffer import params_pkg::*; #(
   logic [ROB_ENTRY_WIDTH-1:0] tail_d, tail_q;
 
   always_comb begin : rob_update
-    rob_d                 = rob_q;
-    head_d                = head_q;
-    tail_d                = tail_q;
-    new_instr_idx_o       = '0;
-    instr_commit_valid_o  = 1'b0;
-    instr_commit_is_wb_o  = 1'b0;
-    instr_commit_reg_id_o = '0;
-    instr_commit_data_o   = '0;
-`ifndef SYNTHESIS
-    instr_commit_pc_o     = '0;
-    instr_commit_o        = '{default:0};
-`endif
+    rob_d                    = rob_q;
+    head_d                   = head_q;
+    tail_d                   = tail_q;
+    instr_commit_valid_o     = 1'b0;
+    instr_commit_is_wb_o     = 1'b0;
+    instr_commit_is_csr_wb_o = 1'b0;
+    instr_commit_csr_addr_o  = '0;
+    instr_commit_csr_data_o  = '0;
 
     if (new_instr_valid_i) begin
-      rob_d[tail_q].valid  = 1'b0;
-      rob_d[tail_q].excp   = 1'b0;
-      rob_d[tail_q].wb     = new_instr_is_wb_i;
-      rob_d[tail_q].pc     = new_instr_pc_i;
-      rob_d[tail_q].reg_id = new_instr_reg_id_i;
+      rob_d[tail_q].valid    = 1'b0;
+      rob_d[tail_q].excp     = 1'b0;
+      rob_d[tail_q].wb       = new_instr_is_wb_i;
+      rob_d[tail_q].csr_wb   = new_instr_is_csr_wb_i;
+      rob_d[tail_q].pc       = new_instr_pc_i;
+      rob_d[tail_q].reg_id   = new_instr_reg_id_i;
+      rob_d[tail_q].csr_addr = new_instr_csr_addr_i;
+      rob_d[tail_q].csr_data = new_instr_csr_data_i;
 `ifndef SYNTHESIS
       rob_d[tail_q].instr  = new_instr_i;
 `endif
@@ -83,10 +92,13 @@ module reorder_buffer import params_pkg::*; #(
     end
 
     if (rob_q[head_q].valid) begin
-      instr_commit_valid_o  = 1'b1;
-      instr_commit_is_wb_o  = rob_q[head_q].wb;
-      instr_commit_reg_id_o = rob_q[head_q].reg_id;
-      instr_commit_data_o   = rob_q[head_q].data;
+      instr_commit_valid_o     = 1'b1;
+      instr_commit_is_wb_o     = rob_q[head_q].wb;
+      instr_commit_is_csr_wb_o = rob_q[head_q].csr_wb;
+      instr_commit_reg_id_o    = rob_q[head_q].reg_id;
+      instr_commit_csr_addr_o  = rob_q[head_q].csr_addr;
+      instr_commit_data_o      = rob_q[head_q].data;
+      instr_commit_csr_data_o  = rob_q[head_q].csr_data;
 `ifndef SYNTHESIS
       instr_commit_pc_o     = rob_q[head_q].pc;
       instr_commit_o        = rob_q[head_q].instr;

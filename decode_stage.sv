@@ -3,6 +3,7 @@ import params_pkg::*;
 module decode_stage #(
   parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
+  parameter int CSR_ADDR_WIDTH = params_pkg::CSR_ADDR_WIDTH,
   parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH
@@ -37,15 +38,19 @@ module decode_stage #(
   output logic alu_valid_o,
   output logic ex_valid_o,
   output logic instr_is_wb_o,
+  output logic instr_is_csr_wb_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
+  output logic [CSR_ADDR_WIDTH-1:0] csr_addr_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
   output var   hazard_ctrl_t hazard_signals_o
 );
 
   logic valid_instruction;
+
+  csr_op_t csr_op;
 
   always_comb begin : decode_instruction
     hazard_signals_o.rs1             = instruction_i.rs1;
@@ -55,6 +60,7 @@ module decode_stage #(
     hazard_signals_o.is_mul          = 1'b0;
 
     instr_is_wb_o                    = 1'b0;
+    instr_is_csr_wb_o                = 1'b0;
 
     case (instruction_i.opcode)
       R: begin
@@ -86,7 +92,17 @@ module decode_stage #(
       LUI, AUIPC: begin
         instr_is_wb_o                    = 1'b1;
       end
-      default;
+      SYSTEM: begin
+        case (csr_op)
+          CSRRW: begin
+            hazard_signals_o.rs1_needed  = 1'b1;
+            instr_is_wb_o                = 1'b1;
+            instr_is_csr_wb_o            = 1'b1;
+          end
+          default:;
+        endcase
+      end
+      default:;
     endcase
   end
 
@@ -169,8 +185,11 @@ module decode_stage #(
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
 
+  assign csr_op = csr_op_t'(instruction_i.funct3);
+
   assign alu_valid_o          = ~hazard_signals_o.is_mul & valid_instruction;
   assign ex_valid_o           = hazard_signals_o.is_mul & valid_instruction;
   assign wr_reg_o             = instruction_i.rd;
+  assign csr_addr_o           = instruction_i[31:20];
 
 endmodule : decode_stage

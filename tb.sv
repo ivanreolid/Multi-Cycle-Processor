@@ -23,10 +23,17 @@ module tb;
   logic [DATA_WIDTH-1:0] model_regs [32];
   logic [7:0] model_mem [MEM_SIZE];
 
+  // CPU CSRs
+  logic [DATA_WIDTH-1:0] cpu_satp;
+
+  // Model CSRs
+  logic [DATA_WIDTH-1:0] model_satp;
+
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
   logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
+  csr_op_t csr_op;
   logic [SHAMT_WIDTH-1:0] shamt;
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -54,6 +61,7 @@ module tb;
     .wr_data_o                      (wr_data),
     .req_access_size_o              (req_access_size),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
+    .debug_satp_o                   (cpu_satp),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
     .debug_instr_o                  (cpu_wb_instr),
@@ -180,6 +188,12 @@ module tb;
         error = 1'b1;
       end
     end
+
+    // CSRs check
+    if (model_satp != cpu_satp) begin
+      error_msg = {error_msg, $sformatf("SATP: model=0x%0h, CPU=0x%0h\n", model_satp, cpu_satp)};
+      error = 1'b1;
+    end
   endtask
 
   task execute_model_instr();
@@ -268,6 +282,21 @@ module tb;
       AUIPC: begin
         offset_sign_extend = {model_instr[31:12], 12'b0};
         model_regs[model_instr.rd] = model_pc + offset_sign_extend;
+      end
+      SYSTEM: begin
+        csr_op = csr_op_t'(model_instr.funct3);
+        case (csr_op)
+          CSRRW: begin
+            case (model_instr[31:20])
+              CSR_SATP: begin
+                model_regs[model_instr.rd] = model_satp;
+                model_satp = model_regs[model_instr.rs1];
+              end
+              default :;
+            endcase
+          end
+          default :;
+        endcase
       end
     endcase
     model_regs[0] = '0;

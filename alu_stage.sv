@@ -110,6 +110,11 @@ module alu_stage #(
         alu_data_a       = pc_i;
         alu_data_b       = offset_sign_extend_i;
       end
+      SYSTEM: begin
+        is_instr_wbalu_o = valid_i;
+        instr_finishes_o = valid_i;
+        alu_data_b       = offset_sign_extend_i; // 0
+      end
     endcase
   end
 
