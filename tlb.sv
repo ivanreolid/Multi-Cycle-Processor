@@ -29,15 +29,21 @@ module tlb import params_pkg::*; #(
     if (!rst_i) begin
       tlb             <= '{default: 0};
       replacement_ptr <= '0;
-    end else if (wr_en_i) begin
-      tlb[replacement_ptr].valid <= 1'b1;
-      tlb[replacement_ptr].vpn   <= vpn_i;
-      tlb[replacement_ptr].ppn   <= ppn_i;
+    end else begin
+      if (flush_i) begin
+        for (int i = 0; i < TLB_DEPTH; i++) begin
+          tlb[i].valid <= 1'b0;
+        end
+      end else if (wr_en_i) begin
+        tlb[replacement_ptr].valid <= 1'b1;
+        tlb[replacement_ptr].vpn   <= vpn_i;
+        tlb[replacement_ptr].ppn   <= ppn_i;
 
-      if (replacement_ptr == TLB_DEPTH - 1) begin
-        replacement_ptr <= '0;
-      end else begin
-        replacement_ptr <= replacement_ptr + 1'b1;
+        if (replacement_ptr == TLB_DEPTH - 1) begin
+          replacement_ptr <= '0;
+        end else begin
+          replacement_ptr <= replacement_ptr + 1'b1;
+        end
       end
     end
   end
