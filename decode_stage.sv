@@ -10,6 +10,7 @@ module decode_stage #(
   input  logic valid_i,
   input  logic is_jump_i,
   input  logic branch_taken_i,
+  input  logic alu_stage_is_wb_i,
   input  logic mem_stage_valid_i,
   input  logic wb_reg_wr_en_i,
   input  logic mem_stage_reg_wr_en_i,
@@ -18,6 +19,7 @@ module decode_stage #(
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
   input  logic ex5_valid_i,
+  input  logic [REGISTER_WIDTH-1:0] alu_stage_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] mem_stage_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
@@ -27,6 +29,7 @@ module decode_stage #(
   input  logic [REGISTER_WIDTH-1:0] ex5_wr_reg_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] alu_stage_result_i,
   input  logic [DATA_WIDTH-1:0] mem_stage_result_i,
   input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
@@ -112,12 +115,19 @@ module decode_stage #(
   end
 
   always_comb begin : bypass_computation
+    logic is_bypass_alu_rs1;
+    logic is_bypass_alu_rs2;
     logic is_bypass_wb_rs1;
     logic is_bypass_wb_rs2;
     logic is_bypass_mem_rs1;
     logic is_bypass_mem_rs2;
     logic is_bypass_ex5_rs1;
     logic is_bypass_ex5_rs2;
+
+    is_bypass_alu_rs1 = hazard_signals_o.rs1_needed && alu_stage_is_wb_i &&
+                        (instruction_i.rs1 == alu_stage_wr_reg_i);
+    is_bypass_alu_rs2 = hazard_signals_o.rs2_needed && alu_stage_is_wb_i &&
+                        (instruction_i.rs2 == alu_stage_wr_reg_i);
 
     is_bypass_mem_rs1 = hazard_signals_o.rs1_needed && mem_stage_valid_i &&
                         mem_stage_reg_wr_en_i && (instruction_i.rs1 == mem_stage_wr_reg_i);
@@ -136,7 +146,9 @@ module decode_stage #(
     alu_rs1_data_o = rs1_data_i;
     alu_rs2_data_o = rs2_data_i;
 
-    if (is_bypass_mem_rs1) begin
+    if (is_bypass_alu_rs1) begin
+      alu_rs1_data_o = alu_stage_result_i;
+    end else if (is_bypass_mem_rs1) begin
       alu_rs1_data_o = mem_stage_result_i;
     end else if (is_bypass_ex5_rs1) begin
       alu_rs1_data_o = ex5_result_i;
@@ -144,7 +156,9 @@ module decode_stage #(
       alu_rs1_data_o = wb_data_to_reg_i;
     end
 
-    if (is_bypass_mem_rs2) begin
+    if (is_bypass_alu_rs2) begin
+      alu_rs2_data_o = alu_stage_result_i;
+    end else if (is_bypass_mem_rs2) begin
       alu_rs2_data_o = mem_stage_result_i;
     end else if (is_bypass_ex5_rs2) begin
       alu_rs2_data_o = ex5_result_i;
