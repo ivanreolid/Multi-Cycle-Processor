@@ -10,6 +10,9 @@ package params_pkg;
   parameter int DATA_WIDTH       = 32;
   parameter int MEM_SIZE         = 200000;
 
+  parameter int ROB_ENTRIES      = `ROB_ENTRIES_MACRO;
+  parameter int ROB_ENTRY_WIDTH  = $clog2(ROB_ENTRIES);
+
   parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
@@ -21,14 +24,12 @@ package params_pkg;
     BRANCH    = 7'b1100011,
     JAL       = 7'b1101111,
     IMMEDIATE = 7'b0010011,
+    LUI       = 7'b0110111,
     AUIPC     = 7'b0010111
   } opcode;
 
   typedef struct packed {
     logic is_mul;
-    logic is_instr_wb_alu;
-    logic is_instr_mem;
-    logic is_branch;
     logic rs1_needed;
     logic rs2_needed;
     logic [4:0] rs1;

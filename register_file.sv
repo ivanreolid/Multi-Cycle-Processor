@@ -1,6 +1,6 @@
 import params_pkg::*;
 
-module rbank #(
+module register_file #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH
 )(
@@ -27,7 +27,7 @@ module rbank #(
       for (int i = 0; i < BANK_SIZE; ++i) begin
         regs[i] <= '0;
       end
-    end else if (wr_en_i) begin
+    end else if (wr_en_i && (wr_reg_i != 5'd0)) begin
       regs[wr_reg_i] <= wr_data_i;
     end
   end
