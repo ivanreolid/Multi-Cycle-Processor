@@ -12,6 +12,7 @@ module fetch_stage import params_pkg::*; #(
 )(
   input  logic clk_i,
   input  logic rst_i,
+  input  logic vm_en_i,
   input  logic mem_req_i,
   input  logic flush_i,
   input  logic alu_branch_taken_i,
@@ -144,15 +145,19 @@ module fetch_stage import params_pkg::*; #(
           state_d = MEM_REQ;
         end
         MEM_REQ: begin
-          if (itlb_hit) begin
-            paddr = {itlb_ppn, pc[11:0]};
-          end else begin
-            iptw_req = 1'b1;
+          if (vm_en_i) begin
+            if (itlb_hit) begin
+              paddr = {itlb_ppn, pc[11:0]};
+            end else begin
+              iptw_req = 1'b1;
 
-            if (iptw_valid) begin
-              paddr      = iptw_paddr;
-              itlb_wr_en = 1'b1;
+              if (iptw_valid) begin
+                paddr      = iptw_paddr;
+                itlb_wr_en = 1'b1;
+              end
             end
+          end else begin
+            paddr = pc[19:0];
           end
 
           cache_req   = 1'b1;

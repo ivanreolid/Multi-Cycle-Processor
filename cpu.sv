@@ -181,6 +181,9 @@ logic mem_req,mem_we;
 logic [PADDR_WIDTH-1:0] mem_addr;
 logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
+  logic vm_en;
+  logic vm_wr_en;
+
 mem_arbiter #(
   .ADDR_WIDTH   (ADDR_WIDTH),
   .PADDR_WIDTH  (PADDR_WIDTH),
@@ -259,6 +262,7 @@ mem_arbiter #(
   fetch_stage fetch_stage (
     .clk_i               (clk_i),
     .rst_i               (rst_i),
+    .vm_en_i             (vm_en),
     .mem_req_i           (dcache_req),
     .flush_i             (flush),
     .alu_branch_taken_i  (alu_branch_taken),
@@ -598,6 +602,7 @@ mem_arbiter #(
 
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
+      vm_en               <= 1'b0;
       dec_valid_q         <= 1'b0;
       is_jump             <= 1'b0;
       alu_branch_taken    <= 1'b0;
@@ -609,6 +614,9 @@ mem_arbiter #(
       ex4_valid_q         <= 1'b0;
       ex5_valid_q         <= 1'b0;
     end else begin
+      if (vm_wr_en) begin
+        vm_en             <= 1'b1;
+      end
 
       // Fetch -> Decode flops
       if (flush || alu_branch_taken || is_jump) begin
@@ -715,5 +723,8 @@ mem_arbiter #(
   assign req_is_instr_o = (icache_gnt);
   assign req_address_o  = mem_addr;
   assign wr_data_o      = mem_wdata;
+
+  assign vm_wr_en = rob_instr_commit_valid & rob_instr_commit_is_csr_wb &
+                    rob_instr_commit_csr_addr == CSR_SATP;
 
 endmodule
