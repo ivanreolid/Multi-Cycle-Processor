@@ -44,7 +44,8 @@ module fetch_stage import params_pkg::*; #(
     IDLE     = 3'b000,
     MEM_REQ  = 3'b001,
     MEM_WAIT = 3'b010,
-    STALL    = 3'b100
+    STALL    = 3'b100,
+    FLUSH    = 3'b101
   } state_t;
 
   state_t state, state_d;
@@ -133,8 +134,9 @@ module fetch_stage import params_pkg::*; #(
     req_access_size_o = WORD;
 
     if (flush_i) begin
-      pc_d    = (last_committed_pc_i + 4) % MEM_SIZE;
-      state_d = MEM_REQ;
+      buffer_wr_en = 1'b1;
+      pc_d         = (last_committed_pc_i + 4) % MEM_SIZE;
+      state_d      = state == MEM_WAIT ? FLUSH : MEM_REQ;
     end else if (alu_branch_taken_i || is_jump_i) begin
       cache_state_reset = 1'b1;
       pc_d              = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
@@ -193,7 +195,12 @@ module fetch_stage import params_pkg::*; #(
             end
           end
         end
-
+        FLUSH: begin
+          if (cache_rvalid) begin
+            pc_d    = pc_buffer;
+            state_d = MEM_REQ;
+          end
+        end
         STALL: begin
           dec_valid_o = 1'b1;
           dec_instr_o = instr_buffer;
