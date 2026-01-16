@@ -16,6 +16,7 @@ module tb;
   access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
+  logic [PADDR_WIDTH-1:0] model_pa_pc;
 
   logic [DATA_WIDTH-1:0] cpu_regs [32];
   logic [7:0] cpu_mem [MEM_SIZE];
@@ -28,6 +29,8 @@ module tb;
 
   // Model CSRs
   logic [DATA_WIDTH-1:0] model_satp;
+
+  logic vm_en;
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
@@ -113,6 +116,7 @@ module tb;
 
   initial begin
     rst = 0;
+    vm_en = 0;
     instructions_executed = 0;
 
     initialize_registers();
@@ -145,8 +149,9 @@ module tb;
   endfunction
 
   task automatic execute_and_compare();
-    model_instr = { model_mem[model_pc + 3], model_mem[model_pc + 2], model_mem[model_pc + 1],
-                    model_mem[model_pc] };
+    model_pa_pc = vm_en ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
+    model_instr = { model_mem[model_pa_pc + 3], model_mem[model_pa_pc + 2],
+                    model_mem[model_pa_pc + 1], model_mem[model_pa_pc] };
     new_model_pc = (model_pc + 4) % MEM_SIZE;
     error_msg = "";
     error = 1'b0;
@@ -291,6 +296,7 @@ module tb;
               CSR_SATP: begin
                 model_regs[model_instr.rd] = model_satp;
                 model_satp = model_regs[model_instr.rs1];
+                vm_en = 1'b1;
               end
               default :;
             endcase
