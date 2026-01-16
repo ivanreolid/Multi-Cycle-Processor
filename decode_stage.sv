@@ -140,24 +140,32 @@ module decode_stage #(
     logic is_bypass_ex5_rs1;
     logic is_bypass_ex5_rs2;
 
-    is_bypass_alu_rs1 = hazard_signals_o.rs1_needed && alu_stage_is_wb_i &&
-                        (instruction_i.rs1 == alu_stage_wr_reg_i);
-    is_bypass_alu_rs2 = hazard_signals_o.rs2_needed && alu_stage_is_wb_i &&
-                        (instruction_i.rs2 == alu_stage_wr_reg_i);
+    logic alu_dst_nz, mem_dst_nz, ex5_dst_nz, wb_dst_nz;
 
-    is_bypass_mem_rs1 = hazard_signals_o.rs1_needed && mem_stage_valid_i &&
+    alu_dst_nz = (alu_stage_wr_reg_i != '0);
+    mem_dst_nz = (mem_stage_wr_reg_i != '0);
+    ex5_dst_nz = (ex5_wr_reg_i != '0);
+    wb_dst_nz  = (wb_wr_reg_i != '0);
+
+    is_bypass_alu_rs1 = hazard_signals_o.rs1_needed && alu_stage_is_wb_i &&
+                        alu_dst_nz && (instruction_i.rs1 == alu_stage_wr_reg_i);
+    is_bypass_alu_rs2 = hazard_signals_o.rs2_needed && alu_stage_is_wb_i &&
+                        alu_dst_nz && (instruction_i.rs2 == alu_stage_wr_reg_i);
+
+    is_bypass_mem_rs1 = hazard_signals_o.rs1_needed && mem_stage_valid_i && mem_dst_nz &&
                         mem_stage_reg_wr_en_i && (instruction_i.rs1 == mem_stage_wr_reg_i);
-    is_bypass_mem_rs2 = hazard_signals_o.rs2_needed && mem_stage_valid_i &&
-                        (mem_stage_reg_wr_en_i && instruction_i.rs2 == mem_stage_wr_reg_i);
+    is_bypass_mem_rs2 = hazard_signals_o.rs2_needed && mem_stage_valid_i && mem_dst_nz &&
+                        mem_stage_reg_wr_en_i && (instruction_i.rs2 == mem_stage_wr_reg_i);
 
     is_bypass_ex5_rs1 = hazard_signals_o.rs1_needed && ex5_valid_i    &&
-                        (instruction_i.rs1 == ex5_wr_reg_i);
+                        ex5_dst_nz && (instruction_i.rs1 == ex5_wr_reg_i);
     is_bypass_ex5_rs2 = hazard_signals_o.rs2_needed && ex5_valid_i    &&
-                        (instruction_i.rs2 == ex5_wr_reg_i);
+                        ex5_dst_nz && (instruction_i.rs2 == ex5_wr_reg_i);
+
     is_bypass_wb_rs1  = hazard_signals_o.rs1_needed && wb_reg_wr_en_i &&
-                        (instruction_i.rs1 == wb_wr_reg_i);
+                        wb_dst_nz && (instruction_i.rs1 == wb_wr_reg_i);
     is_bypass_wb_rs2  = hazard_signals_o.rs2_needed && wb_reg_wr_en_i &&
-                        (instruction_i.rs2 == wb_wr_reg_i);
+                        wb_dst_nz && (instruction_i.rs2 == wb_wr_reg_i);
 
     alu_rs1_data_o = rs1_data_i;
     alu_rs2_data_o = rs2_data_i;
