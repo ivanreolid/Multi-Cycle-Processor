@@ -592,7 +592,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   ) future_file (
     .clk_i          (clk_i),
     .rst_i          (rst_i),
-    .wr_en_i        (wb_reg_wr_en),
+    .wr_en_i        (wb_reg_wr_en & !flush),
     .rd_reg_a_i     (hazard_signals.rs1),
     .rd_reg_b_i     (hazard_signals.rs2),
     .wr_reg_i       (wb_wr_reg),
