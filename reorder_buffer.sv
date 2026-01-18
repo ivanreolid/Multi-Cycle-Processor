@@ -23,6 +23,8 @@ module reorder_buffer import params_pkg::*; #(
   output logic instr_commit_is_wb_o,
   output logic [REGISTER_WIDTH-1:0] instr_commit_reg_id_o,
   output logic [ROB_ENTRY_WIDTH-1:0] new_instr_idx_o,
+    output logic [ROB_ENTRY_WIDTH-1:0] commit_idx_o,  // try1
+
   output logic [DATA_WIDTH-1:0] instr_commit_data_o
 `ifndef SYNTHESIS
   , output logic [ADDR_WIDTH-1:0] instr_commit_pc_o,
@@ -58,6 +60,7 @@ module reorder_buffer import params_pkg::*; #(
     instr_commit_is_wb_o  = 1'b0;
     instr_commit_reg_id_o = '0;
     instr_commit_data_o   = '0;
+    commit_idx_o = head_q; ///// try
 `ifndef SYNTHESIS
     instr_commit_pc_o     = '0;
     instr_commit_o        = '{default:0};
@@ -87,6 +90,7 @@ module reorder_buffer import params_pkg::*; #(
       instr_commit_is_wb_o  = rob_q[head_q].wb;
       instr_commit_reg_id_o = rob_q[head_q].reg_id;
       instr_commit_data_o   = rob_q[head_q].data;
+      instr_commit_valid_o  = 1'b1; //try
 `ifndef SYNTHESIS
       instr_commit_pc_o     = rob_q[head_q].pc;
       instr_commit_o        = rob_q[head_q].instr;
@@ -111,3 +115,4 @@ module reorder_buffer import params_pkg::*; #(
   assign full_o = ((tail_q + 1) % ROB_ENTRIES) == head_q;
 
 endmodule : reorder_buffer
+

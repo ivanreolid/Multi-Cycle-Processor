@@ -38,6 +38,7 @@ module tb;
   logic finish;
   logic done;
   logic write_done_o;
+  logic mem_finish;
 
   int total_cycles;
   int instructions_executed;
@@ -63,7 +64,9 @@ module tb;
     .debug_instr_o                  (cpu_wb_instr),
     .finish(finish),
     .done(done),
-    .write_done_o(write_done_o)   
+    .write_done_o(write_done_o),
+    .mem_finish(mem_finish)
+ 
   );
 
   mem #(
@@ -83,7 +86,7 @@ module tb;
     .data_is_instr_o                (mem_data_is_instr),
     .data_o                         (mem_data),
     .write_done_o                   (write_done_o),
-    .finish(finish),
+    .finish(mem_finish),
     .debug_mem_o                    (cpu_mem)
   );
 
@@ -109,6 +112,7 @@ module tb;
 
   initial begin
     rst = 0;
+    finish = 0;
     instructions_executed = 0;
 
     initialize_registers();
@@ -129,9 +133,9 @@ module tb;
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       model_mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    //$readmemh("matrix_multiply.mem", model_mem);
+    $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -146,7 +150,7 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 88) begin
+    if (model_pc == 224) begin
       finish = 1;
       wait (done == 1'b1); 
         compare_memories();

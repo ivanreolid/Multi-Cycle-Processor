@@ -4,6 +4,7 @@ module hazard_unit #(
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
 )(
   input  logic rob_is_full_i,
+  input  logic sb_full_i,  // .. store buffer
   input  logic dec_valid_i,
   input  logic alu_valid_i,
   input  logic alu_instr_finishes_i,
@@ -113,6 +114,7 @@ module hazard_unit #(
     stall_reason_ex_raw_hazard    = ex_raw_hazard_rs1 || ex_raw_hazard_rs2;
 
     stall_decode_o = rob_is_full_i ||
+                     sb_full_i || //store buffer
                      stall_reason_ex_backpressure ||
                      stall_reason_alu_backpressure ||
                      stall_reason_alu_raw_hazard ||

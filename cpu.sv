@@ -31,6 +31,7 @@ module cpu #(
   input  logic finish,   // flush request
   output logic done,     // flush completed
   input write_done_o,   //mem finished writing
+  output logic mem_finish,
 `ifndef SYNTHESIS
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -213,10 +214,13 @@ mem_arbiter #(
   .mem_rvalid   (mem_data_valid_i)
   );
 
+logic sb_full;
+
   hazard_unit #(
     .REGISTER_WIDTH     (REGISTER_WIDTH)
   ) hazard_unit (
     .rob_is_full_i      (rob_is_full),
+    .sb_full_i          (sb_full),  // ..
     .dec_valid_i        (dec_valid_q),
     .alu_valid_i        (alu_valid_q),
     .alu_instr_finishes_i (alu_instr_finishes),
@@ -351,19 +355,26 @@ mem_arbiter #(
 `endif
   );
 
+
+logic [ROB_ENTRY_WIDTH-1:0] rob_commit_idx;
+
+
   mem_stage #(
     .MEM_SIZE                   (MEM_SIZE),
     .ADDR_WIDTH                 (ADDR_WIDTH),
     .DATA_WIDTH                 (DATA_WIDTH),
     .REGISTER_WIDTH             (REGISTER_WIDTH),
+    .ROB_ENTRY_WIDTH            (ROB_ENTRY_WIDTH),  // ..
     .CACHE_LINE_BYTES           (CACHE_LINE_BYTES),
     .DCACHE_N_LINES             (DCACHE_N_LINES)
   ) mem_stage (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
+    //.flush_i                    (flush),              // ..
     .alu_result_i               (mem_alu_result_q),
     .rs2_data_i                 (mem_rs2_data_q),
     .wr_reg_i                   (mem_wr_reg_q),
+    .rob_instr_idx_i            (mem_rob_instr_idx_q), // ..
     .mem_line_data_i            (dcache_rdata),
     .mem_rvalid_i               (dcache_rvalid),
     .mem_gnt_i                  (dcache_gnt),
@@ -372,6 +383,9 @@ mem_arbiter #(
     .is_store_i                 (mem_is_store_q),
     .reg_wr_en_i                (mem_reg_wr_en_q),
     .access_size_i              (mem_access_size_q),
+
+    .rob_commit_valid_i         (rob_instr_commit_valid),  // ..
+    .rob_commit_idx_i           (rob_commit_idx),  // ..
 `ifndef SYNTHESIS
     .debug_pc_i                 (debug_mem_pc_q),
     .debug_instr_i              (debug_mem_instr_q),
@@ -381,6 +395,7 @@ mem_arbiter #(
     .rd_req_valid_o             (mem_rd_req),
     .wr_req_valid_o             (mem_wr_req),
     .stall_o                    (mem_stall),
+    .sb_full_o                  (sb_full),                 // ..
     .wb_wr_reg_o                (wb_wr_reg_from_mem),
     .wb_data_from_mem_o         (wb_data_from_mem),
     .mem_req_address_o          (mem_req_addr),
@@ -390,6 +405,7 @@ mem_arbiter #(
     .finish(finish),
     .done(done),
     .write_done_o(write_done_o),
+    .mem_finish(mem_finish),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc_from_mem),
     .debug_wb_instr_o           (debug_wb_instr_from_mem)
@@ -566,6 +582,7 @@ mem_arbiter #(
     .instr_commit_is_wb_o   (rob_instr_commit_is_wb),
     .instr_commit_reg_id_o  (rob_instr_commit_reg_id),
     .new_instr_idx_o        (dec_rob_new_instr_idx),
+    .commit_idx_o           (rob_commit_idx),
     .instr_commit_data_o    (rob_instr_commit_data)
 `ifndef SYNTHESIS
     , .instr_commit_pc_o    (debug_rob_instr_commit_pc),
