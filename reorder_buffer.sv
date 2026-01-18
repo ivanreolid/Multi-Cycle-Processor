@@ -33,6 +33,7 @@ module reorder_buffer import params_pkg::*; #(
   output reg_id_t instr_commit_reg_id_o,
   output csr_addr_t instr_commit_csr_addr_o,
   output rob_idx_t new_instr_idx_o,
+  output rob_idx_t commit_idx_o,
   output data_t excp_pc_o,
   output data_t excp_tval_o,
   output data_t instr_commit_data_o,
@@ -84,6 +85,13 @@ module reorder_buffer import params_pkg::*; #(
     excp_tval_o              = '0;
     instr_commit_csr_addr_o  = '0;
     instr_commit_csr_data_o  = '0;
+    new_instr_idx_o          = '0;
+    instr_commit_reg_id_o    = '0;
+    instr_commit_data_o      = '0;
+    commit_idx_o             = head_q;
+`ifndef SYNTHESIS
+    instr_commit_o           = '{default: 0};
+`endif
 
     if (new_instr_valid_i) begin
       rob_d[tail_q].valid      = 1'b0;
@@ -171,3 +179,4 @@ module reorder_buffer import params_pkg::*; #(
   assign full_o = ((tail_q + 1) % ROB_ENTRIES) == head_q;
 
 endmodule : reorder_buffer
+

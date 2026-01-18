@@ -25,7 +25,7 @@ module fetch_stage import params_pkg::*; #(
 
   // Memory interface (Cache to Memory)
   input  logic instr_valid_i,
-  input  logic [CACHE_LINE_BYTES*8-1:0] instr_line_i,
+  input  cacheline_t instr_line_i,
   output logic present_table_req_o,
   output logic rd_req_valid_o,
   output logic [PPN_WIDTH-1:0] present_table_ppn_o,

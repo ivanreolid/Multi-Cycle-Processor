@@ -49,32 +49,40 @@ module mem import params_pkg::*; #(
   cacheline_t pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
                          pipe5_write_data;
 
-parameter int MAX_WRITE_CYCLES = 4; // Cache line sayısı kadar
-parameter int COUNTER_WIDTH = $clog2(MAX_WRITE_CYCLES);
+  // Write done logic
+  logic finish_reg;
+  logic [4:0] idle_counter;
 
-logic [COUNTER_WIDTH:0] write_cycle_counter;
-logic write_done_pulse;
+  always_ff @(posedge clk_i) begin
+    if (!rst_i) begin
+      finish_reg <= 1'b0;
+      idle_counter <= '0;
+      write_done_o <= 1'b0;
+    end else begin
+      if (finish && !finish_reg) begin
+        finish_reg <= 1'b1;
+        idle_counter <= '0;
+        write_done_o <= 1'b0;
+      end
 
-always_ff @(posedge clk_i) begin
-  if (!rst_i) begin
-    write_cycle_counter <= '0;
-    write_done_pulse <= 1'b0;
-  end else begin
-    write_done_pulse <= 1'b0;
-    
-    if (pipe5_valid && pipe5_is_wr && finish == 1'b1) begin
-      write_cycle_counter <= write_cycle_counter + 1'b1;
-      
-      if (write_cycle_counter == (MAX_WRITE_CYCLES + 2)) begin
-        write_done_pulse <= 1'b1;
-        write_cycle_counter <= '0; // Reset counter
+      if (finish_reg) begin
+        if (wr_req_valid_i || pipe1_is_wr || pipe2_is_wr || pipe3_is_wr || pipe4_is_wr ||
+                              pipe5_is_wr) begin
+          idle_counter <= '0;
+          write_done_o <= 1'b0;
+        end else begin
+          if (idle_counter < 5'd15) begin
+            idle_counter <= idle_counter + 1'b1;
+          end
+
+          if (idle_counter >= 5'd10) begin
+            write_done_o <= 1'b1;
+          end
+        end
       end
     end
   end
-end
 
-assign write_done_o = write_done_pulse;
-  
   always_comb begin : memory_operation
     pipe6_read_data_d = '0;
     if (pipe5_valid && !pipe5_is_wr) begin
@@ -83,8 +91,6 @@ assign write_done_o = write_done_pulse;
       end
     end
   end
-
-
 
   always_ff @(posedge clk_i) begin : pipeline
     if (!rst_i) begin

@@ -53,6 +53,7 @@ module tb;
   logic finish;
   logic done;
   logic write_done_o;
+  logic mem_finish;
 
   int total_cycles;
   int instructions_executed, program_instructions_executed;
@@ -77,7 +78,8 @@ module tb;
     .debug_instr_o                  (cpu_wb_instr),
     .finish                         (finish),
     .done                           (done),
-    .write_done_o                   (write_done_o)
+    .write_done_o                   (write_done_o),
+    .mem_finish                     (mem_finish)
   );
 
   mem #(
@@ -96,7 +98,7 @@ module tb;
     .data_is_instr_o                (mem_data_is_instr),
     .data_o                         (mem_data),
     .write_done_o                   (write_done_o),
-    .finish(finish),
+    .finish(mem_finish),
     .debug_mem_o                    (cpu_mem)
   );
 
@@ -124,6 +126,7 @@ module tb;
 
   initial begin
     rst = 0;
+    finish = 0;
     instructions_executed = 0;
     program_instructions_executed = 0;
 

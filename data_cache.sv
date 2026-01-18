@@ -29,9 +29,10 @@ module data_cache import params_pkg::*; #(
     input  logic                      mem_rvalid, // Memory read valid
     input  cacheline_t                mem_rdata,   // Full line read data
 
-    input  logic finish,   // flush request
-    output logic done,      // flush completed
-    input write_done_o   //mem finished writing
+    input  logic finish,
+    output logic done,
+    output logic mem_finish,
+    input write_done_o
 );
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
@@ -72,7 +73,6 @@ module data_cache import params_pkg::*; #(
 
     pending_req_t pending;
 
-    // Current request address breakdown
     wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
     wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[PADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
@@ -219,6 +219,8 @@ module data_cache import params_pkg::*; #(
     assign cpu_rdata    = load_hit_valid ? load_hit_rdata : cpu_rdata_r;
 
     assign cpu_ready     = load_hit_valid ? 1'b1 : cpu_ready_r;
+    
+    assign mem_finish = (state == S_FLUSH) || (state == S_FLUSH_WB) || (state == S_FLUSH_DONE);
 
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
@@ -253,19 +255,16 @@ module data_cache import params_pkg::*; #(
             cpu_rvalid_r <= 1'b0;
 
             case (state)
-
                 S_IDLE: begin
                     done <= 1'b0;
                     if (finish) begin
                         flush_idx <= '0;
                         cpu_ready_r <= 1'b0;
                         state <= S_FLUSH;
-                    end
-                    else begin
+                    end else begin
                         mem_req_r <= 1'b0;
 
                         if (cpu_req && cpu_ready_r) begin
-
                             if (curr_cache_hit) begin
                                 // HIT
                                 if (cpu_wr) begin
@@ -282,7 +281,6 @@ module data_cache import params_pkg::*; #(
                                 end
                                 cpu_ready_r <= 1'b1;
                                 state <= S_IDLE;
-
                             end else begin
                                 // MISS
                                 pending.valid <= 1'b1;
@@ -298,13 +296,12 @@ module data_cache import params_pkg::*; #(
                                 end
                                 cpu_ready_r <= 1'b0;
                                 if (curr_need_writeback) begin
-                                    // Dirty line 
                                     mem_req_r   <= 1'b1;
                                     mem_we_r    <= 1'b1;
                                     mem_addr_r  <= evicted_addr(curr_index);
                                     mem_wdata_r <= data_array[curr_index];
                                     state <= S_WRITEBACK;
-                                end else begin // line is clean: directly refill
+                                end else begin
                                     mem_req_r  <= 1'b1;
                                     mem_we_r   <= 1'b0;
                                     mem_addr_r <= {cpu_addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
@@ -312,7 +309,6 @@ module data_cache import params_pkg::*; #(
                                 end
                             end
                         end else begin
-                            // No request or not ready
                             cpu_ready_r <= (state == S_IDLE) ? 1'b1 : cpu_ready_r;
                             state <= S_IDLE;
                         end
@@ -320,9 +316,7 @@ module data_cache import params_pkg::*; #(
                 end
 
                 S_WRITEBACK: begin
-                    // keep request until granted
                     if (mem_req_r && !mem_gnt) begin
-                        // keep trying
                         mem_req_r   <= 1'b1;
                         mem_we_r    <= 1'b1;
                         mem_addr_r  <= evicted_addr(pend_index);
@@ -336,14 +330,11 @@ module data_cache import params_pkg::*; #(
                 end
 
                 S_REFILL: begin
-                    // keep requesting refill until granted
                     if (mem_req_r && !mem_gnt) begin
-                        // refill not granted keep trying
                         mem_req_r  <= 1'b1;
                         mem_we_r   <= 1'b0;
                         mem_addr_r <= pend_line_addr;
                     end else if (mem_gnt) begin
-                        // refill granted stop request
                         mem_req_r <= 1'b0;
                     end
 
@@ -373,7 +364,7 @@ module data_cache import params_pkg::*; #(
                         end
                         cpu_ready_r   <= 1'b1;
                         pending.valid <= 1'b0;
-                        state <= S_IDLE; //done
+                        state <= S_IDLE;
                     end else begin
                         cpu_ready_r <= 1'b0;
                         state <= S_REFILL;
@@ -382,20 +373,18 @@ module data_cache import params_pkg::*; #(
 
                 S_FLUSH: begin
                     if (flush_idx == N_LINES) begin
-                        if (write_done_o == 1) begin
+                        if (write_done_o == 1'b1) begin
                             state <= S_FLUSH_DONE;
                             done <= 1'b1;
                         end
                         flush_idx <= flush_idx;
-                    end
-                    else if (valid_array[flush_idx] && dirty_array[flush_idx]) begin
+                    end else if (valid_array[flush_idx] && dirty_array[flush_idx]) begin
                         mem_req_r   <= 1'b1;
                         mem_we_r    <= 1'b1;
                         mem_addr_r  <= evicted_addr(flush_idx);
                         mem_wdata_r <= data_array[flush_idx];
                         state <= S_FLUSH_WB;
-                    end
-                    else begin
+                    end else begin
                         flush_idx <= flush_idx + 1'b1;
                         state <= S_FLUSH;
                     end
@@ -404,8 +393,7 @@ module data_cache import params_pkg::*; #(
                 S_FLUSH_WB: begin
                     if (mem_req_r && !mem_gnt) begin
                         mem_req_r <= 1'b1;
-                    end
-                    else if (mem_gnt) begin
+                    end else if (mem_gnt) begin
                         mem_req_r <= 1'b0;
                         dirty_array[flush_idx] <= 1'b0;
                         valid_array[flush_idx] <= 1'b0;
@@ -413,10 +401,12 @@ module data_cache import params_pkg::*; #(
                         state <= S_FLUSH;
                     end
                 end
+
                 S_FLUSH_DONE: begin
                     done <= 1'b1;
                     cpu_ready_r <= 1'b1;
                 end
+
                 default: begin
                     state <= S_IDLE;
                 end

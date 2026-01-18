@@ -30,6 +30,7 @@ module cpu import params_pkg::*; #(
   input  logic finish,   // flush request
   output logic done,     // flush completed
   input write_done_o,   //mem finished writing
+  output logic mem_finish,
 `ifndef SYNTHESIS
   output logic debug_vm_en_o,
   output logic debug_trap_bypass_mmu_o,
@@ -249,8 +250,11 @@ cacheline_t mem_wdata;
   .mem_rvalid   (mem_data_valid_i)
   );
 
+logic sb_full;
+
   hazard_unit hazard_unit (
     .rob_is_full_i      (rob_is_full),
+    .sb_full_i          (sb_full),
     .dec_valid_i        (dec_valid_q),
     .alu_valid_i        (alu_valid_q),
     .alu_instr_finishes_i (alu_instr_finishes),
@@ -394,6 +398,10 @@ cacheline_t mem_wdata;
 `endif
   );
 
+
+  rob_idx_t rob_commit_idx;
+
+
   mem_stage #(
     .MEM_SIZE                   (MEM_SIZE),
     .ADDR_WIDTH                 (ADDR_WIDTH),
@@ -410,6 +418,7 @@ cacheline_t mem_wdata;
     .alu_result_i               (mem_alu_result_q),
     .rs2_data_i                 (mem_rs2_data_q),
     .wr_reg_i                   (mem_wr_reg_q),
+    .rob_instr_idx_i            (mem_rob_instr_idx_q),
     .mem_line_data_i            (dcache_rdata),
     .mem_rvalid_i               (dcache_rvalid),
     .mem_gnt_i                  (dcache_gnt),
@@ -418,6 +427,9 @@ cacheline_t mem_wdata;
     .is_store_i                 (mem_is_store_q),
     .reg_wr_en_i                (mem_reg_wr_en_q),
     .access_size_i              (mem_access_size_q),
+
+    .rob_commit_valid_i         (rob_instr_commit_valid),
+    .rob_commit_idx_i           (rob_commit_idx),
 `ifndef SYNTHESIS
     .debug_pc_i                 (debug_mem_pc_q),
     .debug_instr_i              (debug_mem_instr_q),
@@ -429,6 +441,7 @@ cacheline_t mem_wdata;
     .rd_req_valid_o             (mem_rd_req),
     .wr_req_valid_o             (mem_wr_req),
     .stall_o                    (mem_stall),
+    .sb_full_o                  (sb_full),
     .wb_wr_reg_o                (wb_wr_reg_from_mem),
     .present_table_ppn_o        (mem_present_table_ppn),
     .wb_data_from_mem_o         (wb_data_from_mem),
@@ -440,6 +453,7 @@ cacheline_t mem_wdata;
     .finish(finish),
     .done(done),
     .write_done_o(write_done_o),
+    .mem_finish(mem_finish),
 `ifndef SYNTHESIS
     .debug_wb_pc_o              (debug_wb_pc_from_mem),
     .debug_wb_instr_o           (debug_wb_instr_from_mem)
@@ -640,6 +654,7 @@ cacheline_t mem_wdata;
     .instr_commit_reg_id_o    (rob_instr_commit_reg_id),
     .instr_commit_csr_addr_o  (rob_instr_commit_csr_addr),
     .new_instr_idx_o          (dec_rob_new_instr_idx),
+    .commit_idx_o             (rob_commit_idx),
     .excp_pc_o                (rob_excp_pc),
     .excp_tval_o              (rob_excp_tval),
     .instr_commit_data_o      (rob_instr_commit_data),
