@@ -27,9 +27,11 @@ module hazard_unit #(
   input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
   input  var   hazard_ctrl_t hazard_signals_i,
-  output logic flush_o,
-  output logic stall_ex_o,
-  output logic stall_mem_o,
+  output logic stall_ex5_o,
+  output logic stall_ex4_o,
+  output logic stall_ex3_o,
+  output logic stall_ex2_o,
+  output logic stall_ex1_o,
   output logic stall_alu_o,
   output logic stall_decode_o,
   output logic stall_fetch_o,
@@ -44,13 +46,9 @@ module hazard_unit #(
   logic ex_raw_hazard_rs1, ex_raw_hazard_rs2;
   logic mem_raw_hazard_rs1, mem_raw_hazard_rs2;
 
-  logic ex_stage_is_busy, ex_stage_is_full;
+  logic ex_stage_is_busy;
 
   assign ex_stage_is_busy = ex1_valid_i || ex2_valid_i || ex3_valid_i || ex4_valid_i || ex5_valid_i;
-  assign ex_stage_is_full = ex1_valid_i && ex2_valid_i && ex3_valid_i && ex4_valid_i && ex5_valid_i;
-
-  assign stall_mem_o = mem_busy_i;
-  assign stall_ex_o  = !ex_allowed_wb_i && ex_stage_is_full;
 
   always_comb begin : decode_raw_hazard
     alu_raw_hazard_rs1 = 1'b0;
@@ -89,12 +87,20 @@ module hazard_unit #(
     end
   end
 
+  always_comb begin : ex_stall
+    stall_ex5_o = !ex_allowed_wb_i && ex5_valid_i;
+    stall_ex4_o = stall_ex5_o && ex4_valid_i;
+    stall_ex3_o = stall_ex4_o && ex3_valid_i;
+    stall_ex2_o = stall_ex3_o && ex2_valid_i;
+    stall_ex1_o = stall_ex2_o && ex1_valid_i;
+  end
+
   always_comb begin : alu_stall
     logic stall_reason_wb_contention;
     logic stall_reason_backpressure;
 
     stall_reason_wb_contention = !alu_allowed_wb_i && alu_instr_finishes_i;
-    stall_reason_backpressure  = stall_mem_o && !alu_instr_finishes_i;
+    stall_reason_backpressure  = mem_busy_i && !alu_instr_finishes_i;
 
     stall_alu_o = alu_valid_i && (stall_reason_backpressure || stall_reason_wb_contention);
   end
@@ -106,7 +112,7 @@ module hazard_unit #(
     logic stall_reason_mem_raw_hazard;
     logic stall_reason_ex_raw_hazard;
 
-    stall_reason_ex_backpressure  = hazard_signals_i.is_mul && stall_ex_o;
+    stall_reason_ex_backpressure  = hazard_signals_i.is_mul && stall_ex1_o;
     stall_reason_alu_backpressure = !hazard_signals_i.is_mul && stall_alu_o;
     stall_reason_alu_raw_hazard   = alu_raw_hazard_rs1 || alu_raw_hazard_rs2;
     stall_reason_mem_raw_hazard   = mem_raw_hazard_rs1 || mem_raw_hazard_rs2;
@@ -119,12 +125,11 @@ module hazard_unit #(
                      stall_reason_mem_raw_hazard ||
                      stall_reason_ex_raw_hazard;
 
-    alu_bubble_o   = stall_decode_o && !stall_reason_alu_backpressure;
     ex_bubble_o    = stall_decode_o && !stall_reason_ex_backpressure;
   end
 
-  assign flush_o = alu_branch_taken_i | alu_is_jump_i;
-
   assign stall_fetch_o = stall_decode_o;
+
+  assign alu_bubble_o = stall_decode_o && !stall_alu_o;
 
 endmodule : hazard_unit

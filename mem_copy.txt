@@ -158,3 +158,348 @@ The program must finish with both vectors equal (each element with value 5)
     mem[90] = 8'h00;
     mem[91] = 8'h00; // add x11, x0, x0 (to have last valid instruction)
 
+
+WITH VIRTUAL MEMORY
+
+    // Boot at PC = 0x1000
+    mem['h1000] = 8'h63;
+    mem['h1001] = 8'h10;
+    mem['h1002] = 8'h10;
+    mem['h1003] = 8'h02; // bne x0, x1, 32 (go to main program)
+
+    mem['h1004] = 8'h37;
+    mem['h1005] = 8'h21;
+    mem['h1006] = 8'h00;
+    mem['h1007] = 8'h00; // li sp, 0x1ff8 (first part: lui x2, 2)
+
+    mem['h1008] = 8'h13;
+    mem['h1009] = 8'h01;
+    mem['h100a] = 8'h81;
+    mem['h100b] = 8'hff; // li sp, 0x1ff8 (second part: addi x2, x2, -8)
+
+    mem['h100c] = 8'h37;
+    mem['h100d] = 8'h22;
+    mem['h100e] = 8'h00;
+    mem['h100f] = 8'h00; // li x4, 0x2000 (lui x4, 2)
+
+    mem['h1010] = 8'h73;
+    mem['h1011] = 8'h10;
+    mem['h1012] = 8'h52;
+    mem['h1013] = 8'h30; // csrrw x0, mtvec, x4
+
+    mem['h1014] = 8'h93;
+    mem['h1015] = 8'h00;
+    mem['h1016] = 8'h10;
+    mem['h1017] = 8'h00; // addi x1, x0, 1 (li x1, 1)
+
+    mem['h1018] = 8'hb7;
+    mem['h1019] = 8'h11;
+    mem['h101a] = 8'h00;
+    mem['h101b] = 8'h00; // li x3, 0x1000
+
+    mem['h101c] = 8'hef;
+    mem['h101d] = 8'h02;
+    mem['h101e] = 8'h10;
+    mem['h101f] = 8'h7e; // jal x5, 4096 (jump to 0x1ffc)
+
+    // Main program
+    mem['h1020] = 8'hb7;
+    mem['h1021] = 8'h30;
+    mem['h1022] = 8'h00;
+    mem['h1023] = 8'h00;  // lui x1, 3
+
+    mem['h1024] = 8'h93;
+    mem['h1025] = 8'h81;
+    mem['h1026] = 8'h00;
+    mem['h1027] = 8'h61; // addi x3, x1, 0x610 (la x2, sum)
+
+    mem['h1028] = 8'h13;
+    mem['h1029] = 8'h02;
+    mem['h102a] = 8'h00;
+    mem['h102b] = 8'h08; // addi x4, x0, 128
+
+    mem['h102c] = 8'h93;
+    mem['h102d] = 8'h02;
+    mem['h102e] = 8'h50;
+    mem['h102f] = 8'h00; // addi x5, x0, 5
+
+    mem['h1030] = 8'h13;
+    mem['h1031] = 8'h03;
+    mem['h1032] = 8'h00;
+    mem['h1033] = 8'h00; // addi x6, x0, x0
+
+    mem['h1034] = 8'h63;
+    mem['h1035] = 8'h44;
+    mem['h1036] = 8'h43;
+    mem['h1037] = 8'h00; // blt x6, x4, 8
+
+    mem['h1038] = 8'h6f;
+    mem['h1039] = 8'h05;
+    mem['h103a] = 8'h80;
+    mem['h103b] = 8'h01; // jal x10, 24
+
+    mem['h103c] = 8'h93;
+    mem['h103d] = 8'h13;
+    mem['h103e] = 8'h23;
+    mem['h103f] = 8'h00; // slli x7, x6, 2
+
+    mem['h1040] = 8'hb3;
+    mem['h1041] = 8'h83;
+    mem['h1042] = 8'h70;
+    mem['h1043] = 8'h00; // add x7, x1, x7
+
+    mem['h1044] = 8'h23;
+    mem['h1045] = 8'ha0;
+    mem['h1046] = 8'h53;
+    mem['h1047] = 8'h00; // sw x5, 0(x7)
+
+    mem['h1048] = 8'h13;
+    mem['h1049] = 8'h03;
+    mem['h104a] = 8'h13;
+    mem['h104b] = 8'h00; // addi x6, x6, 1
+
+    mem['h104c] = 8'h6f;
+    mem['h104d] = 8'hf5;
+    mem['h104e] = 8'h9f;
+    mem['h104f] = 8'hfe; // jal x10, -24
+
+    mem['h1050] = 8'h13;
+    mem['h1051] = 8'h03;
+    mem['h1052] = 8'h00;
+    mem['h1053] = 8'h00; // addi x6, x0, 0
+
+    mem['h1054] = 8'h63;
+    mem['h1055] = 8'h44;
+    mem['h1056] = 8'h43;
+    mem['h1057] = 8'h00; // blt x6, x4, 8
+
+    mem['h1058] = 8'hef;
+    mem['h1059] = 8'h05;
+    mem['h105a] = 8'h00;
+    mem['h105b] = 8'h02; // jal x11, 32
+
+    mem['h105c] = 8'h93;
+    mem['h105d] = 8'h13;
+    mem['h105e] = 8'h23;
+    mem['h105f] = 8'h00; // slli x7, x6, 2
+
+    mem['h1060] = 8'h33;
+    mem['h1061] = 8'h84;
+    mem['h1062] = 8'h70;
+    mem['h1063] = 8'h00; // add x8, x1, x7
+
+    mem['h1064] = 8'hb3;
+    mem['h1065] = 8'h84;
+    mem['h1066] = 8'h71;
+    mem['h1067] = 8'h00; // add x9, x3, x7
+
+    mem['h1068] = 8'h03;
+    mem['h1069] = 8'h25;
+    mem['h106a] = 8'h04;
+    mem['h106b] = 8'h00; // lw x10, 0(x8)
+
+    mem['h106c] = 8'h23;
+    mem['h106d] = 8'ha0;
+    mem['h106e] = 8'ha4;
+    mem['h106f] = 8'h00; // sw x10, 0(x9)
+
+    mem['h1070] = 8'h13;
+    mem['h1071] = 8'h03;
+    mem['h1072] = 8'h13;
+    mem['h1073] = 8'h00; // addi x6, x6, 1
+
+    mem['h1074] = 8'hef;
+    mem['h1075] = 8'hf5;
+    mem['h1076] = 8'h1f;
+    mem['h1077] = 8'hfe; // jal x11, -32
+
+    mem['h1078] = 8'hb3;
+    mem['h1079] = 8'h05;
+    mem['h107a] = 8'h00;
+    mem['h107b] = 8'h00; // add x11, x0, x0 (to have last valid instruction)
+
+    // Last instruction before activating VM
+    mem['h1ffc] = 8'h73;
+    mem['h1ffd] = 8'h90;
+    mem['h1ffe] = 8'h01;
+    mem['h1fff] = 8'h18; // csrrw x0, satp, x3
+
+    // Trap handler
+    mem['h2000] = 8'h13;
+    mem['h2001] = 8'h01;
+    mem['h2002] = 8'h41;
+    mem['h2003] = 8'hfe; // addi sp, sp, -28 (addi x2, x2, -28)
+
+    // Let's save the 7 registers that we need in the handler
+    mem['h2004] = 8'h23;
+    mem['h2005] = 8'h20;
+    mem['h2006] = 8'h11;
+    mem['h2007] = 8'h00; // sw x1, 0(sp)
+
+    mem['h2008] = 8'h23;
+    mem['h2009] = 8'h22;
+    mem['h200a] = 8'h31;
+    mem['h200b] = 8'h00; // sw x3, 4(sp)
+
+    mem['h200c] = 8'h23;
+    mem['h200d] = 8'h24;
+    mem['h200e] = 8'h41;
+    mem['h200f] = 8'h00; // sw x4, 8(sp)
+
+    mem['h2010] = 8'h23;
+    mem['h2011] = 8'h26;
+    mem['h2012] = 8'h51;
+    mem['h2013] = 8'h00; // sw x5, 12(sp)
+
+    mem['h2014] = 8'h23;
+    mem['h2015] = 8'h28;
+    mem['h2016] = 8'h61;
+    mem['h2017] = 8'h00; // sw x6, 16(sp)
+
+    mem['h2018] = 8'h23;
+    mem['h2019] = 8'h2a;
+    mem['h201a] = 8'h71;
+    mem['h201b] = 8'h00; // sw x7, 20(sp)
+
+    mem['h201c] = 8'h23;
+    mem['h201d] = 8'h2c;
+    mem['h201e] = 8'h81;
+    mem['h201f] = 8'h00; // sw x8, 24(sp)
+
+    mem['h2020] = 8'hf3;
+    mem['h2021] = 8'h20;
+    mem['h2022] = 8'h20;
+    mem['h2023] = 8'h34; // csrr x1, mcause (csrrs x1, mcause, x0)
+
+    mem['h2024] = 8'h93;
+    mem['h2025] = 8'h01;
+    mem['h2026] = 8'hc0;
+    mem['h2027] = 8'h00; // li x3, 12 (addi x3, x0, 12)
+
+    mem['h2028] = 8'h63;
+    mem['h2029] = 8'h94;
+    mem['h202a] = 8'h30;
+    mem['h202b] = 8'h04; // bne x1, x3, 0x48 (next to mret)
+
+    mem['h202c] = 8'h73;
+    mem['h202d] = 8'h22;
+    mem['h202e] = 8'h30;
+    mem['h202f] = 8'h34; // csrr x4, mtval (csrrs x4, mtval, x0)
+
+    mem['h2030] = 8'hf3;
+    mem['h2031] = 8'h22;
+    mem['h2032] = 8'h00;
+    mem['h2033] = 8'h18; // csrr x5, satp (csrrs x5, satp, x0)
+
+    mem['h2034] = 8'h33;
+    mem['h2035] = 8'h03;
+    mem['h2036] = 8'h52;
+    mem['h2037] = 8'h00; // add x6, x4, x5
+
+    mem['h2038] = 8'h93;
+    mem['h2039] = 8'h53;
+    mem['h203a] = 8'hc3;
+    mem['h203b] = 8'h00; // srli x7, x6, 12
+
+    mem['h203c] = 8'h93;
+    mem['h203d] = 8'hf3;
+    mem['h203e] = 8'hf3;
+    mem['h203f] = 8'h0f; // andi x7, x7, 0xff
+
+    mem['h2040] = 8'h73;
+    mem['h2041] = 8'h90;
+    mem['h2042] = 8'h03;
+    mem['h2043] = 8'h7c; // csrrw x0, ppn_sel, x7
+
+    mem['h2044] = 8'h13;
+    mem['h2045] = 8'h04;
+    mem['h2046] = 8'h10;
+    mem['h2047] = 8'h00; // li x8, 1 (addi x8, x0, 1)
+
+    mem['h2048] = 8'h73;
+    mem['h2049] = 8'h10;
+    mem['h204a] = 8'h14;
+    mem['h204b] = 8'h7c; // csrrw x0, ppn_flag, x8
+
+    // Let's bring back the 7 registers
+    mem['h204c] = 8'h83;
+    mem['h204d] = 8'h20;
+    mem['h204e] = 8'h01;
+    mem['h204f] = 8'h00; // lw x1, 0(sp)
+
+    mem['h2050] = 8'h83;
+    mem['h2051] = 8'h21;
+    mem['h2052] = 8'h41;
+    mem['h2053] = 8'h00; // lw x3, 4(sp)
+
+    mem['h2054] = 8'h03;
+    mem['h2055] = 8'h22;
+    mem['h2056] = 8'h81;
+    mem['h2057] = 8'h00; // lw x4, 8(sp)
+
+    mem['h2058] = 8'h83;
+    mem['h2059] = 8'h22;
+    mem['h205a] = 8'hc1;
+    mem['h205b] = 8'h00; // lw x5, 12(sp)
+
+    mem['h205c] = 8'h03;
+    mem['h205d] = 8'h23;
+    mem['h205e] = 8'h01;
+    mem['h205f] = 8'h01; // lw x6, 16(sp)
+
+    mem['h2060] = 8'h83;
+    mem['h2061] = 8'h23;
+    mem['h2062] = 8'h41;
+    mem['h2063] = 8'h01; // lw x7, 20(sp)
+
+    mem['h2064] = 8'h03;
+    mem['h2065] = 8'h24;
+    mem['h2066] = 8'h81;
+    mem['h2067] = 8'h01; // lw x8, 24(sp)
+
+    mem['h2068] = 8'h13;
+    mem['h2069] = 8'h01;
+    mem['h206a] = 8'hc1;
+    mem['h206b] = 8'h01; // addi sp, sp, 28
+
+    mem['h206c] = 8'h73;
+    mem['h206d] = 8'h00;
+    mem['h206e] = 8'h20;
+    mem['h206f] = 8'h30; // mret
+
+    mem['h2070] = 8'h93;
+    mem['h2071] = 8'h01;
+    mem['h2072] = 8'hd0;
+    mem['h2073] = 8'h00; // li x3, 13 (addi x3, x0, 13)
+
+    mem['h2074] = 8'h63;
+    mem['h2075] = 8'h94;
+    mem['h2076] = 8'h30;
+    mem['h2077] = 8'h00; // bne x1, x3, 8
+
+    mem['h2078] = 8'hef;
+    mem['h2079] = 8'hf0;
+    mem['h207a] = 8'h5f;
+    mem['h207b] = 8'hfb; // jal x1, -0x4c (go back)
+
+    mem['h207c] = 8'h93;
+    mem['h207d] = 8'h01;
+    mem['h207e] = 8'hf0;
+    mem['h207f] = 8'h00; // li x3, 15 (addi x3, x0, 15)
+
+    mem['h2080] = 8'h63;
+    mem['h2081] = 8'h94;
+    mem['h2082] = 8'h30;
+    mem['h2083] = 8'h00; // bne x1, x3, 8
+
+    mem['h2084] = 8'hef;
+    mem['h2085] = 8'hf0;
+    mem['h2086] = 8'h9f;
+    mem['h2087] = 8'hfa; // jal x1, -0x58 (go back)
+
+    // PA = 0x3000
+    mem['h3000] = 8'h6f;
+    mem['h3001] = 8'he2;
+    mem['h3002] = 8'h0f;
+    mem['h3003] = 8'h80; // jal x4, -0x2000
+

@@ -44,10 +44,11 @@ module alu #(
           3'b000:  result_o = sum_result;
           3'b001:  result_o = a_i << b_i[4:0];           // SLLI
           3'b101:  result_o = funct7_i[5] ? sra_result : srl_result; // SRLI, SRAI
+          3'b111:  result_o = a_i & b_i;
           default: result_o = sum_result;
         endcase
       end
-      LOAD, STORE, JAL, LUI, AUIPC: result_o = sum_result;
+      LOAD, STORE, JAL, LUI, AUIPC, SYSTEM: result_o = sum_result;
       default;
     endcase
   end

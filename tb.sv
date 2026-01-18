@@ -11,11 +11,14 @@ module tb;
   logic mem_data_valid, mem_data_is_instr;
   logic [CACHE_LINE_BYTES*8-1:0] mem_data;
   logic rd_req_valid, wr_req_valid, req_is_instr;
-  logic [ADDR_WIDTH-1:0] req_address;
+  logic [PADDR_WIDTH-1:0] req_address;
   logic [CACHE_LINE_BYTES*8-1:0] wr_data;
   access_size_t req_access_size;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
+  logic [PADDR_WIDTH-1:0] model_pa_pc;
+  logic [PADDR_WIDTH-1:0] model_reg_pa;
+  logic [PADDR_WIDTH-1:0] model_mem_op_pa;
 
   logic [DATA_WIDTH-1:0] cpu_regs [32];
   logic [7:0] cpu_mem [MEM_SIZE];
@@ -23,10 +26,22 @@ module tb;
   logic [DATA_WIDTH-1:0] model_regs [32];
   logic [7:0] model_mem [MEM_SIZE];
 
+  // CPU CSRs
+  logic [DATA_WIDTH-1:0] cpu_satp;
+
+  // Model CSRs
+  logic [DATA_WIDTH-1:0] model_satp;
+
+  // CPU virtual memory
+  logic cpu_vm_en;
+  logic cpu_trap_bypass_mmu;
+  logic cpu_mmu_enable;
+
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
   logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
+  system_funct3_t system_funct3;
   logic [SHAMT_WIDTH-1:0] shamt;
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -40,13 +55,9 @@ module tb;
   logic write_done_o;
 
   int total_cycles;
-  int instructions_executed;
+  int instructions_executed, program_instructions_executed;
 
-  cpu #(
-    .CACHE_LINE_BYTES               (CACHE_LINE_BYTES),
-    .ICACHE_N_LINES                 (ICACHE_N_LINES),
-    .DCACHE_N_LINES                 (DCACHE_N_LINES)
-  ) i_cpu (
+  cpu i_cpu (
     .clk_i                          (clk),
     .rst_i                          (rst),
     .mem_data_valid_i               (mem_data_valid),
@@ -57,18 +68,21 @@ module tb;
     .req_address_o                  (req_address),
     .wr_data_o                      (wr_data),
     .req_access_size_o              (req_access_size),
+    .debug_vm_en_o                  (cpu_vm_en),
+    .debug_trap_bypass_mmu_o        (cpu_trap_bypass_mmu),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
+    .debug_satp_o                   (cpu_satp),
     .debug_regs_o                   (cpu_regs),
     .debug_pc_o                     (cpu_wb_pc),
     .debug_instr_o                  (cpu_wb_instr),
-    .finish(finish),
-    .done(done),
-    .write_done_o(write_done_o)   
+    .finish                         (finish),
+    .done                           (done),
+    .write_done_o                   (write_done_o)
   );
 
   mem #(
     .MEM_SIZE                       (MEM_SIZE),
-    .ADDR_WIDTH                     (ADDR_WIDTH),
+    .ADDR_WIDTH                     (PADDR_WIDTH),
     .DATA_WIDTH                     (CACHE_LINE_BYTES*8)
   ) mem (
     .clk_i                          (clk),
@@ -87,6 +101,8 @@ module tb;
     .debug_mem_o                    (cpu_mem)
   );
 
+  assign cpu_mmu_enable = cpu_vm_en && !cpu_trap_bypass_mmu;
+
   always_ff @(posedge clk) begin : cycles_count
     if (!rst)
       total_cycles <= 0;
@@ -96,7 +112,7 @@ module tb;
 
   always_ff @(posedge clk) begin : check
     if (!rst) begin
-      model_pc <= '0;
+      model_pc <= 4096;
     end else if (cpu_instr_is_completed) begin
         execute_and_compare();
     end
@@ -110,6 +126,7 @@ module tb;
   initial begin
     rst = 0;
     instructions_executed = 0;
+    program_instructions_executed = 0;
 
     initialize_registers();
     initialize_memories();
@@ -129,15 +146,23 @@ module tb;
     for (i = 0; i < MEM_SIZE; i = i + 1) begin
       model_mem[i] = 8'b0;
     end
-    $readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    //$readmemh("matrix_multiply.mem", model_mem);
+    $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
-    model_instr = { model_mem[model_pc + 3], model_mem[model_pc + 2], model_mem[model_pc + 1],
-                    model_mem[model_pc] };
+    model_pa_pc = cpu_mmu_enable ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
+    model_instr = { model_mem[model_pa_pc + 3], model_mem[model_pa_pc + 2],
+                    model_mem[model_pa_pc + 1], model_mem[model_pa_pc] };
     new_model_pc = (model_pc + 4) % MEM_SIZE;
+
+    // Trap handler
+    if (!cpu_mmu_enable && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000)) begin
+      ++instructions_executed;
+      return;
+    end
+
     error_msg = "";
     error = 1'b0;
     execute_model_instr();
@@ -145,14 +170,19 @@ module tb;
     check_registers();
     print_check_result();
     ++instructions_executed;
+    ++program_instructions_executed;
 
-    if (model_pc == 88) begin
+    // buffer_sum='h74, mem_copy='h78, matrix_multiply='h100
+    if (model_pc == 'h100) begin
       finish = 1;
-      wait (done == 1'b1); 
+      wait (done == 1'b1);
         compare_memories();
-        $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
+        $display("Total CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                 real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
                 instructions_executed);
+        $display("Program CPI=%0.3f (total_cycles=%0d, program_instructions_executed=%0d)",
+                real'(total_cycles) / real'(program_instructions_executed - 1), total_cycles,
+                program_instructions_executed);
         $finish;
     end
     model_pc = new_model_pc;
@@ -178,6 +208,12 @@ module tb;
         error = 1'b1;
       end
     end
+
+    // CSRs check
+    if (model_satp != cpu_satp) begin
+      error_msg = {error_msg, $sformatf("SATP: model=0x%0h, CPU=0x%0h\n", model_satp, cpu_satp)};
+      error = 1'b1;
+    end
   endtask
 
   task execute_model_instr();
@@ -195,32 +231,32 @@ module tb;
         end
       end
       LOAD: begin
+        model_reg_pa = cpu_mmu_enable ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                        model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
+        model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin            // LB
-          model_regs[model_instr.rd] = {24'b0, model_mem[offset_sign_extend +
-                                        model_regs[model_instr.rs1]]};
+          model_regs[model_instr.rd] = {24'b0, model_mem[model_mem_op_pa]};
         end else if (model_instr.funct3 == 3'b010) begin  // LW
           model_regs[model_instr.rd] = {
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 3],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 2],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 1],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1])]};
+            model_mem[model_mem_op_pa + 3],
+            model_mem[model_mem_op_pa + 2],
+            model_mem[model_mem_op_pa + 1],
+            model_mem[model_mem_op_pa]};
         end
       end
       STORE: begin
+        model_reg_pa = cpu_mmu_enable ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                        model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:25], model_instr[11:7]};
+        model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin           // SB
-          model_mem[offset_sign_extend + model_regs[model_instr.rs1]] =
-                   model_regs[model_instr.rs2][7:0];
+          model_mem[model_mem_op_pa] = model_regs[model_instr.rs2][7:0];
         end else if (model_instr.funct3 == 3'b010) begin  // SW
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1])]
-                   = model_regs[model_instr.rs2][7:0];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 1]
-                   = model_regs[model_instr.rs2][15:8];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 2]
-                   = model_regs[model_instr.rs2][23:16];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 3]
-                   = model_regs[model_instr.rs2][31:24];
+          model_mem[model_mem_op_pa]     = model_regs[model_instr.rs2][7:0];
+          model_mem[model_mem_op_pa + 1] = model_regs[model_instr.rs2][15:8];
+          model_mem[model_mem_op_pa + 2] = model_regs[model_instr.rs2][23:16];
+          model_mem[model_mem_op_pa + 3] = model_regs[model_instr.rs2][31:24];
         end
       end
       BRANCH: begin
@@ -267,6 +303,21 @@ module tb;
         offset_sign_extend = {model_instr[31:12], 12'b0};
         model_regs[model_instr.rd] = model_pc + offset_sign_extend;
       end
+      SYSTEM: begin
+        system_funct3 = system_funct3_t'(model_instr.funct3);
+        case (system_funct3)
+          CSRRW: begin
+            case (model_instr[31:20])
+              CSR_SATP: begin
+                model_regs[model_instr.rd] = model_satp;
+                model_satp = model_regs[model_instr.rs1];
+              end
+              default :;
+            endcase
+          end
+          default :;
+        endcase
+      end
     endcase
     model_regs[0] = '0;
   endtask
@@ -291,6 +342,11 @@ module tb;
     error_msg = "";
     error = 1'b0;
     for (int i = 0; i < MEM_SIZE; i++) begin
+      // This range are the last 8 words of the program that the trap handler
+      // uses to save the registers
+      if (i >= 'h1fdc && i <= 'h1ff8)
+        continue;
+
       if (model_mem[i] !== cpu_mem[i]) begin
         error = 1'b1;
         error_msg = {error_msg, $sformatf("@0x%0h model=0x%0h, cpu=0x%0h\n", i, model_mem[i],

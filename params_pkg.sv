@@ -5,6 +5,7 @@ package params_pkg;
   parameter int OPCODE_WIDTH     = 4;
   parameter int REGISTER_WIDTH   = 5;
   parameter int SHAMT_WIDTH      = 6;
+  parameter int CSR_ADDR_WIDTH   = 12;
   parameter int INSTR_WIDTH      = 32;
   parameter int ADDR_WIDTH       = 32;
   parameter int DATA_WIDTH       = 32;
@@ -13,9 +14,27 @@ package params_pkg;
   parameter int ROB_ENTRIES      = `ROB_ENTRIES_MACRO;
   parameter int ROB_ENTRY_WIDTH  = $clog2(ROB_ENTRIES);
 
+  parameter int VADDR_WIDTH       = 32;
+  parameter int PADDR_WIDTH       = 20;
+  parameter int PAGE_OFFSET_WIDTH = 12;
+  parameter int VPN_WIDTH         = VADDR_WIDTH - PAGE_OFFSET_WIDTH;
+  parameter int PPN_WIDTH         = PADDR_WIDTH - PAGE_OFFSET_WIDTH;
+
+  parameter int ITLB_DEPTH       = `ITLB_DEPTH_MACRO;
+
   parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
+
+  // CSRS
+  parameter int CSR_SATP   = 12'h180;
+  parameter int CSR_MTVEC  = 12'h305;
+  parameter int CSR_MCAUSE = 12'h342;
+  parameter int CSR_MTVAL  = 12'h343;
+
+  // CSRs custom
+  parameter int CSR_PPN_SEL  = 12'h7c0;
+  parameter int CSR_PPN_FLAG = 12'h7c1;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,
@@ -25,8 +44,21 @@ package params_pkg;
     JAL       = 7'b1101111,
     IMMEDIATE = 7'b0010011,
     LUI       = 7'b0110111,
-    AUIPC     = 7'b0010111
+    AUIPC     = 7'b0010111,
+    SYSTEM    = 7'b1110011
   } opcode;
+
+  typedef enum logic[4:0] {
+    INSTR_PAGE_FAULT = 5'd12,
+    LOAD_PAGE_FAULT  = 5'd13,
+    STORE_PAGE_FAULT = 5'd15
+  } excpt_cause_t;
+
+  typedef enum logic [2:0] {
+    MACHINE = 3'b000,
+    CSRRW   = 3'b001,
+    CSRRS   = 3'b010
+  } system_funct3_t;
 
   typedef struct packed {
     logic is_mul;
@@ -50,7 +82,9 @@ package params_pkg;
       BRANCH    : opcode_to_string = "BRANCH";
       JAL       : opcode_to_string = "JAL";
       IMMEDIATE : opcode_to_string = "IMMEDIATE";
+      LUI       : opcode_to_string = "LUI";
       AUIPC     : opcode_to_string = "AUIPC";
+      SYSTEM    : opcode_to_string = "SYSTEM";
       default   : opcode_to_string = "???";
     endcase
   endfunction
