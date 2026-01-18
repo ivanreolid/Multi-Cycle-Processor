@@ -177,9 +177,14 @@ module cpu import params_pkg::*; #(
 `endif
 
   // Future file wires
+  logic [31:0] ff_valid;
+  logic [DATA_WIDTH-1:0] ff_data_a, ff_data_b;
 `ifndef SYNTHESIS
   logic [DATA_WIDTH-1:0] debug_future_file [32];
 `endif
+
+  // Architectural file wires
+  logic [DATA_WIDTH-1:0] af_data_a, af_data_b;
 
   // Reorder buffer wires
   logic rob_is_full;
@@ -597,8 +602,8 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .rd_reg_b_i     (hazard_signals.rs2),
     .wr_reg_i       (wb_wr_reg),
     .wr_data_i      (wb_data_to_reg),
-    .reg_a_data_o   (dec_rs1_data),
-    .reg_b_data_o   (dec_rs2_data)
+    .reg_a_data_o   (ff_data_a),
+    .reg_b_data_o   (ff_data_b)
 `ifndef SYNTHESIS
     , .debug_regs_o (debug_future_file)
 `endif
@@ -611,12 +616,12 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (rob_instr_commit_valid & rob_instr_commit_is_wb),
-    .rd_reg_a_i   (),
-    .rd_reg_b_i   (),
+    .rd_reg_a_i   (hazard_signals.rs1),
+    .rd_reg_b_i   (hazard_signals.rs2),
     .wr_reg_i     (rob_instr_commit_reg_id),
     .wr_data_i    (rob_instr_commit_is_csr_wb ? rob_instr_commit_csr_data : rob_instr_commit_data),
-    .reg_a_data_o (),
-    .reg_b_data_o (),
+    .reg_a_data_o (af_data_a),
+    .reg_b_data_o (af_data_b),
 `ifndef SYNTHESIS
     .debug_regs_o (debug_regs_o)
 `endif
@@ -680,9 +685,16 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
       ex3_valid_q         <= 1'b0;
       ex4_valid_q         <= 1'b0;
       ex5_valid_q         <= 1'b0;
+      ff_valid            <= '0;
     end else begin
       if (vm_wr_en) begin
         vm_en             <= vm_en_d;
+      end
+
+      if (flush) begin
+        ff_valid <= '0;
+      end else if (wb_reg_wr_en) begin
+        ff_valid[wb_wr_reg] <= 1'b1;
       end
 
       // Fetch -> Decode flops
@@ -787,6 +799,9 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
     rob_new_instr_valid = alu_can_be_issued || ex_can_be_issued;
   end
+
+  assign dec_rs1_data = ff_valid[hazard_signals.rs1] ? ff_data_a : af_data_a;
+  assign dec_rs2_data = ff_valid[hazard_signals.rs2] ? ff_data_b : af_data_b;
 
   assign rd_req_valid_o = mem_req & ~mem_we;
   assign wr_req_valid_o = mem_req &  mem_we;
