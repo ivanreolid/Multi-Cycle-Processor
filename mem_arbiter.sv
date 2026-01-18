@@ -20,7 +20,7 @@ module mem_arbiter import params_pkg::*; #(
   // ======================
   input  logic                  dcache_req,
   input  logic                  dcache_we,
-  input  logic [ADDR_WIDTH-1:0]  dcache_addr,
+  input  logic [PADDR_WIDTH-1:0]  dcache_addr,
   input  logic [DATA_WIDTH-1:0]  dcache_wdata,
   output logic                  dcache_gnt,
   output logic [DATA_WIDTH-1:0]  dcache_rdata,

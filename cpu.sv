@@ -46,7 +46,7 @@ module cpu import params_pkg::*; #(
   logic [CACHE_LINE_BYTES*8-1:0] icache_rdata;
 
   logic dcache_req, dcache_we, dcache_gnt, dcache_rvalid;
-  logic [ADDR_WIDTH-1:0] dcache_addr;
+  logic [PADDR_WIDTH-1:0] dcache_addr;
   logic [CACHE_LINE_BYTES*8-1:0] dcache_wdata, dcache_rdata;
 
   // Fetch stage wires
@@ -119,6 +119,8 @@ module cpu import params_pkg::*; #(
   logic [DATA_WIDTH-1:0] mem_rs2_data_q;
   logic [ROB_ENTRY_WIDTH-1:0] mem_rob_instr_idx_q;
   logic [REGISTER_WIDTH-1:0] mem_wr_reg_q;
+  logic mem_ppn_is_present;
+  logic mem_present_table_req;
   logic mem_reg_wr_en_q;
   logic mem_is_load_q, mem_is_store_q;
   logic mem_valid_q;
@@ -126,7 +128,8 @@ module cpu import params_pkg::*; #(
   logic mem_wb_is_next_cycle;
   access_size_t mem_access_size_q;
   logic mem_rd_req, mem_wr_req;
-  logic [ADDR_WIDTH-1:0] mem_req_addr;
+  logic [PPN_WIDTH-1:0] mem_present_table_ppn;
+  logic [PADDR_WIDTH-1:0] mem_req_addr;
   logic [CACHE_LINE_BYTES*8-1:0] mem_wr_line;
   access_size_t mem_req_access_size;
 `ifndef SYNTHESIS
@@ -155,15 +158,19 @@ module cpu import params_pkg::*; #(
 
   // WB stage wires
   logic wb_valid_from_mem, wb_valid_from_ex;
+  logic wb_excpt_from_mem;
   logic wb_reg_wr_en_from_mem, wb_reg_wr_en_from_ex_q;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem, wb_wr_reg_from_ex;
   logic [REGISTER_WIDTH-1:0] wb_wr_reg;
   logic [DATA_WIDTH-1:0] wb_data_from_mem, wb_data_from_ex;
   logic wb_reg_wr_en;
-  logic mem_is_completed, ex_is_completed, alu_is_completed;
+  logic instr_with_excpt;
+  logic instr_complete;
   logic ex_allowed_wb, alu_allowed_wb;
   logic wb_valid;
   logic [DATA_WIDTH-1:0] wb_data_to_reg;
+  logic [ADDR_WIDTH-1:0] wb_excpt_tval_from_mem, instr_complete_excpt_tval;
+  excpt_cause_t wb_excpt_cause_from_mem, instr_complete_excp_cause;
 `ifndef SYNTHESIS
   logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem, debug_wb_pc_from_ex, debug_wb_pc;
   instruction_t debug_wb_instr_from_mem, debug_wb_instr_from_ex, debug_wb_instr;
@@ -397,6 +404,10 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   ) mem_stage (
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
+    .vm_en_i                    (vm_en),
+    .flush_i                    (flush),
+    .ppn_is_present_i           (mem_ppn_is_present),
+    .satp_data_i                (satp_data),
     .alu_result_i               (mem_alu_result_q),
     .rs2_data_i                 (mem_rs2_data_q),
     .wr_reg_i                   (mem_wr_reg_q),
@@ -412,17 +423,21 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .debug_pc_i                 (debug_mem_pc_q),
     .debug_instr_i              (debug_mem_instr_q),
 `endif
+    .present_table_req_o        (mem_present_table_req),
     .wb_valid_o                 (wb_valid_from_mem),
+    .wb_excpt_o                (wb_excpt_from_mem),
     .wb_reg_wr_en_o             (wb_reg_wr_en_from_mem),
     .rd_req_valid_o             (mem_rd_req),
     .wr_req_valid_o             (mem_wr_req),
     .stall_o                    (mem_stall),
     .wb_wr_reg_o                (wb_wr_reg_from_mem),
+    .present_table_ppn_o        (mem_present_table_ppn),
     .wb_data_from_mem_o         (wb_data_from_mem),
+    .wb_excpt_tval_o            (wb_excpt_tval_from_mem),
     .mem_req_address_o          (mem_req_addr),
     .wr_line_data_o             (mem_wr_line),
     .req_access_size_o          (mem_req_access_size),
-
+    .wb_excpt_cause_o           (wb_excpt_cause_from_mem),
     .finish(finish),
     .done(done),
     .write_done_o(write_done_o),
@@ -507,6 +522,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .alu_ready_i        (alu_instr_finishes),
     .alu_is_instr_wb_i  (alu_is_instr_wbalu),
     .mem_ready_i        (wb_valid_from_mem),
+    .mem_excpt_i        (wb_excpt_from_mem),
     .ex_ready_i         (wb_valid_from_ex),
     .mem_reg_wr_en_i    (wb_reg_wr_en_from_mem),
     .alu_rob_idx_i      (alu_rob_instr_idx_q),
@@ -518,8 +534,10 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .alu_result_i       (alu_data_to_reg),
     .ex_result_i        (wb_data_from_ex),
     .data_from_mem_i    (wb_data_from_mem),
+    .mem_excpt_tval_i   (wb_excpt_tval_from_mem),
+    .mem_excpt_cause_i  (wb_excpt_cause_from_mem)
 `ifndef SYNTHESIS
-    .debug_alu_pc_i     (alu_pc_q),
+    , .debug_alu_pc_i     (alu_pc_q),
     .debug_mem_pc_i     (debug_wb_pc_from_mem),
     .debug_ex_pc_i      (debug_wb_pc_from_ex),
     .debug_alu_instr_i  (debug_mem_instr_d),
@@ -527,40 +545,44 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .debug_ex_instr_i   (debug_wb_instr_from_ex),
 `endif
     .reg_wr_en_o        (wb_reg_wr_en),
-    .mem_is_completed_o (mem_is_completed),
-    .ex_is_completed_o  (ex_is_completed),
-    .alu_is_completed_o (alu_is_completed),
+    .instr_with_excpt_o (instr_with_excpt),
+    .instr_is_completed_o (instr_complete),
     .ex_allowed_wb_o    (ex_allowed_wb),
     .alu_allowed_wb_o   (alu_allowed_wb),
     .rob_idx_o          (rob_instr_complete_idx),
     .wr_reg_o           (wb_wr_reg),
     .data_to_reg_o      (wb_data_to_reg),
+    .instr_excpt_tval_o (instr_complete_excpt_tval),
+    .instr_excpt_cause_o (instr_complete_excp_cause)
 `ifndef SYNTHESIS
-    .debug_pc_o         (debug_wb_pc),
+    , .debug_pc_o         (debug_wb_pc),
     .debug_instr_o      (debug_wb_instr)
 `endif
   );
 
   csr_regfile csr_file (
-    .clk_i            (clk_i),
-    .rst_i            (rst_i),
-    .excpt_we_i       (rob_excp_we),
-    .csr_instr_we_i   (rob_instr_commit_valid & rob_instr_commit_is_csr_wb),
-    .present_req_i    (fetch_present_table_req),
-    .rd_addr_i        (dec_csr_addr),
-    .csr_wraddr_i     (rob_instr_commit_csr_addr),
-    .present_ppn_i    (fetch_present_table_ppn),
-    .csr_wrdata_i     (rob_instr_commit_data),
-    .excpt_mepc_i     (rob_excp_pc),
-    .excpt_mtval_i    (rob_excp_tval),
-    .excpt_mcause_i   (rob_excp_cause),
-    .ppn_is_present_o (fetch_ppn_is_present),
-    .data_o           (dec_csr_data),
-    .satp_o           (satp_data),
-    .mtvec_o          (mtvec_data),
-    .mepc_o           (mepc_data)
+    .clk_i                  (clk_i),
+    .rst_i                  (rst_i),
+    .excpt_we_i             (rob_excp_we),
+    .csr_instr_we_i         (rob_instr_commit_valid & rob_instr_commit_is_csr_wb),
+    .fetch_present_req_i    (fetch_present_table_req),
+    .mem_present_req_i      (mem_present_table_req),
+    .rd_addr_i              (dec_csr_addr),
+    .csr_wraddr_i           (rob_instr_commit_csr_addr),
+    .fetch_present_ppn_i    (fetch_present_table_ppn),
+    .mem_present_ppn_i      (mem_present_table_ppn),
+    .csr_wrdata_i           (rob_instr_commit_data),
+    .excpt_mepc_i           (rob_excp_pc),
+    .excpt_mtval_i          (rob_excp_tval),
+    .excpt_mcause_i         (rob_excp_cause),
+    .fetch_ppn_is_present_o (fetch_ppn_is_present),
+    .mem_ppn_is_present_o   (mem_ppn_is_present),
+    .data_o                 (dec_csr_data),
+    .satp_o                 (satp_data),
+    .mtvec_o                (mtvec_data),
+    .mepc_o                 (mepc_data)
 `ifndef SYNTHESIS
-    , .debug_satp_o (debug_satp_o)
+    , .debug_satp_o         (debug_satp_o)
 `endif
   );
 
@@ -607,16 +629,19 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .new_instr_is_wb_i        (dec_instr_is_wb),
     .new_instr_is_csr_wb_i    (dec_instr_is_csr_wb),
     .new_instr_is_mret_i      (dec_instr_is_mret),
-    .instr_complete_valid_i   (alu_is_completed | mem_is_completed | ex_is_completed),
+    .instr_complete_excpt_i   (instr_with_excpt),
+    .instr_complete_valid_i   (instr_complete),
     .instr_excp_valid_i       (dec_excpt_q),
     .new_instr_reg_id_i       (dec_wr_reg),
     .new_instr_csr_addr_i     (dec_csr_addr),
     .instr_complete_idx_i     (rob_instr_complete_idx),
     .new_instr_pc_i           (dec_pc_q),
     .instr_excp_tval_i        (dec_pc_q),
+    .instr_complete_excpt_tval_i (instr_complete_excpt_tval),
     .new_instr_csr_data_i     (dec_csr_data),
     .instr_complete_data_i    (wb_data_to_reg),
-    .instr_excp_cause_i       (dec_excpt_cause_q)
+    .instr_excp_cause_i       (dec_excpt_cause_q),
+    .instr_complete_excpt_cause_i (instr_complete_excp_cause)
 `ifndef SYNTHESIS
     , .new_instr_i            (dec_instruction_q)
 `endif

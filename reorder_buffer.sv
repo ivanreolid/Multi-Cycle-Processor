@@ -12,6 +12,7 @@ module reorder_buffer import params_pkg::*; #(
   input  logic new_instr_is_wb_i,
   input  logic new_instr_is_csr_wb_i,
   input  logic new_instr_is_mret_i,
+  input  logic instr_complete_excpt_i,
   input  logic instr_complete_valid_i,
   input  logic instr_excp_valid_i,
   input  logic [REGISTER_WIDTH-1:0] new_instr_reg_id_i,
@@ -19,9 +20,11 @@ module reorder_buffer import params_pkg::*; #(
   input  logic [ROB_ENTRY_WIDTH-1:0] instr_complete_idx_i,
   input  logic [ADDR_WIDTH-1:0] new_instr_pc_i,
   input  logic [ADDR_WIDTH-1:0] instr_excp_tval_i,
+  input  logic [ADDR_WIDTH-1:0] instr_complete_excpt_tval_i,
   input  logic [DATA_WIDTH-1:0] new_instr_csr_data_i,
   input  logic [DATA_WIDTH-1:0] instr_complete_data_i,
-  input  var excpt_cause_t instr_excp_cause_i
+  input  var excpt_cause_t instr_excp_cause_i,
+  input  var excpt_cause_t instr_complete_excpt_cause_i
 `ifndef SYNTHESIS
   , input  var instruction_t new_instr_i
 `endif
@@ -108,8 +111,13 @@ module reorder_buffer import params_pkg::*; #(
 
     if (instr_complete_valid_i) begin
       rob_d[instr_complete_idx_i].valid = 1'b1;
-      rob_d[instr_complete_idx_i].excp  = instr_excp_valid_i;
       rob_d[instr_complete_idx_i].data  = instr_complete_data_i;
+    end
+
+    if (instr_complete_excpt_i) begin
+      rob_d[instr_complete_idx_i].excp       = 1'b1;
+      rob_d[instr_complete_idx_i].excp_cause = instr_complete_excpt_cause_i;
+      rob_d[instr_complete_idx_i].excp_tval  = instr_complete_excpt_tval_i;
     end
 
     if (rob_q[head_q].valid) begin

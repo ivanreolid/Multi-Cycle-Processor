@@ -3,15 +3,21 @@
 import params_pkg::*;
 
 module mem_stage #(
+  parameter int PADDR_WIDTH      = params_pkg::PADDR_WIDTH,
   parameter int MEM_SIZE         = params_pkg::MEM_SIZE,
   parameter int ADDR_WIDTH       = params_pkg::ADDR_WIDTH,
   parameter int DATA_WIDTH       = params_pkg::DATA_WIDTH,
+  parameter int PPN_WIDTH        = params_pkg::PPN_WIDTH,
   parameter int REGISTER_WIDTH   = params_pkg::REGISTER_WIDTH,
   parameter int CACHE_LINE_BYTES = 16,
   parameter int DCACHE_N_LINES   = 4
 )(
   input  logic clk_i,
   input  logic rst_i,
+  input  logic vm_en_i,
+  input  logic flush_i,
+  input  logic ppn_is_present_i,
+  input  logic [DATA_WIDTH-1:0] satp_data_i,
   input  logic [DATA_WIDTH-1:0] alu_result_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
   input  logic [REGISTER_WIDTH-1:0] wr_reg_i,
@@ -29,20 +35,24 @@ module mem_stage #(
   input  logic [ADDR_WIDTH-1:0] debug_pc_i,
   input  var instruction_t debug_instr_i,
 `endif
+  output logic present_table_req_o,
   output logic wb_valid_o,
+  output logic wb_excpt_o,
   output logic wb_reg_wr_en_o,
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic stall_o,
   output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
+  output logic [PPN_WIDTH-1:0] present_table_ppn_o,
   output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
-  output logic [ADDR_WIDTH-1:0] mem_req_address_o,
+  output logic [ADDR_WIDTH-1:0] wb_excpt_tval_o,
+  output logic [PADDR_WIDTH-1:0] mem_req_address_o,
   output logic [CACHE_LINE_BYTES*8-1:0] wr_line_data_o,
-  output access_size_t req_access_size_o,
-
-    input  logic finish,   // flush request
-    output logic done,     // flush completed
-    input write_done_o,   //mem finished writing
+  output var access_size_t req_access_size_o,
+  output var excpt_cause_t wb_excpt_cause_o,
+  input  logic finish,   // flush request
+  output logic done,     // flush completed
+  input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
   output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
   output var instruction_t debug_wb_instr_o
@@ -56,6 +66,7 @@ module mem_stage #(
   } state_t;
 
   state_t state, state_d;
+  logic [PADDR_WIDTH-1:0] paddr;
 
   // Cache signals
   logic cache_req;
@@ -67,6 +78,17 @@ module mem_stage #(
   logic [31:0] cache_wdata;
   logic [3:0] cache_wstrb;
   logic [1:0] cache_size;
+
+  // DTLB wires
+  logic dtlb_hit;
+  logic dtlb_wr_en;
+  logic [PPN_WIDTH-1:0] dtlb_ppn;
+
+  // DPTW wires
+  logic dptw_req;
+  logic dptw_valid;
+  logic dptw_error;
+  logic [PADDR_WIDTH-1:0] dptw_paddr;
 
   assign cache_size = (access_size_i == BYTE) ? 2'b00 :
                       (access_size_i == HALF) ? 2'b01 : 2'b10;
@@ -83,6 +105,27 @@ module mem_stage #(
 
   logic mem_req;
 
+  tlb d_tlb (
+    .clk_i     (clk_i),
+    .rst_i     (rst_i),
+    .flush_i   (flush_i),
+    .wr_en_i   (dtlb_wr_en),
+    .vpn_i     (alu_result_i[31:12]),
+    .ppn_i     (dptw_paddr[19:12]),
+    .hit_o     (dtlb_hit),
+    .ppn_o     (dtlb_ppn)
+  );
+
+  ptw d_ptw (
+    .req_i            (dptw_req),
+    .ppn_is_present_i (ppn_is_present_i),
+    .vaddr_i          (alu_result_i),
+    .satp_data_i      (satp_data_i),
+    .valid_o          (dptw_valid),
+    .error_o          (dptw_error),
+    .paddr_o          (dptw_paddr)
+  );
+
   data_cache #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .LINE_BYTES(CACHE_LINE_BYTES),
@@ -92,7 +135,7 @@ module mem_stage #(
     .rstn(rst_i),
     .cpu_req(cache_req),
     .cpu_wr(cache_wr),
-    .cpu_addr(alu_result_i),
+    .cpu_addr(paddr),
     .cpu_wdata(rs2_data_i),
     .cpu_wstrb(cache_wstrb),
     .cpu_size(cache_size),
@@ -111,7 +154,7 @@ module mem_stage #(
 
     .finish(finish),
     .done(done) ,
-    .write_done_o(write_done_o)    
+    .write_done_o(write_done_o)
   );
 
   assign rd_req_valid_o = mem_req && !wr_req_valid_o ;
@@ -136,9 +179,18 @@ module mem_stage #(
     cache_req          = 1'b0;
     cache_wr           = 1'b0;
     wb_valid_o         = 1'b0;
+    wb_excpt_o         = 1'b0;
+    wb_excpt_tval_o    = '0;
+    wb_excpt_cause_o   = '{default: 0};
     wb_reg_wr_en_o     = 1'b0;
     stall_o            = 1'b0;
     state_d            = state;
+
+    dtlb_wr_en          = 1'b0;
+
+    dptw_req            = 1'b0;
+    present_table_req_o = 1'b0;
+    present_table_ppn_o = '0;
 
     case(state)
       IDLE: begin
@@ -146,38 +198,63 @@ module mem_stage #(
       end
       READY: begin
         if (valid_i) begin
-          cache_req         = is_load_i | is_store_i;
-          cache_wr          = is_store_i;
-
-          if (is_load_i) begin
-            if (cache_hit && cache_rvalid) begin
-              wb_valid_o      = 1'b1;
-              wb_reg_wr_en_o  = 1'b1;
-              stall_o         = 1'b0;
-              state_d         = READY;
+          if (vm_en_i) begin
+            if (dtlb_hit) begin
+              paddr = {dtlb_ppn, alu_result_i[11:0]};
             end else begin
-              wb_valid_o      = 1'b0;
-              wb_reg_wr_en_o  = 1'b0;
-              stall_o         = 1'b1;
-              state_d         = WAITING;
+              dptw_req = 1'b1;
+              present_table_req_o = 1'b1;
+              present_table_ppn_o = dptw_paddr[19:12];
+
+              if (dptw_valid) begin
+                paddr      = dptw_paddr;
+                dtlb_wr_en = 1'b1;
+              end
             end
-          end else if (is_store_i) begin
-            if (cache_hit) begin
+          end else begin
+            paddr = alu_result_i[19:0];
+          end
+
+          if (dptw_error) begin
+            wb_valid_o = 1'b1;
+            wb_excpt_o       = 1'b1;
+            wb_excpt_tval_o  = alu_result_i;
+            wb_excpt_cause_o = is_load_i ? LOAD_PAGE_FAULT : STORE_PAGE_FAULT;
+            state_d          = READY;
+          end else begin
+            cache_req         = is_load_i | is_store_i;
+            cache_wr          = is_store_i;
+
+            if (is_load_i) begin
+              if (cache_hit && cache_rvalid) begin
+                wb_valid_o      = 1'b1;
+                wb_reg_wr_en_o  = 1'b1;
+                stall_o         = 1'b0;
+                state_d         = READY;
+              end else begin
+                wb_valid_o      = 1'b0;
+                wb_reg_wr_en_o  = 1'b0;
+                stall_o         = 1'b1;
+                state_d         = WAITING;
+              end
+            end else if (is_store_i) begin
+              if (cache_hit) begin
+                wb_reg_wr_en_o  = reg_wr_en_i;
+                wb_valid_o      = 1'b1;
+                stall_o         = 1'b0;
+                state_d         = READY;
+              end else begin
+                wb_reg_wr_en_o  = 1'b0;
+                wb_valid_o      = 1'b0;
+                stall_o         = 1'b1;
+                state_d         = WAITING;
+              end
+            end else begin
               wb_reg_wr_en_o  = reg_wr_en_i;
               wb_valid_o      = 1'b1;
               stall_o         = 1'b0;
               state_d         = READY;
-            end else begin
-              wb_reg_wr_en_o  = 1'b0;
-              wb_valid_o      = 1'b0;
-              stall_o         = 1'b1;
-              state_d         = WAITING;
             end
-          end else begin
-            wb_reg_wr_en_o  = reg_wr_en_i;
-            wb_valid_o      = 1'b1;
-            stall_o         = 1'b0;
-            state_d         = READY;
           end
         end
       end

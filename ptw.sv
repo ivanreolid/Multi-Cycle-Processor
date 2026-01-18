@@ -9,8 +9,7 @@ module ptw import params_pkg::*; #(
   input  logic [DATA_WIDTH-1:0] satp_data_i,
   output logic valid_o,
   output logic error_o,
-  output logic [PADDR_WIDTH-1:0] paddr_o,
-  excpt_cause_t error_cause_o
+  output logic [PADDR_WIDTH-1:0] paddr_o
 );
 
   logic [VADDR_WIDTH-1:0] sum_result;
@@ -21,12 +20,10 @@ module ptw import params_pkg::*; #(
   always_comb begin : page_walk
     valid_o       = 1'b0;
     error_o       = 1'b0;
-    error_cause_o = '{default: 0};
 
     if (req_i) begin
       if (!ppn_is_present_i) begin
         error_o       = 1'b1;
-        error_cause_o = INSTR_PAGE_FAULT;
       end else begin
         valid_o = 1'b1;
       end

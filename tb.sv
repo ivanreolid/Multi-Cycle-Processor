@@ -17,6 +17,8 @@ module tb;
 
   logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
   logic [PADDR_WIDTH-1:0] model_pa_pc;
+  logic [PADDR_WIDTH-1:0] model_reg_pa;
+  logic [PADDR_WIDTH-1:0] model_mem_op_pa;
 
   logic [DATA_WIDTH-1:0] cpu_regs [32];
   logic [7:0] cpu_mem [MEM_SIZE];
@@ -166,9 +168,9 @@ module tb;
     print_check_result();
     ++instructions_executed;
 
-    if (model_pc == 88) begin
+    if (model_pc == 'h74) begin
       finish = 1;
-      wait (done == 1'b1); 
+      wait (done == 1'b1);
         compare_memories();
         $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                 real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
@@ -221,32 +223,32 @@ module tb;
         end
       end
       LOAD: begin
+        model_reg_pa = cpu_vm_en ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                   model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
+        model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin            // LB
-          model_regs[model_instr.rd] = {24'b0, model_mem[offset_sign_extend +
-                                        model_regs[model_instr.rs1]]};
+          model_regs[model_instr.rd] = {24'b0, model_mem[model_mem_op_pa]};
         end else if (model_instr.funct3 == 3'b010) begin  // LW
           model_regs[model_instr.rd] = {
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 3],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 2],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 1],
-            model_mem[(offset_sign_extend + model_regs[model_instr.rs1])]};
+            model_mem[model_mem_op_pa + 3],
+            model_mem[model_mem_op_pa + 2],
+            model_mem[model_mem_op_pa + 1],
+            model_mem[model_mem_op_pa]};
         end
       end
       STORE: begin
+        model_reg_pa = cpu_vm_en ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                   model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:25], model_instr[11:7]};
+        model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin           // SB
-          model_mem[offset_sign_extend + model_regs[model_instr.rs1]] =
-                   model_regs[model_instr.rs2][7:0];
+          model_mem[model_mem_op_pa] = model_regs[model_instr.rs2][7:0];
         end else if (model_instr.funct3 == 3'b010) begin  // SW
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1])]
-                   = model_regs[model_instr.rs2][7:0];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 1]
-                   = model_regs[model_instr.rs2][15:8];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 2]
-                   = model_regs[model_instr.rs2][23:16];
-          model_mem[(offset_sign_extend + model_regs[model_instr.rs1]) + 3]
-                   = model_regs[model_instr.rs2][31:24];
+          model_mem[model_mem_op_pa]     = model_regs[model_instr.rs2][7:0];
+          model_mem[model_mem_op_pa + 1] = model_regs[model_instr.rs2][15:8];
+          model_mem[model_mem_op_pa + 2] = model_regs[model_instr.rs2][23:16];
+          model_mem[model_mem_op_pa + 3] = model_regs[model_instr.rs2][31:24];
         end
       end
       BRANCH: begin
@@ -332,6 +334,11 @@ module tb;
     error_msg = "";
     error = 1'b0;
     for (int i = 0; i < MEM_SIZE; i++) begin
+      // This range are the last 8 words of the program that the trap handler
+      // uses to save the registers
+      if (i >= 'h1fdc && i <= 'h1ff8)
+        continue;
+
       if (model_mem[i] !== cpu_mem[i]) begin
         error = 1'b1;
         error_msg = {error_msg, $sformatf("@0x%0h model=0x%0h, cpu=0x%0h\n", i, model_mem[i],

@@ -74,7 +74,6 @@ module fetch_stage import params_pkg::*; #(
   logic iptw_valid;
   logic iptw_error;
   logic [PADDR_WIDTH-1:0] iptw_paddr;
-  excpt_cause_t iptw_error_cause;
 
   // Cache signals
   logic cache_state_reset;
@@ -102,7 +101,6 @@ module fetch_stage import params_pkg::*; #(
     .satp_data_i      (satp_data_i),
     .valid_o          (iptw_valid),
     .error_o          (iptw_error),
-    .error_cause_o    (iptw_error_cause),
     .paddr_o          (iptw_paddr)
   );
 
@@ -187,12 +185,12 @@ module fetch_stage import params_pkg::*; #(
             if (dec_stall_i) begin
               buffer_wr_en         = 1'b1;
               error_buffer_d       = 1'b1;
-              error_cause_buffer_d = iptw_error_cause;
+              error_cause_buffer_d = INSTR_PAGE_FAULT;
               state_d              = STALL;
             end else begin
               dec_valid_o        = 1'b1;
               dec_excpt_o        = 1'b1;
-              dec_excpt_cause_o  = iptw_error_cause;
+              dec_excpt_cause_o  = INSTR_PAGE_FAULT;
               dec_pc_o           = pc;
               state_d            = MEM_REQ;
             end

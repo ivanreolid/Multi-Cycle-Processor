@@ -49,7 +49,9 @@ package params_pkg;
   } opcode;
 
   typedef enum logic[4:0] {
-    INSTR_PAGE_FAULT = 5'd12
+    INSTR_PAGE_FAULT = 5'd12,
+    LOAD_PAGE_FAULT  = 5'd13,
+    STORE_PAGE_FAULT = 5'd15
   } excpt_cause_t;
 
   typedef enum logic [2:0] {

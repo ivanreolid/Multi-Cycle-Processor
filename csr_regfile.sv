@@ -8,15 +8,18 @@ module csr_regfile import params_pkg::*; #(
   input  logic rst_i,
   input  logic excpt_we_i,
   input  logic csr_instr_we_i,
-  input  logic present_req_i,
+  input  logic fetch_present_req_i,
+  input  logic mem_present_req_i,
   input  logic [CSR_ADDR_WIDTH-1:0] rd_addr_i,
   input  logic [CSR_ADDR_WIDTH-1:0] csr_wraddr_i,
-  input  logic [PPN_WIDTH-1:0] present_ppn_i,
+  input  logic [PPN_WIDTH-1:0] fetch_present_ppn_i,
+  input  logic [PPN_WIDTH-1:0] mem_present_ppn_i,
   input  logic [DATA_WIDTH-1:0] csr_wrdata_i,
   input  logic [DATA_WIDTH-1:0] excpt_mepc_i,
   input  logic [DATA_WIDTH-1:0] excpt_mtval_i,
   input  var excpt_cause_t excpt_mcause_i,
-  output logic ppn_is_present_o,
+  output logic fetch_ppn_is_present_o,
+  output logic mem_ppn_is_present_o,
   output logic [DATA_WIDTH-1:0] data_o,
   output logic [DATA_WIDTH-1:0] satp_o,
   output logic [DATA_WIDTH-1:0] mtvec_o,
@@ -77,10 +80,15 @@ module csr_regfile import params_pkg::*; #(
   end
 
   always_comb begin : read_presence
-    ppn_is_present_o = 1'b0;
+    fetch_ppn_is_present_o = 1'b0;
+    mem_ppn_is_present_o   = 1'b0;
 
-    if (present_req_i) begin
-      ppn_is_present_o = present[present_ppn_i];
+    if (fetch_present_req_i) begin
+      fetch_ppn_is_present_o = present[fetch_present_ppn_i];
+    end
+
+    if (mem_present_req_i) begin
+      mem_ppn_is_present_o = present[mem_present_ppn_i];
     end
   end
 
