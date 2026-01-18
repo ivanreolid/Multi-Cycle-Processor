@@ -13,6 +13,7 @@ module fetch_stage import params_pkg::*; #(
   input  logic clk_i,
   input  logic rst_i,
   input  logic vm_en_i,
+  input  logic ppn_is_present_i,
   input  logic mem_req_i,
   input  logic flush_i,
   input  logic alu_branch_taken_i,
@@ -20,14 +21,16 @@ module fetch_stage import params_pkg::*; #(
   input  logic dec_stall_i,
   input  logic mem_stall_i,
   input  logic [DATA_WIDTH-1:0] satp_data_i,
-  input  logic [ADDR_WIDTH-1:0] last_committed_pc_i,
+  input  logic [ADDR_WIDTH-1:0] next_pc_flush_i,
   input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
   input  logic [ADDR_WIDTH-1:0] jump_address_i,
 
   // Memory interface (Cache to Memory)
   input  logic instr_valid_i,
   input  logic [CACHE_LINE_BYTES*8-1:0] instr_line_i,
+  output logic present_table_req_o,
   output logic rd_req_valid_o,
+  output logic [PPN_WIDTH-1:0] present_table_ppn_o,
   output logic [PADDR_WIDTH-1:0] mem_req_addr_o,
   output access_size_t req_access_size_o,
 
@@ -36,7 +39,9 @@ module fetch_stage import params_pkg::*; #(
 
   // Decode stage outputs
   output logic dec_valid_o,
+  output logic dec_excpt_o,
   output logic [ADDR_WIDTH-1:0] dec_pc_o,
+  output var excpt_cause_t dec_excpt_cause_o,
   output var instruction_t dec_instr_o
 );
 
@@ -53,9 +58,11 @@ module fetch_stage import params_pkg::*; #(
   logic [PADDR_WIDTH-1:0] paddr;
 
   // Stall Buffer
-  logic [ADDR_WIDTH-1:0] pc_buffer;
-  instruction_t instr_buffer;
   logic buffer_wr_en;
+  logic error_buffer, error_buffer_d;
+  logic [ADDR_WIDTH-1:0] pc_buffer, pc_buffer_d;
+  excpt_cause_t error_cause_buffer, error_cause_buffer_d;
+  instruction_t instr_buffer;
 
   // ITLB wires
   logic itlb_hit;
@@ -65,7 +72,9 @@ module fetch_stage import params_pkg::*; #(
   // IPTW wires
   logic iptw_req;
   logic iptw_valid;
+  logic iptw_error;
   logic [PADDR_WIDTH-1:0] iptw_paddr;
+  excpt_cause_t iptw_error_cause;
 
   // Cache signals
   logic cache_state_reset;
@@ -87,12 +96,14 @@ module fetch_stage import params_pkg::*; #(
   );
 
   ptw i_ptw (
-    .req_i       (iptw_req),
-    .vaddr_i     (pc),
-    .satp_data_i (satp_data_i),
-    .valid_o     (iptw_valid),
-    .error_o     (),
-    .paddr_o     (iptw_paddr)
+    .req_i            (iptw_req),
+    .ppn_is_present_i (ppn_is_present_i),
+    .vaddr_i          (pc),
+    .satp_data_i      (satp_data_i),
+    .valid_o          (iptw_valid),
+    .error_o          (iptw_error),
+    .error_cause_o    (iptw_error_cause),
+    .paddr_o          (iptw_paddr)
   );
 
   // --- Cache Instantiation ---
@@ -123,19 +134,27 @@ module fetch_stage import params_pkg::*; #(
     itlb_wr_en    = 1'b0;
 
     iptw_req      = 1'b0;
+    present_table_req_o = 1'b0;
+    present_table_ppn_o = '0;
 
     cache_req         = 1'b0;
     cache_state_reset = 1'b0;
 
-    buffer_wr_en = 1'b0;
+    buffer_wr_en         = 1'b0;
+    pc_buffer_d          = pc;
+    error_buffer_d       = 1'b0;
+    error_cause_buffer_d = '{default: 0};
+
     dec_valid_o  = 1'b0;
+    dec_excpt_o  = 1'b0;
     dec_pc_o     = pc;
     dec_instr_o  = instruction_t'('0);
     req_access_size_o = WORD;
 
     if (flush_i) begin
       buffer_wr_en = 1'b1;
-      pc_d         = (last_committed_pc_i + 4) % MEM_SIZE;
+      pc_buffer_d  = next_pc_flush_i;
+      pc_d         = next_pc_flush_i;
       state_d      = state == MEM_WAIT ? FLUSH : MEM_REQ;
     end else if (alu_branch_taken_i || is_jump_i) begin
       cache_state_reset = 1'b1;
@@ -152,6 +171,8 @@ module fetch_stage import params_pkg::*; #(
               paddr = {itlb_ppn, pc[11:0]};
             end else begin
               iptw_req = 1'b1;
+              present_table_req_o = 1'b1;
+              present_table_ppn_o = iptw_paddr[19:12];
 
               if (iptw_valid) begin
                 paddr      = iptw_paddr;
@@ -162,22 +183,37 @@ module fetch_stage import params_pkg::*; #(
             paddr = pc[19:0];
           end
 
-          cache_req   = 1'b1;
-
-          if (cache_hit && cache_rvalid) begin
+          if (iptw_error) begin
             if (dec_stall_i) begin
-              buffer_wr_en = 1'b1;
-              state_d      = STALL;
+              buffer_wr_en         = 1'b1;
+              error_buffer_d       = 1'b1;
+              error_cause_buffer_d = iptw_error_cause;
+              state_d              = STALL;
             end else begin
-              dec_valid_o = 1'b1;
-              dec_instr_o = instruction_t'(cache_rdata);
-              dec_pc_o    = pc;
-
-              pc_d        = (pc + 4) % MEM_SIZE;
-              state_d     = MEM_REQ;
+              dec_valid_o        = 1'b1;
+              dec_excpt_o        = 1'b1;
+              dec_excpt_cause_o  = iptw_error_cause;
+              dec_pc_o           = pc;
+              state_d            = MEM_REQ;
             end
           end else begin
-            state_d   = MEM_WAIT;
+            cache_req   = 1'b1;
+
+            if (cache_hit && cache_rvalid) begin
+              if (dec_stall_i) begin
+                buffer_wr_en = 1'b1;
+                state_d      = STALL;
+              end else begin
+                dec_valid_o = 1'b1;
+                dec_instr_o = instruction_t'(cache_rdata);
+                dec_pc_o    = pc;
+
+                pc_d        = (pc + 4) % MEM_SIZE;
+                state_d     = MEM_REQ;
+              end
+            end else begin
+              state_d   = MEM_WAIT;
+            end
           end
         end
         MEM_WAIT: begin
@@ -202,9 +238,11 @@ module fetch_stage import params_pkg::*; #(
           end
         end
         STALL: begin
-          dec_valid_o = 1'b1;
-          dec_instr_o = instr_buffer;
-          dec_pc_o    = pc_buffer;
+          dec_valid_o       = 1'b1;
+          dec_excpt_o       = error_buffer;
+          dec_excpt_cause_o = error_cause_buffer;
+          dec_instr_o       = instr_buffer;
+          dec_pc_o          = pc_buffer;
 
           if (!dec_stall_i) begin
             pc_d    = (pc + 4) % MEM_SIZE;
@@ -222,15 +260,19 @@ module fetch_stage import params_pkg::*; #(
     if (!rst_i) begin
       state        <= IDLE;
       pc           <= 4096;
-      instr_buffer <= '0;
-      pc_buffer    <= '0;
+      error_buffer       <= 1'b0;
+      error_cause_buffer <= '{default: 0};
+      instr_buffer       <= '0;
+      pc_buffer          <= '0;
     end else begin
       state <= state_d;
       pc    <= pc_d;
 
       if (buffer_wr_en) begin
-        instr_buffer <= instruction_t'(cache_rdata);
-        pc_buffer    <= pc;
+        error_buffer       <= error_buffer_d;
+        error_cause_buffer <= error_cause_buffer_d;
+        instr_buffer       <= instruction_t'(cache_rdata);
+        pc_buffer          <= pc_buffer_d;
       end
     end
   end

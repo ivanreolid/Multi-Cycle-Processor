@@ -30,13 +30,13 @@ module tb;
   // Model CSRs
   logic [DATA_WIDTH-1:0] model_satp;
 
-  logic vm_en;
+  logic cpu_vm_en;
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
   logic [ADDR_WIDTH-1:0] cpu_wb_pc;
 
-  csr_op_t csr_op;
+  system_funct3_t system_funct3;
   logic [SHAMT_WIDTH-1:0] shamt;
   logic [DATA_WIDTH-1:0] offset_sign_extend;
 
@@ -63,6 +63,7 @@ module tb;
     .req_address_o                  (req_address),
     .wr_data_o                      (wr_data),
     .req_access_size_o              (req_access_size),
+    .debug_vm_en_o                  (cpu_vm_en),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_satp_o                   (cpu_satp),
     .debug_regs_o                   (cpu_regs),
@@ -116,7 +117,6 @@ module tb;
 
   initial begin
     rst = 0;
-    vm_en = 0;
     instructions_executed = 0;
 
     initialize_registers();
@@ -149,10 +149,15 @@ module tb;
   endfunction
 
   task automatic execute_and_compare();
-    model_pa_pc = vm_en ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
+    model_pa_pc = cpu_vm_en ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
     model_instr = { model_mem[model_pa_pc + 3], model_mem[model_pa_pc + 2],
                     model_mem[model_pa_pc + 1], model_mem[model_pa_pc] };
     new_model_pc = (model_pc + 4) % MEM_SIZE;
+
+    // Trap handler
+    if (!cpu_vm_en && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000))
+      return;
+
     error_msg = "";
     error = 1'b0;
     execute_model_instr();
@@ -289,14 +294,13 @@ module tb;
         model_regs[model_instr.rd] = model_pc + offset_sign_extend;
       end
       SYSTEM: begin
-        csr_op = csr_op_t'(model_instr.funct3);
-        case (csr_op)
+        system_funct3 = system_funct3_t'(model_instr.funct3);
+        case (system_funct3)
           CSRRW: begin
             case (model_instr[31:20])
               CSR_SATP: begin
                 model_regs[model_instr.rd] = model_satp;
                 model_satp = model_regs[model_instr.rs1];
-                vm_en = 1'b1;
               end
               default :;
             endcase

@@ -27,7 +27,14 @@ package params_pkg;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
 
   // CSRS
-  parameter int CSR_SATP = 12'h180;
+  parameter int CSR_SATP   = 12'h180;
+  parameter int CSR_MTVEC  = 12'h305;
+  parameter int CSR_MCAUSE = 12'h342;
+  parameter int CSR_MTVAL  = 12'h343;
+
+  // CSRs custom
+  parameter int CSR_PPN_SEL  = 12'h7c0;
+  parameter int CSR_PPN_FLAG = 12'h7c1;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,
@@ -41,9 +48,15 @@ package params_pkg;
     SYSTEM    = 7'b1110011
   } opcode;
 
+  typedef enum logic[4:0] {
+    INSTR_PAGE_FAULT = 5'd12
+  } excpt_cause_t;
+
   typedef enum logic [2:0] {
-    CSRRW = 3'b001
-  } csr_op_t;
+    MACHINE = 3'b000,
+    CSRRW   = 3'b001,
+    CSRRS   = 3'b010
+  } system_funct3_t;
 
   typedef struct packed {
     logic is_mul;

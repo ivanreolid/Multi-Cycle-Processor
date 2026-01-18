@@ -34,11 +34,13 @@ module decode_stage #(
   input  logic [DATA_WIDTH-1:0] mem_stage_result_i,
   input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
+  input  logic [DATA_WIDTH-1:0] csr_data_i,
   input  var   instruction_t instruction_i,
   output logic alu_valid_o,
   output logic ex_valid_o,
   output logic instr_is_wb_o,
   output logic instr_is_csr_wb_o,
+  output logic instr_is_mret_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
@@ -50,7 +52,7 @@ module decode_stage #(
 
   logic valid_instruction;
 
-  csr_op_t csr_op;
+  system_funct3_t system_funct3;
 
   always_comb begin : decode_instruction
     hazard_signals_o.rs1             = instruction_i.rs1;
@@ -61,6 +63,7 @@ module decode_stage #(
 
     instr_is_wb_o                    = 1'b0;
     instr_is_csr_wb_o                = 1'b0;
+    instr_is_mret_o                  = 1'b0;
 
     case (instruction_i.opcode)
       R: begin
@@ -93,11 +96,18 @@ module decode_stage #(
         instr_is_wb_o                    = 1'b1;
       end
       SYSTEM: begin
-        case (csr_op)
+        case (system_funct3)
+          MACHINE: begin
+            instr_is_mret_o              = 1'b1;
+          end
           CSRRW: begin
             hazard_signals_o.rs1_needed  = 1'b1;
             instr_is_wb_o                = 1'b1;
             instr_is_csr_wb_o            = 1'b1;
+          end
+          CSRRS: begin
+            hazard_signals_o.rs1_needed  = 1'b1;
+            instr_is_wb_o                = 1'b1;
           end
           default:;
         endcase
@@ -189,11 +199,15 @@ module decode_stage #(
     end else if (is_bypass_wb_rs2) begin
       alu_rs2_data_o = wb_data_to_reg_i;
     end
+
+    if (instruction_i.opcode == SYSTEM && system_funct3 == CSRRS) begin
+      alu_rs1_data_o = csr_data_i;
+    end
   end
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
 
-  assign csr_op = csr_op_t'(instruction_i.funct3);
+  assign system_funct3 = system_funct3_t'(instruction_i.funct3);
 
   assign alu_valid_o          = ~hazard_signals_o.is_mul & valid_instruction;
   assign ex_valid_o           = hazard_signals_o.is_mul & valid_instruction;

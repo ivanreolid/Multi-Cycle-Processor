@@ -33,6 +33,7 @@ module cpu import params_pkg::*; #(
   output logic done,     // flush completed
   input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
+  output logic debug_vm_en_o,
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_satp_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -50,15 +51,25 @@ module cpu import params_pkg::*; #(
 
   // Fetch stage wires
   logic fetch_stall;
+  logic fetch_present_table_req;
+  logic fetch_ppn_is_present;
   logic dec_valid_d;
+  logic dec_excpt_d;
+  logic [PPN_WIDTH-1:0] fetch_present_table_ppn;
   logic [DATA_WIDTH-1:0] satp_data;
+  logic [DATA_WIDTH-1:0] mtvec_data;
+  logic [DATA_WIDTH-1:0] mepc_data;
+  logic [ADDR_WIDTH-1:0] next_pc_flush;
   logic [ADDR_WIDTH-1:0] dec_pc_d;
+  excpt_cause_t dec_excpt_cause_d;
   access_size_t fetch_req_access_size;
   instruction_t dec_instruction_d;
 
   // Decode stage wires
   logic dec_valid_q;
+  logic dec_excpt_q;
   logic dec_instr_is_wb, dec_instr_is_csr_wb;
+  logic dec_instr_is_mret;
   logic alu_valid_d;
   logic ex1_valid_d;
   logic [ROB_ENTRY_WIDTH-1:0] dec_rob_new_instr_idx;
@@ -72,6 +83,7 @@ module cpu import params_pkg::*; #(
   logic [DATA_WIDTH-1:0] alu_offset_sign_extend_d;
   logic dec_stall;
   logic alu_bubble, ex_bubble;
+  excpt_cause_t dec_excpt_cause_q;
   hazard_ctrl_t hazard_signals;
   instruction_t dec_instruction_q;
 
@@ -164,15 +176,20 @@ module cpu import params_pkg::*; #(
 
   // Reorder buffer wires
   logic rob_is_full;
+  logic rob_excp_we;
   logic flush;
   logic rob_new_instr_valid;
   logic rob_instr_commit_valid;
   logic rob_instr_commit_is_wb, rob_instr_commit_is_csr_wb;
+  logic rob_instr_commit_is_mret;
   logic [ROB_ENTRY_WIDTH-1:0] rob_instr_complete_idx;
   logic [REGISTER_WIDTH-1:0] rob_instr_commit_reg_id;
   logic [CSR_ADDR_WIDTH-1:0] rob_instr_commit_csr_addr;
   logic [DATA_WIDTH-1:0] rob_instr_commit_data, rob_instr_commit_csr_data;
+  logic [ADDR_WIDTH-1:0] rob_excp_pc;
+  logic [ADDR_WIDTH-1:0] rob_excp_tval;
   logic [ADDR_WIDTH-1:0] rob_instr_commit_pc;
+  excpt_cause_t rob_excp_cause;
 `ifndef SYNTHESIS
   instruction_t debug_rob_instr_commit;
 `endif
@@ -181,10 +198,10 @@ logic mem_req,mem_we;
 logic [PADDR_WIDTH-1:0] mem_addr;
 logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
-  logic vm_en;
+  logic vm_en, vm_en_d;
   logic vm_wr_en;
 
-mem_arbiter #(
+  mem_arbiter #(
   .ADDR_WIDTH   (ADDR_WIDTH),
   .PADDR_WIDTH  (PADDR_WIDTH),
   .DATA_WIDTH   (CACHE_LINE_BYTES*8)
@@ -264,22 +281,27 @@ mem_arbiter #(
     .rst_i               (rst_i),
     .vm_en_i             (vm_en),
     .mem_req_i           (dcache_req),
+    .ppn_is_present_i    (fetch_ppn_is_present),
     .flush_i             (flush),
     .alu_branch_taken_i  (alu_branch_taken),
     .is_jump_i           (is_jump),
     .dec_stall_i         (dec_stall),
     .mem_stall_i         (mem_stall),
     .satp_data_i         (satp_data),
-    .last_committed_pc_i (rob_instr_commit_pc),
+    .next_pc_flush_i     (next_pc_flush),
     .pc_branch_offset_i  (alu_pc_branch_offset),
     .jump_address_i      (jump_address),
     .instr_valid_i       (icache_rvalid),
     .instr_line_i        (icache_rdata),
+    .present_table_req_o (fetch_present_table_req),
     .rd_req_valid_o      (icache_req),
+    .present_table_ppn_o (fetch_present_table_ppn),
     .mem_req_addr_o      (icache_addr),
     .req_access_size_o   (fetch_req_access_size),
     .mem_gnt_i           (icache_gnt),
     .dec_valid_o         (dec_valid_d),
+    .dec_excpt_o         (dec_excpt_d),
+    .dec_excpt_cause_o   (dec_excpt_cause_d),
     .dec_pc_o            (dec_pc_d),
     .dec_instr_o         (dec_instruction_d)
   );
@@ -317,11 +339,13 @@ mem_arbiter #(
     .mem_stage_result_i    (wb_data_from_mem),
     .ex5_result_i          (ex5_result_q),
     .wb_data_to_reg_i      (wb_data_to_reg),
+    .csr_data_i            (dec_csr_data),
     .instruction_i         (dec_instruction_q),
     .alu_valid_o           (alu_valid_d),
     .ex_valid_o            (ex1_valid_d),
     .instr_is_wb_o         (dec_instr_is_wb),
     .instr_is_csr_wb_o     (dec_instr_is_csr_wb),
+    .instr_is_mret_o       (dec_instr_is_mret),
     .shamt_o               (alu_shamt_d),
     .offset_sign_extend_o  (alu_offset_sign_extend_d),
     .wr_reg_o              (dec_wr_reg),
@@ -518,14 +542,23 @@ mem_arbiter #(
   );
 
   csr_regfile csr_file (
-    .clk_i      (clk_i),
-    .rst_i      (rst_i),
-    .wr_en_i    (rob_instr_commit_valid & rob_instr_commit_is_csr_wb),
-    .rd_addr_i  (dec_csr_addr),
-    .wr_addr_i  (rob_instr_commit_csr_addr),
-    .wr_data_i  (rob_instr_commit_data),
-    .data_o     (dec_csr_data),
-    .satp_o     (satp_data)
+    .clk_i            (clk_i),
+    .rst_i            (rst_i),
+    .excpt_we_i       (rob_excp_we),
+    .csr_instr_we_i   (rob_instr_commit_valid & rob_instr_commit_is_csr_wb),
+    .present_req_i    (fetch_present_table_req),
+    .rd_addr_i        (dec_csr_addr),
+    .csr_wraddr_i     (rob_instr_commit_csr_addr),
+    .present_ppn_i    (fetch_present_table_ppn),
+    .csr_wrdata_i     (rob_instr_commit_data),
+    .excpt_mepc_i     (rob_excp_pc),
+    .excpt_mtval_i    (rob_excp_tval),
+    .excpt_mcause_i   (rob_excp_cause),
+    .ppn_is_present_o (fetch_ppn_is_present),
+    .data_o           (dec_csr_data),
+    .satp_o           (satp_data),
+    .mtvec_o          (mtvec_data),
+    .mepc_o           (mepc_data)
 `ifndef SYNTHESIS
     , .debug_satp_o (debug_satp_o)
 `endif
@@ -568,33 +601,41 @@ mem_arbiter #(
   );
 
   reorder_buffer rob (
-    .clk_i                  (clk_i),
-    .rst_i                  (rst_i),
-    .new_instr_valid_i      (rob_new_instr_valid),
-    .new_instr_is_wb_i      (dec_instr_is_wb),
-    .new_instr_is_csr_wb_i  (dec_instr_is_csr_wb),
-    .instr_complete_valid_i (alu_is_completed | mem_is_completed | ex_is_completed),
-    .instr_excp_valid_i     (1'b0),
-    .new_instr_reg_id_i     (dec_wr_reg),
-    .new_instr_csr_addr_i   (dec_csr_addr),
-    .instr_complete_idx_i   (rob_instr_complete_idx),
-    .new_instr_pc_i         (dec_pc_q),
-    .new_instr_csr_data_i   (dec_csr_data),
-    .instr_complete_data_i  (wb_data_to_reg)
+    .clk_i                    (clk_i),
+    .rst_i                    (rst_i),
+    .new_instr_valid_i        (rob_new_instr_valid),
+    .new_instr_is_wb_i        (dec_instr_is_wb),
+    .new_instr_is_csr_wb_i    (dec_instr_is_csr_wb),
+    .new_instr_is_mret_i      (dec_instr_is_mret),
+    .instr_complete_valid_i   (alu_is_completed | mem_is_completed | ex_is_completed),
+    .instr_excp_valid_i       (dec_excpt_q),
+    .new_instr_reg_id_i       (dec_wr_reg),
+    .new_instr_csr_addr_i     (dec_csr_addr),
+    .instr_complete_idx_i     (rob_instr_complete_idx),
+    .new_instr_pc_i           (dec_pc_q),
+    .instr_excp_tval_i        (dec_pc_q),
+    .new_instr_csr_data_i     (dec_csr_data),
+    .instr_complete_data_i    (wb_data_to_reg),
+    .instr_excp_cause_i       (dec_excpt_cause_q)
 `ifndef SYNTHESIS
-    , .new_instr_i          (dec_instruction_q)
+    , .new_instr_i            (dec_instruction_q)
 `endif
-    , .full_o               (rob_is_full),
-    .flush_o                (flush),
-    .instr_commit_valid_o   (rob_instr_commit_valid),
-    .instr_commit_is_wb_o   (rob_instr_commit_is_wb),
+    , .full_o                 (rob_is_full),
+    .excp_we_o                (rob_excp_we),
+    .flush_o                  (flush),
+    .instr_commit_valid_o     (rob_instr_commit_valid),
+    .instr_commit_is_wb_o     (rob_instr_commit_is_wb),
     .instr_commit_is_csr_wb_o (rob_instr_commit_is_csr_wb),
-    .instr_commit_reg_id_o  (rob_instr_commit_reg_id),
-    .instr_commit_csr_addr_o (rob_instr_commit_csr_addr),
-    .new_instr_idx_o        (dec_rob_new_instr_idx),
-    .instr_commit_data_o    (rob_instr_commit_data),
-    .instr_commit_csr_data_o (rob_instr_commit_csr_data),
-    .instr_commit_pc_o       (rob_instr_commit_pc)
+    .instr_commit_is_mret_o   (rob_instr_commit_is_mret),
+    .instr_commit_reg_id_o    (rob_instr_commit_reg_id),
+    .instr_commit_csr_addr_o  (rob_instr_commit_csr_addr),
+    .new_instr_idx_o          (dec_rob_new_instr_idx),
+    .excp_pc_o                (rob_excp_pc),
+    .excp_tval_o              (rob_excp_tval),
+    .instr_commit_data_o      (rob_instr_commit_data),
+    .instr_commit_csr_data_o  (rob_instr_commit_csr_data),
+    .instr_commit_pc_o        (rob_instr_commit_pc),
+    .excp_cause_o             (rob_excp_cause)
 `ifndef SYNTHESIS
     , .instr_commit_o         (debug_rob_instr_commit)
 `endif
@@ -604,6 +645,7 @@ mem_arbiter #(
     if (!rst_i) begin
       vm_en               <= 1'b0;
       dec_valid_q         <= 1'b0;
+      dec_excpt_q         <= 1'b0;
       is_jump             <= 1'b0;
       alu_branch_taken    <= 1'b0;
       alu_valid_q         <= 1'b0;
@@ -615,7 +657,7 @@ mem_arbiter #(
       ex5_valid_q         <= 1'b0;
     end else begin
       if (vm_wr_en) begin
-        vm_en             <= 1'b1;
+        vm_en             <= vm_en_d;
       end
 
       // Fetch -> Decode flops
@@ -623,6 +665,8 @@ mem_arbiter #(
         dec_valid_q       <= 1'b0;
       end else if (!dec_stall) begin
         dec_valid_q       <= dec_valid_d;
+        dec_excpt_q       <= dec_excpt_d;
+        dec_excpt_cause_q <= dec_excpt_cause_d;
         dec_pc_q          <= dec_pc_d;
         dec_instruction_q <= dec_instruction_d;
       end
@@ -701,6 +745,7 @@ mem_arbiter #(
       end
 
 `ifndef SYNTHESIS
+      debug_vm_en_o              <= vm_en;
       debug_instr_is_completed_o <= rob_instr_commit_valid;
       debug_pc_o                 <= rob_instr_commit_pc;
       debug_instr_o              <= debug_rob_instr_commit;
@@ -724,7 +769,30 @@ mem_arbiter #(
   assign req_address_o  = mem_addr;
   assign wr_data_o      = mem_wdata;
 
-  assign vm_wr_en = rob_instr_commit_valid & rob_instr_commit_is_csr_wb &
-                    rob_instr_commit_csr_addr == CSR_SATP;
+  assign vm_en_d  = rob_excp_we ? 1'b0 : 1'b1;
+
+  always_comb begin : rob_instr_commit
+    logic rob_is_csrrw_satp;
+
+    next_pc_flush = '0;
+    vm_wr_en      = 1'b0;
+
+    rob_is_csrrw_satp = (rob_instr_commit_valid && rob_instr_commit_is_csr_wb &&
+                                  rob_instr_commit_csr_addr == CSR_SATP);
+
+    if (flush) begin
+      if (rob_instr_commit_is_mret) begin
+        next_pc_flush = mepc_data;
+      end else if (rob_excp_we) begin
+        next_pc_flush = mtvec_data;
+      end else begin
+        next_pc_flush = (rob_instr_commit_pc + 4) % MEM_SIZE;
+      end
+    end
+
+    if (rob_instr_commit_is_mret || rob_excp_we || rob_is_csrrw_satp) begin
+      vm_wr_en = 1'b1;
+    end
+  end
 
 endmodule
