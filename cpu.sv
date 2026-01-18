@@ -141,7 +141,7 @@ module cpu import params_pkg::*; #(
   // EX1 stage wires
   logic ex2_valid_d, ex3_valid_d, ex4_valid_d, ex5_valid_d;
   logic ex1_valid_q, ex2_valid_q, ex3_valid_q, ex4_valid_q, ex5_valid_q;
-  logic ex_stall;
+  logic ex1_stall, ex2_stall, ex3_stall, ex4_stall, ex5_stall;
   logic [ROB_ENTRY_WIDTH-1:0] ex1_rob_instr_idx_q, ex2_rob_instr_idx_q, ex3_rob_instr_idx_q,
                               ex4_rob_instr_idx_q, ex5_rob_instr_idx_q;
   logic [REGISTER_WIDTH-1:0] ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
@@ -282,7 +282,11 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .ex3_wr_reg_i       (ex3_wr_reg_q),
     .ex4_wr_reg_i       (ex4_wr_reg_q),
     .hazard_signals_i   (hazard_signals),
-    .stall_ex_o         (ex_stall),
+    .stall_ex5_o        (ex5_stall),
+    .stall_ex4_o        (ex4_stall),
+    .stall_ex3_o        (ex3_stall),
+    .stall_ex2_o        (ex2_stall),
+    .stall_ex1_o        (ex1_stall),
     .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
     .stall_decode_o     (dec_stall),
@@ -738,7 +742,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
       // Decode -> EX flops
       if (ex_bubble) begin
         ex1_valid_q              <= 1'b0;
-      end else if (!ex_stall) begin
+      end else if (!ex1_stall) begin
         ex1_valid_q              <= ex1_valid_d;
         ex1_rob_instr_idx_q      <= dec_rob_new_instr_idx;
         ex1_wr_reg_q             <= dec_wr_reg;
@@ -749,32 +753,49 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
       end
 
       // Internal EX flops
-      ex2_valid_q         <= ex2_valid_d;
-      ex3_valid_q         <= ex3_valid_d;
-      ex4_valid_q         <= ex4_valid_d;
-      ex5_valid_q         <= ex5_valid_d;
-      ex2_rob_instr_idx_q <= ex1_rob_instr_idx_q;
-      ex3_rob_instr_idx_q <= ex2_rob_instr_idx_q;
-      ex4_rob_instr_idx_q <= ex3_rob_instr_idx_q;
-      ex5_rob_instr_idx_q <= ex4_rob_instr_idx_q;
-      ex2_wr_reg_q        <= ex2_wr_reg_d;
-      ex3_wr_reg_q        <= ex3_wr_reg_d;
-      ex4_wr_reg_q        <= ex4_wr_reg_d;
-      ex5_wr_reg_q        <= ex5_wr_reg_d;
-      ex2_result_q        <= ex2_result_d;
-      ex3_result_q        <= ex3_result_d;
-      ex4_result_q        <= ex4_result_d;
-      ex5_result_q        <= ex5_result_d;
+      if (!ex2_stall) begin
+        ex2_valid_q         <= ex2_valid_d;
+        ex2_rob_instr_idx_q <= ex1_rob_instr_idx_q;
+        ex2_wr_reg_q        <= ex2_wr_reg_d;
+        ex2_result_q        <= ex2_result_d;
 `ifndef SYNTHESIS
-      ex2_debug_pc_q      <= ex2_debug_pc_d;
-      ex3_debug_pc_q      <= ex3_debug_pc_d;
-      ex4_debug_pc_q      <= ex4_debug_pc_d;
-      ex5_debug_pc_q      <= ex5_debug_pc_d;
-      ex2_debug_instr_q   <= ex2_debug_instr_d;
-      ex3_debug_instr_q   <= ex3_debug_instr_d;
-      ex4_debug_instr_q   <= ex4_debug_instr_d;
-      ex5_debug_instr_q   <= ex5_debug_instr_d;
+        ex2_debug_pc_q      <= ex2_debug_pc_d;
+        ex2_debug_instr_q   <= ex2_debug_instr_d;
 `endif
+      end
+
+      if (!ex3_stall) begin
+        ex3_valid_q         <= ex3_valid_d;
+        ex3_rob_instr_idx_q <= ex2_rob_instr_idx_q;
+        ex3_wr_reg_q        <= ex3_wr_reg_d;
+        ex3_result_q        <= ex3_result_d;
+`ifndef SYNTHESIS
+        ex3_debug_pc_q      <= ex3_debug_pc_d;
+        ex3_debug_instr_q   <= ex3_debug_instr_d;
+`endif
+      end
+
+      if (!ex4_stall) begin
+        ex4_valid_q         <= ex4_valid_d;
+        ex4_rob_instr_idx_q <= ex3_rob_instr_idx_q;
+        ex4_wr_reg_q        <= ex4_wr_reg_d;
+        ex4_result_q        <= ex4_result_d;
+`ifndef SYNTHESIS
+        ex4_debug_pc_q      <= ex4_debug_pc_d;
+        ex4_debug_instr_q   <= ex4_debug_instr_d;
+`endif
+      end
+
+      if (!ex5_stall) begin
+        ex5_valid_q         <= ex5_valid_d;
+        ex5_rob_instr_idx_q <= ex4_rob_instr_idx_q;
+        ex5_wr_reg_q        <= ex5_wr_reg_d;
+        ex5_result_q        <= ex5_result_d;
+`ifndef SYNTHESIS
+        ex5_debug_pc_q      <= ex5_debug_pc_d;
+        ex5_debug_instr_q   <= ex5_debug_instr_d;
+`endif
+      end
 
       // ALU -> MEM flops
       if (!mem_stall) begin
@@ -808,7 +829,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     logic ex_can_be_issued;
 
     alu_can_be_issued = alu_valid_d && !alu_bubble && !alu_stall;
-    ex_can_be_issued  = ex1_valid_d && !ex_bubble && !ex_stall;
+    ex_can_be_issued  = ex1_valid_d && !ex_bubble && !ex1_stall;
 
     rob_new_instr_valid = alu_can_be_issued || ex_can_be_issued;
   end
