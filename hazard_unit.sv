@@ -32,7 +32,6 @@ module hazard_unit #(
   output logic stall_ex3_o,
   output logic stall_ex2_o,
   output logic stall_ex1_o,
-  output logic stall_mem_o,
   output logic stall_alu_o,
   output logic stall_decode_o,
   output logic stall_fetch_o,
@@ -50,8 +49,6 @@ module hazard_unit #(
   logic ex_stage_is_busy;
 
   assign ex_stage_is_busy = ex1_valid_i || ex2_valid_i || ex3_valid_i || ex4_valid_i || ex5_valid_i;
-
-  assign stall_mem_o = mem_busy_i;
 
   always_comb begin : decode_raw_hazard
     alu_raw_hazard_rs1 = 1'b0;
@@ -103,7 +100,7 @@ module hazard_unit #(
     logic stall_reason_backpressure;
 
     stall_reason_wb_contention = !alu_allowed_wb_i && alu_instr_finishes_i;
-    stall_reason_backpressure  = stall_mem_o && !alu_instr_finishes_i;
+    stall_reason_backpressure  = mem_busy_i && !alu_instr_finishes_i;
 
     stall_alu_o = alu_valid_i && (stall_reason_backpressure || stall_reason_wb_contention);
   end

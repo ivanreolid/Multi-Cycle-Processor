@@ -287,7 +287,6 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .stall_ex3_o        (ex3_stall),
     .stall_ex2_o        (ex2_stall),
     .stall_ex1_o        (ex1_stall),
-    .stall_mem_o        (),
     .stall_alu_o        (alu_stall),
     .stall_decode_o     (dec_stall),
     .stall_fetch_o      (fetch_stall),
