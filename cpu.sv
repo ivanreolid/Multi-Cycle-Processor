@@ -34,6 +34,7 @@ module cpu import params_pkg::*; #(
   input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
   output logic debug_vm_en_o,
+  output logic debug_trap_bypass_mmu_o,
   output logic debug_instr_is_completed_o,
   output logic [DATA_WIDTH-1:0] debug_satp_o,
   output logic [DATA_WIDTH-1:0] debug_regs_o [32],
@@ -194,6 +195,7 @@ module cpu import params_pkg::*; #(
   logic rob_instr_commit_valid;
   logic rob_instr_commit_is_wb, rob_instr_commit_is_csr_wb;
   logic rob_instr_commit_is_mret;
+  logic rob_instr_commit_is_csrrw_satp;
   logic [ROB_ENTRY_WIDTH-1:0] rob_instr_complete_idx;
   logic [REGISTER_WIDTH-1:0] rob_instr_commit_reg_id;
   logic [CSR_ADDR_WIDTH-1:0] rob_instr_commit_csr_addr;
@@ -210,8 +212,9 @@ logic mem_req,mem_we;
 logic [PADDR_WIDTH-1:0] mem_addr;
 logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
-  logic vm_en, vm_en_d;
-  logic vm_wr_en;
+  // Virtual memory wires
+  logic vm_en;
+  logic trap_bypass_mmu;
 
   mem_arbiter #(
   .ADDR_WIDTH   (ADDR_WIDTH),
@@ -292,6 +295,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .clk_i               (clk_i),
     .rst_i               (rst_i),
     .vm_en_i             (vm_en),
+    .trap_bypass_mmu_i   (trap_bypass_mmu),
     .mem_req_i           (dcache_req),
     .ppn_is_present_i    (fetch_ppn_is_present),
     .flush_i             (flush),
@@ -410,6 +414,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
     .clk_i                      (clk_i),
     .rst_i                      (rst_i),
     .vm_en_i                    (vm_en),
+    .trap_bypass_mmu_i          (trap_bypass_mmu),
     .flush_i                    (flush),
     .ppn_is_present_i           (mem_ppn_is_present),
     .satp_data_i                (satp_data),
@@ -674,6 +679,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   always_ff @(posedge clk_i) begin : flops
     if (!rst_i) begin
       vm_en               <= 1'b0;
+      trap_bypass_mmu     <= 1'b0;
       dec_valid_q         <= 1'b0;
       dec_excpt_q         <= 1'b0;
       is_jump             <= 1'b0;
@@ -687,8 +693,14 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
       ex5_valid_q         <= 1'b0;
       ff_valid            <= '0;
     end else begin
-      if (vm_wr_en) begin
-        vm_en             <= vm_en_d;
+      if (rob_instr_commit_is_csrrw_satp) begin
+        vm_en <= 1'b1;
+      end
+
+      if (rob_excp_we) begin
+        trap_bypass_mmu <= 1'b1;
+      end else if (rob_instr_commit_is_mret) begin
+        trap_bypass_mmu <= 1'b0;
       end
 
       if (flush) begin
@@ -783,6 +795,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
 `ifndef SYNTHESIS
       debug_vm_en_o              <= vm_en;
+      debug_trap_bypass_mmu_o    <= trap_bypass_mmu;
       debug_instr_is_completed_o <= rob_instr_commit_valid;
       debug_pc_o                 <= rob_instr_commit_pc;
       debug_instr_o              <= debug_rob_instr_commit;
@@ -809,16 +822,11 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   assign req_address_o  = mem_addr;
   assign wr_data_o      = mem_wdata;
 
-  assign vm_en_d  = rob_excp_we ? 1'b0 : 1'b1;
-
   always_comb begin : rob_instr_commit
-    logic rob_is_csrrw_satp;
-
     next_pc_flush = '0;
-    vm_wr_en      = 1'b0;
 
-    rob_is_csrrw_satp = (rob_instr_commit_valid && rob_instr_commit_is_csr_wb &&
-                                  rob_instr_commit_csr_addr == CSR_SATP);
+    rob_instr_commit_is_csrrw_satp = (rob_instr_commit_valid && rob_instr_commit_is_csr_wb &&
+                                      rob_instr_commit_csr_addr == CSR_SATP);
 
     if (flush) begin
       if (rob_instr_commit_is_mret) begin
@@ -828,10 +836,6 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
       end else begin
         next_pc_flush = (rob_instr_commit_pc + 4) % MEM_SIZE;
       end
-    end
-
-    if (rob_instr_commit_is_mret || rob_excp_we || rob_is_csrrw_satp) begin
-      vm_wr_en = 1'b1;
     end
   end
 

@@ -32,7 +32,10 @@ module tb;
   // Model CSRs
   logic [DATA_WIDTH-1:0] model_satp;
 
+  // CPU virtual memory
   logic cpu_vm_en;
+  logic cpu_trap_bypass_mmu;
+  logic cpu_mmu_enable;
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
@@ -66,6 +69,7 @@ module tb;
     .wr_data_o                      (wr_data),
     .req_access_size_o              (req_access_size),
     .debug_vm_en_o                  (cpu_vm_en),
+    .debug_trap_bypass_mmu_o        (cpu_trap_bypass_mmu),
     .debug_instr_is_completed_o     (cpu_instr_is_completed),
     .debug_satp_o                   (cpu_satp),
     .debug_regs_o                   (cpu_regs),
@@ -96,6 +100,8 @@ module tb;
     .finish(finish),
     .debug_mem_o                    (cpu_mem)
   );
+
+  assign cpu_mmu_enable = cpu_vm_en && !cpu_trap_bypass_mmu;
 
   always_ff @(posedge clk) begin : cycles_count
     if (!rst)
@@ -151,13 +157,13 @@ module tb;
   endfunction
 
   task automatic execute_and_compare();
-    model_pa_pc = cpu_vm_en ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
+    model_pa_pc = cpu_mmu_enable ? model_pc + {12'b0, model_satp[19:0]} : model_pc;
     model_instr = { model_mem[model_pa_pc + 3], model_mem[model_pa_pc + 2],
                     model_mem[model_pa_pc + 1], model_mem[model_pa_pc] };
     new_model_pc = (model_pc + 4) % MEM_SIZE;
 
     // Trap handler
-    if (!cpu_vm_en && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000))
+    if (!cpu_mmu_enable && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000))
       return;
 
     error_msg = "";
@@ -223,8 +229,8 @@ module tb;
         end
       end
       LOAD: begin
-        model_reg_pa = cpu_vm_en ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
-                                   model_regs[model_instr.rs1];
+        model_reg_pa = cpu_mmu_enable ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                        model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:20]};
         model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin            // LB
@@ -238,8 +244,8 @@ module tb;
         end
       end
       STORE: begin
-        model_reg_pa = cpu_vm_en ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
-                                   model_regs[model_instr.rs1];
+        model_reg_pa = cpu_mmu_enable ? model_regs[model_instr.rs1] + {12'b0, model_satp[19:0]} :
+                                        model_regs[model_instr.rs1];
         offset_sign_extend = {{20{model_instr[31]}}, model_instr[31:25], model_instr[11:7]};
         model_mem_op_pa = model_reg_pa + offset_sign_extend;
         if (model_instr.funct3 == 3'b000) begin           // SB

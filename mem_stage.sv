@@ -15,6 +15,7 @@ module mem_stage #(
   input  logic clk_i,
   input  logic rst_i,
   input  logic vm_en_i,
+  input  logic trap_bypass_mmu_i,
   input  logic flush_i,
   input  logic ppn_is_present_i,
   input  logic [DATA_WIDTH-1:0] satp_data_i,
@@ -78,6 +79,8 @@ module mem_stage #(
   logic [31:0] cache_wdata;
   logic [3:0] cache_wstrb;
   logic [1:0] cache_size;
+
+  logic mmu_enable;
 
   // DTLB wires
   logic dtlb_hit;
@@ -157,6 +160,8 @@ module mem_stage #(
     .write_done_o(write_done_o)
   );
 
+  assign mmu_enable = vm_en_i && !trap_bypass_mmu_i;
+
   assign rd_req_valid_o = mem_req && !wr_req_valid_o ;
 
   always_ff @(posedge clk_i) begin : flops
@@ -198,7 +203,7 @@ module mem_stage #(
       end
       READY: begin
         if (valid_i) begin
-          if (vm_en_i) begin
+          if (mmu_enable) begin
             if (dtlb_hit) begin
               paddr = {dtlb_ppn, alu_result_i[11:0]};
             end else begin

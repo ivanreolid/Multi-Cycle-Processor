@@ -13,6 +13,7 @@ module fetch_stage import params_pkg::*; #(
   input  logic clk_i,
   input  logic rst_i,
   input  logic vm_en_i,
+  input  logic trap_bypass_mmu_i,
   input  logic ppn_is_present_i,
   input  logic mem_req_i,
   input  logic flush_i,
@@ -63,6 +64,8 @@ module fetch_stage import params_pkg::*; #(
   logic [ADDR_WIDTH-1:0] pc_buffer, pc_buffer_d;
   excpt_cause_t error_cause_buffer, error_cause_buffer_d;
   instruction_t instr_buffer;
+
+  logic mmu_enable;
 
   // ITLB wires
   logic itlb_hit;
@@ -164,7 +167,7 @@ module fetch_stage import params_pkg::*; #(
           state_d = MEM_REQ;
         end
         MEM_REQ: begin
-          if (vm_en_i) begin
+          if (mmu_enable) begin
             if (itlb_hit) begin
               paddr = {itlb_ppn, pc[11:0]};
             end else begin
@@ -274,5 +277,7 @@ module fetch_stage import params_pkg::*; #(
       end
     end
   end
+
+  assign mmu_enable = vm_en_i && !trap_bypass_mmu_i;
 
 endmodule : fetch_stage
