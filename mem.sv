@@ -197,13 +197,7 @@ assign write_done_o = write_done_pulse;
     end
     //$readmemh("buffer_sum.mem", mem);
     //$readmemh("mem_copy.mem", mem);
-    //$readmemh("matrix_multiply.mem", mem);
-
-    // Boot at PC = 0x1000
-    mem[4096] = 8'h93; // addi x1, x0, 0
-
-    mem[4100] = 8'h13;
-    mem[4101] = 8'h01; // addi x2, x0, 0x1000
+    $readmemh("matrix_multiply.mem", mem);
   end
 
 endmodule

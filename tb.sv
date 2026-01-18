@@ -55,7 +55,7 @@ module tb;
   logic write_done_o;
 
   int total_cycles;
-  int instructions_executed;
+  int instructions_executed, program_instructions_executed;
 
   cpu i_cpu (
     .clk_i                          (clk),
@@ -126,6 +126,7 @@ module tb;
   initial begin
     rst = 0;
     instructions_executed = 0;
+    program_instructions_executed = 0;
 
     initialize_registers();
     initialize_memories();
@@ -147,13 +148,7 @@ module tb;
     end
     //$readmemh("buffer_sum.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
-    //$readmemh("matrix_multiply.mem", model_mem);
-
-    // Boot at PC = 0x1000
-    model_mem[4096] = 8'h93; // addi x1, x0, 0
-
-    model_mem[4100] = 8'h13;
-    model_mem[4101] = 8'h01; // addi x2, x0, 0x1000
+    $readmemh("matrix_multiply.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -163,8 +158,10 @@ module tb;
     new_model_pc = (model_pc + 4) % MEM_SIZE;
 
     // Trap handler
-    if (!cpu_mmu_enable && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000))
+    if (!cpu_mmu_enable && (cpu_wb_pc >= 'h2000 && cpu_wb_pc < 'h3000)) begin
+      ++instructions_executed;
       return;
+    end
 
     error_msg = "";
     error = 1'b0;
@@ -173,14 +170,19 @@ module tb;
     check_registers();
     print_check_result();
     ++instructions_executed;
+    ++program_instructions_executed;
 
-    if (model_pc == 'h74) begin
+    // buffer_sum='h74, mem_copy='h78, matrix_multiply='h100
+    if (model_pc == 'h100) begin
       finish = 1;
       wait (done == 1'b1);
         compare_memories();
-        $display("CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
+        $display("Total CPI=%0.3f (total_cycles=%0d, instructions_executed=%0d)",
                 real'(total_cycles) / real'(instructions_executed - 1), total_cycles,
                 instructions_executed);
+        $display("Program CPI=%0.3f (total_cycles=%0d, program_instructions_executed=%0d)",
+                real'(total_cycles) / real'(program_instructions_executed - 1), total_cycles,
+                program_instructions_executed);
         $finish;
     end
     model_pc = new_model_pc;
