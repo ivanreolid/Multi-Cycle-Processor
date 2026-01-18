@@ -63,7 +63,8 @@ module mem_stage #(
   typedef enum logic [1:0] {
     IDLE     = 2'b00,
     READY    = 2'b01,
-    WAITING  = 2'b10
+    WAITING  = 2'b10,
+    FLUSH    = 2'b11
   } state_t;
 
   state_t state, state_d;
@@ -197,88 +198,96 @@ module mem_stage #(
     present_table_req_o = 1'b0;
     present_table_ppn_o = '0;
 
-    case(state)
-      IDLE: begin
-        state_d            = READY;
-      end
-      READY: begin
-        if (valid_i) begin
-          if (mmu_enable) begin
-            if (dtlb_hit) begin
-              paddr = {dtlb_ppn, alu_result_i[11:0]};
-            end else begin
-              dptw_req = 1'b1;
-              present_table_req_o = 1'b1;
-              present_table_ppn_o = dptw_paddr[19:12];
-
-              if (dptw_valid) begin
-                paddr      = dptw_paddr;
-                dtlb_wr_en = 1'b1;
-              end
-            end
-          end else begin
-            paddr = alu_result_i[19:0];
-          end
-
-          if (dptw_error) begin
-            wb_valid_o = 1'b1;
-            wb_excpt_o       = 1'b1;
-            wb_excpt_tval_o  = alu_result_i;
-            wb_excpt_cause_o = is_load_i ? LOAD_PAGE_FAULT : STORE_PAGE_FAULT;
-            state_d          = READY;
-          end else begin
-            cache_req         = is_load_i | is_store_i;
-            cache_wr          = is_store_i;
-
-            if (is_load_i) begin
-              if (cache_hit && cache_rvalid) begin
-                wb_valid_o      = 1'b1;
-                wb_reg_wr_en_o  = 1'b1;
-                stall_o         = 1'b0;
-                state_d         = READY;
+    if (flush_i) begin
+      state_d = state == WAITING ? FLUSH : READY;
+    end else begin
+      case(state)
+        IDLE: begin
+          state_d            = READY;
+        end
+        READY: begin
+          if (valid_i) begin
+            if (mmu_enable) begin
+              if (dtlb_hit) begin
+                paddr = {dtlb_ppn, alu_result_i[11:0]};
               end else begin
-                wb_valid_o      = 1'b0;
-                wb_reg_wr_en_o  = 1'b0;
-                stall_o         = 1'b1;
-                state_d         = WAITING;
+                dptw_req = 1'b1;
+                present_table_req_o = 1'b1;
+                present_table_ppn_o = dptw_paddr[19:12];
+
+                if (dptw_valid) begin
+                  paddr      = dptw_paddr;
+                  dtlb_wr_en = 1'b1;
+                end
               end
-            end else if (is_store_i) begin
-              if (cache_hit) begin
+            end else begin
+              paddr = alu_result_i[19:0];
+            end
+
+            if (dptw_error) begin
+              wb_valid_o = 1'b1;
+              wb_excpt_o       = 1'b1;
+              wb_excpt_tval_o  = alu_result_i;
+              wb_excpt_cause_o = is_load_i ? LOAD_PAGE_FAULT : STORE_PAGE_FAULT;
+              state_d          = READY;
+            end else begin
+              cache_req         = is_load_i | is_store_i;
+              cache_wr          = is_store_i;
+
+              if (is_load_i) begin
+                if (cache_hit && cache_rvalid) begin
+                  wb_valid_o      = 1'b1;
+                  wb_reg_wr_en_o  = 1'b1;
+                  stall_o         = 1'b0;
+                  state_d         = READY;
+                end else begin
+                  wb_valid_o      = 1'b0;
+                  wb_reg_wr_en_o  = 1'b0;
+                  stall_o         = 1'b1;
+                  state_d         = WAITING;
+                end
+              end else if (is_store_i) begin
+                if (cache_hit) begin
+                  wb_reg_wr_en_o  = reg_wr_en_i;
+                  wb_valid_o      = 1'b1;
+                  stall_o         = 1'b0;
+                  state_d         = READY;
+                end else begin
+                  wb_reg_wr_en_o  = 1'b0;
+                  wb_valid_o      = 1'b0;
+                  stall_o         = 1'b1;
+                  state_d         = WAITING;
+                end
+              end else begin
                 wb_reg_wr_en_o  = reg_wr_en_i;
                 wb_valid_o      = 1'b1;
                 stall_o         = 1'b0;
                 state_d         = READY;
-              end else begin
-                wb_reg_wr_en_o  = 1'b0;
-                wb_valid_o      = 1'b0;
-                stall_o         = 1'b1;
-                state_d         = WAITING;
               end
-            end else begin
-              wb_reg_wr_en_o  = reg_wr_en_i;
-              wb_valid_o      = 1'b1;
-              stall_o         = 1'b0;
-              state_d         = READY;
             end
           end
         end
-      end
-
-      WAITING: begin
-        stall_o              = 1'b1;
-        if (cache_rvalid) begin
-          wb_valid_o         = 1'b1;
-          wb_reg_wr_en_o     = 1'b1;
-          stall_o            = 1'b0;
-          state_d            = READY;
-        end else if (cache_hit && !is_load_i) begin
-          wb_valid_o         = 1'b1;
-          wb_reg_wr_en_o     = reg_wr_en_i;
-          stall_o            = 1'b0;
-          state_d            = READY;
+        WAITING: begin
+          stall_o              = 1'b1;
+          if (cache_rvalid) begin
+            wb_valid_o         = 1'b1;
+            wb_reg_wr_en_o     = 1'b1;
+            stall_o            = 1'b0;
+            state_d            = READY;
+          end else if (cache_hit && !is_load_i) begin
+            wb_valid_o         = 1'b1;
+            wb_reg_wr_en_o     = reg_wr_en_i;
+            stall_o            = 1'b0;
+            state_d            = READY;
+          end
         end
-      end
-    endcase
+        FLUSH: begin
+          if (cache_rvalid) begin
+            state_d = READY;
+          end
+        end
+      endcase
+    end
   end
 
 endmodule : mem_stage
