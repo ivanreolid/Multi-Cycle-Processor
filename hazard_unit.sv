@@ -118,10 +118,11 @@ module hazard_unit #(
                      stall_reason_mem_raw_hazard ||
                      stall_reason_ex_raw_hazard;
 
-    alu_bubble_o   = stall_decode_o && !stall_reason_alu_backpressure;
     ex_bubble_o    = stall_decode_o && !stall_reason_ex_backpressure;
   end
 
   assign stall_fetch_o = stall_decode_o;
+
+  assign alu_bubble_o = stall_decode_o && !stall_alu_o;
 
 endmodule : hazard_unit
