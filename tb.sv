@@ -9,28 +9,28 @@ module tb;
 
   // CPU - IMEM communication wires
   logic mem_data_valid, mem_data_is_instr;
-  logic [CACHE_LINE_BYTES*8-1:0] mem_data;
+  cacheline_t mem_data;
   logic rd_req_valid, wr_req_valid, req_is_instr;
-  logic [PADDR_WIDTH-1:0] req_address;
-  logic [CACHE_LINE_BYTES*8-1:0] wr_data;
+  paddr_t req_address;
+  cacheline_t wr_data;
   access_size_t req_access_size;
 
-  logic [ADDR_WIDTH-1:0] model_pc, new_model_pc;
-  logic [PADDR_WIDTH-1:0] model_pa_pc;
-  logic [PADDR_WIDTH-1:0] model_reg_pa;
-  logic [PADDR_WIDTH-1:0] model_mem_op_pa;
+  vaddr_t model_pc, new_model_pc;
+  paddr_t model_pa_pc;
+  paddr_t model_reg_pa;
+  paddr_t model_mem_op_pa;
 
-  logic [DATA_WIDTH-1:0] cpu_regs [32];
+  data_t cpu_regs [32];
   logic [7:0] cpu_mem [MEM_SIZE];
 
-  logic [DATA_WIDTH-1:0] model_regs [32];
+  data_t model_regs [32];
   logic [7:0] model_mem [MEM_SIZE];
 
   // CPU CSRs
-  logic [DATA_WIDTH-1:0] cpu_satp;
+  data_t cpu_satp;
 
   // Model CSRs
-  logic [DATA_WIDTH-1:0] model_satp;
+  data_t model_satp;
 
   // CPU virtual memory
   logic cpu_vm_en;
@@ -39,13 +39,13 @@ module tb;
 
   logic cpu_instr_is_completed;
   instruction_t model_instr, cpu_wb_instr;
-  logic [ADDR_WIDTH-1:0] cpu_wb_pc;
+  vaddr_t cpu_wb_pc;
 
   system_funct3_t system_funct3;
   logic [SHAMT_WIDTH-1:0] shamt;
-  logic [DATA_WIDTH-1:0] offset_sign_extend;
+  data_t offset_sign_extend;
 
-  logic [ADDR_WIDTH-1:0] pc_plus_offset;
+  vaddr_t pc_plus_offset;
 
   bit error;
   string error_msg;
@@ -82,7 +82,6 @@ module tb;
 
   mem #(
     .MEM_SIZE                       (MEM_SIZE),
-    .ADDR_WIDTH                     (PADDR_WIDTH),
     .DATA_WIDTH                     (CACHE_LINE_BYTES*8)
   ) mem (
     .clk_i                          (clk),

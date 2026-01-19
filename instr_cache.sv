@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
 module instr_cache import params_pkg::*; #(
-    parameter int ADDR_WIDTH  = params_pkg::ADDR_WIDTH,
     parameter int PADDR_WIDTH = params_pkg::PADDR_WIDTH,
+    parameter int ADDR_WIDTH  = params_pkg::ADDR_WIDTH,
     parameter int LINE_BYTES  = params_pkg::CACHE_LINE_BYTES, // cache line byte
     parameter int N_LINES     = params_pkg::ICACHE_N_LINES    // line number
 ) (
@@ -11,18 +11,18 @@ module instr_cache import params_pkg::*; #(
 
     input  logic                      state_reset,
     input  logic                      cpu_req,       // CPU req came
-    input  logic [PADDR_WIDTH-1:0]    cpu_addr,      // Byte adres
+    input  paddr_t                    cpu_addr,      // Byte adres
     input  logic [1:0]                cpu_size,      // 00=byte, 01=half, 10=word
     output logic                      cpu_ready,     // cache ready for another req
-    output logic [ADDR_WIDTH-1:0]     cpu_rdata,     // read data
+    output data_t                     cpu_rdata,     // read data
     output logic                      cpu_rvalid,    // read valid result
     output logic                      curr_cache_hit,
 
     output logic                      mem_req,       // mem req
-    output logic [PADDR_WIDTH-1:0]    mem_addr,      // Line-aligned address
+    output paddr_t                    mem_addr,      // Line-aligned address
     input  logic                      mem_gnt,       // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid,    // mem read
-    input  logic [LINE_BYTES*8-1:0]   mem_rdata      // full line
+    input  cacheline_t                mem_rdata      // full line
 );
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
@@ -42,11 +42,11 @@ module instr_cache import params_pkg::*; #(
 
     logic [TAG_BITS-1:0]        tag_array   [N_LINES];
     logic                       valid_array [N_LINES];
-    logic [LINE_BYTES*8-1:0]    data_array  [N_LINES];
+    cacheline_t                 data_array  [N_LINES];
 
     typedef struct packed {
         logic                   valid;
-        logic [PADDR_WIDTH-1:0] addr;
+        paddr_t                 addr;
         logic [1:0]             size;
     } pending_req_t;
 
@@ -61,7 +61,7 @@ module instr_cache import params_pkg::*; #(
     logic [TAG_BITS-1:0]      pend_tag;
     logic [WORD_OFF_BITS-1:0] pend_word_off;
     logic [1:0]               pend_byte_off;
-    logic [PADDR_WIDTH-1:0]   pend_line_addr;
+    paddr_t                   pend_line_addr;
 
     assign curr_index    = cpu_addr[OFFSET_BITS +: IDX_BITS];
     assign curr_tag      = cpu_addr[PADDR_WIDTH-1 -: TAG_BITS];
@@ -81,7 +81,7 @@ module instr_cache import params_pkg::*; #(
     state_t state;
 
     logic                      mem_req_r;
-    logic [PADDR_WIDTH-1:0]    mem_addr_r;
+    paddr_t                    mem_addr_r;
 
     assign mem_req   = mem_req_r;
     assign mem_addr  = mem_addr_r;
@@ -92,8 +92,8 @@ module instr_cache import params_pkg::*; #(
         input [1:0]               byte_off,
         input [1:0]               size
     );
-        logic [31:0] word_data;
-        logic [31:0] result;
+        data_t word_data;
+        data_t result;
         begin
             word_data = line_data[(word_idx*32) +: 32];
 
@@ -122,7 +122,7 @@ module instr_cache import params_pkg::*; #(
         end
     endfunction
 
-    logic [31:0] load_hit_rdata;
+    data_t       load_hit_rdata;
     logic        load_hit_valid;
 
     assign load_hit_valid = cpu_req && curr_cache_hit && (state == S_IDLE);
@@ -136,7 +136,7 @@ module instr_cache import params_pkg::*; #(
         );
 
     logic                      cpu_ready_r;
-    logic [31:0]               cpu_rdata_r;
+    data_t                     cpu_rdata_r;
     logic                      cpu_rvalid_r;
 
     assign cpu_rvalid = load_hit_valid | cpu_rvalid_r;

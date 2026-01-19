@@ -1,22 +1,21 @@
 import params_pkg::*;
 
 module alu #(
-  parameter OPCODE_WIDTH = params_pkg::OPCODE_WIDTH,
-  parameter DATA_WIDTH   = params_pkg::DATA_WIDTH
+  parameter int OPCODE_WIDTH = params_pkg::OPCODE_WIDTH
 )(
   input  opcode opcode_i,
   input  logic [2:0] funct3_i,
   input  logic [6:0] funct7_i,
-  input  logic [DATA_WIDTH-1:0] a_i,
-  input  logic [DATA_WIDTH-1:0] b_i,
+  input  data_t a_i,
+  input  data_t b_i,
   output logic is_zero_o,
   output logic is_less_o,
-  output logic [DATA_WIDTH-1:0] result_o
+  output data_t result_o
 );
 
-  logic [DATA_WIDTH-1:0] sum_result;
-  logic [DATA_WIDTH-1:0] sub_result;
-  logic [DATA_WIDTH-1:0] srl_result, sra_result;
+  data_t sum_result;
+  data_t sub_result;
+  data_t srl_result, sra_result;
 
   assign sum_result         = a_i + b_i;
   assign sub_result         = a_i - b_i;

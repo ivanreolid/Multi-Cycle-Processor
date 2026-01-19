@@ -23,6 +23,7 @@ package params_pkg;
   parameter int ITLB_DEPTH       = `ITLB_DEPTH_MACRO;
 
   parameter int CACHE_LINE_BYTES = `CACHE_LINE_BYTES_MACRO;
+  parameter int CACHE_LINE_BITS  = CACHE_LINE_BYTES * 8;
   parameter int DCACHE_N_LINES   = `DCACHE_N_LINES_MACRO;
   parameter int ICACHE_N_LINES   = `ICACHE_N_LINES_MACRO;
 
@@ -35,6 +36,16 @@ package params_pkg;
   // CSRs custom
   parameter int CSR_PPN_SEL  = 12'h7c0;
   parameter int CSR_PPN_FLAG = 12'h7c1;
+
+  typedef logic [PADDR_WIDTH-1:0]     paddr_t;
+  typedef logic [VADDR_WIDTH-1:0]     vaddr_t;
+  typedef logic [DATA_WIDTH-1:0]      data_t;
+  typedef logic [REGISTER_WIDTH-1:0]  reg_id_t;
+  typedef logic [ROB_ENTRY_WIDTH-1:0] rob_idx_t;
+  typedef logic [CACHE_LINE_BITS-1:0] cacheline_t;
+  typedef logic [CSR_ADDR_WIDTH-1:0]  csr_addr_t;
+
+  const reg_id_t X0 = '0;
 
   typedef enum logic[6:0] {
     R         = 7'b0110011,
@@ -64,8 +75,8 @@ package params_pkg;
     logic is_mul;
     logic rs1_needed;
     logic rs2_needed;
-    logic [4:0] rs1;
-    logic [4:0] rs2;
+    reg_id_t rs1;
+    reg_id_t rs2;
   } hazard_ctrl_t;
 
   typedef enum logic [1:0] {
@@ -91,10 +102,10 @@ package params_pkg;
 
   typedef struct packed {
     logic [6:0] funct7;
-    logic [4:0] rs2;
-    logic [4:0] rs1;
+    reg_id_t rs2;
+    reg_id_t rs1;
     logic [2:0] funct3;
-    logic [4:0] rd;
+    reg_id_t rd;
     opcode opcode;
   } instruction_t;
 

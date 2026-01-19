@@ -1,6 +1,5 @@
 module mem import params_pkg::*; #(
   parameter int MEM_SIZE   = 4096,
-  parameter int ADDR_WIDTH = 20,
   parameter int DATA_WIDTH = 128
 )(
   input  logic clk_i,
@@ -8,12 +7,12 @@ module mem import params_pkg::*; #(
   input  logic rd_req_valid_i,
   input  logic wr_req_valid_i,
   input  logic req_is_instr_i,
-  input  logic [ADDR_WIDTH-1:0] address_i,
-  input  logic [DATA_WIDTH-1:0] wr_data_i,
+  input  paddr_t address_i,
+  input  cacheline_t wr_data_i,
   input  access_size_t access_size_i,
   output logic data_valid_o,
   output logic data_is_instr_o,
-  output logic [DATA_WIDTH-1:0] data_o,
+  output cacheline_t data_o,
   output logic write_done_o,
   input logic finish,
 `ifndef SYNTHESIS
@@ -39,15 +38,15 @@ module mem import params_pkg::*; #(
   logic pipe1_is_instr, pipe2_is_instr, pipe3_is_instr, pipe4_is_instr, pipe5_is_instr,
         pipe6_is_instr, pipe7_is_instr, pipe8_is_instr, pipe9_is_instr, pipe10_is_instr;
 
-  logic [ADDR_WIDTH-1:0] pipe1_addr_d;
-  logic [ADDR_WIDTH-1:0] pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
+  paddr_t pipe1_addr_d;
+  paddr_t pipe1_addr, pipe2_addr, pipe3_addr, pipe4_addr, pipe5_addr;
 
-  logic [DATA_WIDTH-1:0] pipe6_read_data_d;
-  logic [DATA_WIDTH-1:0] pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data,
+  cacheline_t pipe6_read_data_d;
+  cacheline_t pipe6_read_data, pipe7_read_data, pipe8_read_data, pipe9_read_data,
                          pipe10_read_data;
 
-  logic [DATA_WIDTH-1:0] pipe1_write_data_d;
-  logic [DATA_WIDTH-1:0] pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
+  cacheline_t pipe1_write_data_d;
+  cacheline_t pipe1_write_data, pipe2_write_data, pipe3_write_data, pipe4_write_data,
                          pipe5_write_data;
 
 parameter int MAX_WRITE_CYCLES = 4; // Cache line sayısı kadar

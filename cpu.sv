@@ -11,8 +11,6 @@
 `include "reorder_buffer.sv"
 
 module cpu import params_pkg::*; #(
-  parameter int CSR_ADDR_WIDTH    = params_pkg::CSR_ADDR_WIDTH,
-  parameter int PADDR_WIDTH       = params_pkg::PADDR_WIDTH,
   parameter int CACHE_LINE_BYTES  = params_pkg::CACHE_LINE_BYTES,
   parameter int ICACHE_N_LINES    = params_pkg::ICACHE_N_LINES,
   parameter int DCACHE_N_LINES    = params_pkg::DCACHE_N_LINES
@@ -21,12 +19,12 @@ module cpu import params_pkg::*; #(
   input  logic rst_i,
 
   input  logic mem_data_valid_i,
-  input  logic [CACHE_LINE_BYTES*8-1:0] mem_data_i,
+  input  cacheline_t mem_data_i,
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic req_is_instr_o,
-  output logic [PADDR_WIDTH-1:0] req_address_o,
-  output logic [CACHE_LINE_BYTES*8-1:0] wr_data_o,
+  output paddr_t req_address_o,
+  output cacheline_t wr_data_o,
   output access_size_t req_access_size_o,
 
   input  logic finish,   // flush request
@@ -36,19 +34,19 @@ module cpu import params_pkg::*; #(
   output logic debug_vm_en_o,
   output logic debug_trap_bypass_mmu_o,
   output logic debug_instr_is_completed_o,
-  output logic [DATA_WIDTH-1:0] debug_satp_o,
-  output logic [DATA_WIDTH-1:0] debug_regs_o [32],
-  output logic [ADDR_WIDTH-1:0] debug_pc_o,
+  output data_t debug_satp_o,
+  output data_t debug_regs_o [32],
+  output vaddr_t debug_pc_o,
   output instruction_t debug_instr_o
 `endif
 );
   logic icache_req, icache_gnt, icache_rvalid;
-  logic [PADDR_WIDTH-1:0] icache_addr;
-  logic [CACHE_LINE_BYTES*8-1:0] icache_rdata;
+  paddr_t icache_addr;
+  cacheline_t icache_rdata;
 
   logic dcache_req, dcache_we, dcache_gnt, dcache_rvalid;
-  logic [PADDR_WIDTH-1:0] dcache_addr;
-  logic [CACHE_LINE_BYTES*8-1:0] dcache_wdata, dcache_rdata;
+  paddr_t dcache_addr;
+  cacheline_t dcache_wdata, dcache_rdata;
 
   // Fetch stage wires
   logic fetch_stall;
@@ -57,11 +55,11 @@ module cpu import params_pkg::*; #(
   logic dec_valid_d;
   logic dec_excpt_d;
   logic [PPN_WIDTH-1:0] fetch_present_table_ppn;
-  logic [DATA_WIDTH-1:0] satp_data;
-  logic [DATA_WIDTH-1:0] mtvec_data;
-  logic [DATA_WIDTH-1:0] mepc_data;
-  logic [ADDR_WIDTH-1:0] next_pc_flush;
-  logic [ADDR_WIDTH-1:0] dec_pc_d;
+  data_t satp_data;
+  data_t mtvec_data;
+  data_t mepc_data;
+  vaddr_t next_pc_flush;
+  vaddr_t dec_pc_d;
   excpt_cause_t dec_excpt_cause_d;
   access_size_t fetch_req_access_size;
   instruction_t dec_instruction_d;
@@ -73,15 +71,15 @@ module cpu import params_pkg::*; #(
   logic dec_instr_is_mret;
   logic alu_valid_d;
   logic ex1_valid_d;
-  logic [ROB_ENTRY_WIDTH-1:0] dec_rob_new_instr_idx;
-  logic [REGISTER_WIDTH-1:0] dec_wr_reg;
+  rob_idx_t dec_rob_new_instr_idx;
+  reg_id_t dec_wr_reg;
   logic [SHAMT_WIDTH-1:0] alu_shamt_d;
-  logic [ADDR_WIDTH-1:0] dec_pc_q;
-  logic [CSR_ADDR_WIDTH-1:0] dec_csr_addr;
-  logic [DATA_WIDTH-1:0] dec_csr_data;
-  logic [DATA_WIDTH-1:0] dec_rs1_data, dec_rs2_data;
-  logic [DATA_WIDTH-1:0] alu_rs1_data_d, alu_rs2_data_d;
-  logic [DATA_WIDTH-1:0] alu_offset_sign_extend_d;
+  vaddr_t dec_pc_q;
+  csr_addr_t dec_csr_addr;
+  data_t dec_csr_data;
+  data_t dec_rs1_data, dec_rs2_data;
+  data_t alu_rs1_data_d, alu_rs2_data_d;
+  data_t alu_offset_sign_extend_d;
   logic dec_stall;
   logic alu_bubble, ex_bubble;
   excpt_cause_t dec_excpt_cause_q;
@@ -89,12 +87,12 @@ module cpu import params_pkg::*; #(
   instruction_t dec_instruction_q;
 
   // ALU stage wires
-  logic [ADDR_WIDTH-1:0] alu_pc_q;
-  logic [DATA_WIDTH-1:0] alu_rs1_data_q, alu_rs2_data_q;
+  vaddr_t alu_pc_q;
+  data_t alu_rs1_data_q, alu_rs2_data_q;
   logic [SHAMT_WIDTH-1:0] alu_shamt_q;
-  logic [DATA_WIDTH-1:0] alu_offset_sign_extend_q;
-  logic [ADDR_WIDTH-1:0] alu_pc_branch_offset;
-  logic [ADDR_WIDTH-1:0] jump_address;
+  data_t alu_offset_sign_extend_q;
+  vaddr_t alu_pc_branch_offset;
+  vaddr_t jump_address;
   logic is_jump;
   logic alu_branch_taken;
   logic alu_valid_q;
@@ -104,11 +102,11 @@ module cpu import params_pkg::*; #(
   logic mem_is_store_d;
   logic mem_reg_wr_en_d;
   logic alu_is_instr_wbalu, alu_instr_finishes;
-  logic [ROB_ENTRY_WIDTH-1:0] alu_rob_instr_idx_q;
-  logic [REGISTER_WIDTH-1:0] alu_wr_reg_q;
-  logic [DATA_WIDTH-1:0] alu_data_to_reg;
-  logic [DATA_WIDTH-1:0] mem_alu_result_d;
-  logic [DATA_WIDTH-1:0] mem_rs2_data_d;
+  rob_idx_t alu_rob_instr_idx_q;
+  reg_id_t alu_wr_reg_q;
+  data_t alu_data_to_reg;
+  data_t mem_alu_result_d;
+  data_t mem_rs2_data_d;
   access_size_t mem_access_size_d;
   instruction_t alu_instruction_q;
 `ifndef SYNTHESIS
@@ -116,10 +114,10 @@ module cpu import params_pkg::*; #(
 `endif
 
   // Mem stage wires
-  logic [DATA_WIDTH-1:0] mem_alu_result_q;
-  logic [DATA_WIDTH-1:0] mem_rs2_data_q;
-  logic [ROB_ENTRY_WIDTH-1:0] mem_rob_instr_idx_q;
-  logic [REGISTER_WIDTH-1:0] mem_wr_reg_q;
+  data_t mem_alu_result_q;
+  data_t mem_rs2_data_q;
+  rob_idx_t mem_rob_instr_idx_q;
+  reg_id_t mem_wr_reg_q;
   logic mem_ppn_is_present;
   logic mem_present_table_req;
   logic mem_reg_wr_en_q;
@@ -130,11 +128,11 @@ module cpu import params_pkg::*; #(
   access_size_t mem_access_size_q;
   logic mem_rd_req, mem_wr_req;
   logic [PPN_WIDTH-1:0] mem_present_table_ppn;
-  logic [PADDR_WIDTH-1:0] mem_req_addr;
-  logic [CACHE_LINE_BYTES*8-1:0] mem_wr_line;
+  paddr_t mem_req_addr;
+  cacheline_t mem_wr_line;
   access_size_t mem_req_access_size;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_mem_pc_q;
+  vaddr_t debug_mem_pc_q;
   instruction_t debug_mem_instr_q;
 `endif
 
@@ -142,15 +140,15 @@ module cpu import params_pkg::*; #(
   logic ex2_valid_d, ex3_valid_d, ex4_valid_d, ex5_valid_d;
   logic ex1_valid_q, ex2_valid_q, ex3_valid_q, ex4_valid_q, ex5_valid_q;
   logic ex1_stall, ex2_stall, ex3_stall, ex4_stall, ex5_stall;
-  logic [ROB_ENTRY_WIDTH-1:0] ex1_rob_instr_idx_q, ex2_rob_instr_idx_q, ex3_rob_instr_idx_q,
+  rob_idx_t ex1_rob_instr_idx_q, ex2_rob_instr_idx_q, ex3_rob_instr_idx_q,
                               ex4_rob_instr_idx_q, ex5_rob_instr_idx_q;
-  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
-  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_q, ex2_wr_reg_q, ex3_wr_reg_q, ex4_wr_reg_q, ex5_wr_reg_q;
-  logic [DATA_WIDTH-1:0] ex2_result_d, ex3_result_d, ex4_result_d, ex5_result_d;
-  logic [DATA_WIDTH-1:0] ex2_result_q, ex3_result_q, ex4_result_q, ex5_result_q;
+  reg_id_t ex2_wr_reg_d, ex3_wr_reg_d, ex4_wr_reg_d, ex5_wr_reg_d;
+  reg_id_t ex1_wr_reg_q, ex2_wr_reg_q, ex3_wr_reg_q, ex4_wr_reg_q, ex5_wr_reg_q;
+  data_t ex2_result_d, ex3_result_d, ex4_result_d, ex5_result_d;
+  data_t ex2_result_q, ex3_result_q, ex4_result_q, ex5_result_q;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] ex2_debug_pc_d, ex3_debug_pc_d, ex4_debug_pc_d, ex5_debug_pc_d;
-  logic [ADDR_WIDTH-1:0] ex1_debug_pc_q, ex2_debug_pc_q, ex3_debug_pc_q, ex4_debug_pc_q,
+  vaddr_t ex2_debug_pc_d, ex3_debug_pc_d, ex4_debug_pc_d, ex5_debug_pc_d;
+  vaddr_t ex1_debug_pc_q, ex2_debug_pc_q, ex3_debug_pc_q, ex4_debug_pc_q,
                          ex5_debug_pc_q;
   instruction_t ex2_debug_instr_d, ex3_debug_instr_d, ex4_debug_instr_d, ex5_debug_instr_d;
   instruction_t ex1_debug_instr_q, ex2_debug_instr_q, ex3_debug_instr_q, ex4_debug_instr_q,
@@ -161,31 +159,31 @@ module cpu import params_pkg::*; #(
   logic wb_valid_from_mem, wb_valid_from_ex;
   logic wb_excpt_from_mem;
   logic wb_reg_wr_en_from_mem, wb_reg_wr_en_from_ex_q;
-  logic [REGISTER_WIDTH-1:0] wb_wr_reg_from_mem, wb_wr_reg_from_ex;
-  logic [REGISTER_WIDTH-1:0] wb_wr_reg;
-  logic [DATA_WIDTH-1:0] wb_data_from_mem, wb_data_from_ex;
+  reg_id_t wb_wr_reg_from_mem, wb_wr_reg_from_ex;
+  reg_id_t wb_wr_reg;
+  data_t wb_data_from_mem, wb_data_from_ex;
   logic wb_reg_wr_en;
   logic instr_with_excpt;
   logic instr_complete;
   logic ex_allowed_wb, alu_allowed_wb;
   logic wb_valid;
-  logic [DATA_WIDTH-1:0] wb_data_to_reg;
-  logic [ADDR_WIDTH-1:0] wb_excpt_tval_from_mem, instr_complete_excpt_tval;
+  data_t wb_data_to_reg;
+  vaddr_t wb_excpt_tval_from_mem, instr_complete_excpt_tval;
   excpt_cause_t wb_excpt_cause_from_mem, instr_complete_excp_cause;
 `ifndef SYNTHESIS
-  logic [ADDR_WIDTH-1:0] debug_wb_pc_from_mem, debug_wb_pc_from_ex, debug_wb_pc;
+  vaddr_t debug_wb_pc_from_mem, debug_wb_pc_from_ex, debug_wb_pc;
   instruction_t debug_wb_instr_from_mem, debug_wb_instr_from_ex, debug_wb_instr;
 `endif
 
   // Future file wires
   logic [31:0] ff_valid;
-  logic [DATA_WIDTH-1:0] ff_data_a, ff_data_b;
+  data_t ff_data_a, ff_data_b;
 `ifndef SYNTHESIS
-  logic [DATA_WIDTH-1:0] debug_future_file [32];
+  data_t debug_future_file [32];
 `endif
 
   // Architectural file wires
-  logic [DATA_WIDTH-1:0] af_data_a, af_data_b;
+  data_t af_data_a, af_data_b;
 
   // Reorder buffer wires
   logic rob_is_full;
@@ -196,31 +194,27 @@ module cpu import params_pkg::*; #(
   logic rob_instr_commit_is_wb, rob_instr_commit_is_csr_wb;
   logic rob_instr_commit_is_mret;
   logic rob_instr_commit_is_csrrw_satp;
-  logic [ROB_ENTRY_WIDTH-1:0] rob_instr_complete_idx;
-  logic [REGISTER_WIDTH-1:0] rob_instr_commit_reg_id;
-  logic [CSR_ADDR_WIDTH-1:0] rob_instr_commit_csr_addr;
-  logic [DATA_WIDTH-1:0] rob_instr_commit_data, rob_instr_commit_csr_data;
-  logic [ADDR_WIDTH-1:0] rob_excp_pc;
-  logic [ADDR_WIDTH-1:0] rob_excp_tval;
-  logic [ADDR_WIDTH-1:0] rob_instr_commit_pc;
+  rob_idx_t rob_instr_complete_idx;
+  reg_id_t rob_instr_commit_reg_id;
+  csr_addr_t rob_instr_commit_csr_addr;
+  data_t rob_instr_commit_data, rob_instr_commit_csr_data;
+  vaddr_t rob_excp_pc;
+  vaddr_t rob_excp_tval;
+  vaddr_t rob_instr_commit_pc;
   excpt_cause_t rob_excp_cause;
 `ifndef SYNTHESIS
   instruction_t debug_rob_instr_commit;
 `endif
 
 logic mem_req,mem_we;
-logic [PADDR_WIDTH-1:0] mem_addr;
-logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
+paddr_t mem_addr;
+cacheline_t mem_wdata;
 
   // Virtual memory wires
   logic vm_en;
   logic trap_bypass_mmu;
 
-  mem_arbiter #(
-  .ADDR_WIDTH   (ADDR_WIDTH),
-  .PADDR_WIDTH  (PADDR_WIDTH),
-  .DATA_WIDTH   (CACHE_LINE_BYTES*8)
-) mem_arbiter (
+  mem_arbiter mem_arbiter (
   .clk          (clk_i),
   .rst          (rst_i),
 
@@ -255,9 +249,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   .mem_rvalid   (mem_data_valid_i)
   );
 
-  hazard_unit #(
-    .REGISTER_WIDTH     (REGISTER_WIDTH)
-  ) hazard_unit (
+  hazard_unit hazard_unit (
     .rob_is_full_i      (rob_is_full),
     .dec_valid_i        (dec_valid_q),
     .alu_valid_i        (alu_valid_q),
@@ -327,9 +319,6 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
   decode_stage #(
     .SHAMT_WIDTH           (SHAMT_WIDTH),
-    .DATA_WIDTH            (DATA_WIDTH),
-    .ADDR_WIDTH            (ADDR_WIDTH),
-    .REGISTER_WIDTH        (REGISTER_WIDTH),
     .OPCODE_WIDTH          (OPCODE_WIDTH)
   ) decode_stage (
     .valid_i               (dec_valid_q),
@@ -376,7 +365,6 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 
   alu_stage #(
     .SHAMT_WIDTH          (SHAMT_WIDTH),
-    .DATA_WIDTH           (DATA_WIDTH),
     .OPCODE_WIDTH         (OPCODE_WIDTH)
   ) alu_stage (
     .valid_i              (alu_valid_q),
@@ -409,8 +397,6 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   mem_stage #(
     .MEM_SIZE                   (MEM_SIZE),
     .ADDR_WIDTH                 (ADDR_WIDTH),
-    .DATA_WIDTH                 (DATA_WIDTH),
-    .REGISTER_WIDTH             (REGISTER_WIDTH),
     .CACHE_LINE_BYTES           (CACHE_LINE_BYTES),
     .DCACHE_N_LINES             (DCACHE_N_LINES)
   ) mem_stage (
@@ -465,10 +451,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
   assign dcache_addr = mem_req_addr;
   assign dcache_wdata = mem_wr_line;
 
-  ex_stages #(
-    .REGISTER_WIDTH     (REGISTER_WIDTH),
-    .DATA_WIDTH         (DATA_WIDTH)
-  ) ex_stages (
+  ex_stages ex_stages (
     .ex1_valid_i        (ex1_valid_q),
     .ex2_valid_i        (ex2_valid_q),
     .ex3_valid_i        (ex3_valid_q),
@@ -526,12 +509,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 `endif
   );
 
-  wb_arbiter #(
-    .ROB_ENTRY_WIDTH    (ROB_ENTRY_WIDTH),
-    .REGISTER_WIDTH     (REGISTER_WIDTH),
-    .DATA_WIDTH         (DATA_WIDTH),
-    .ADDR_WIDTH         (ADDR_WIDTH)
-  ) wb_arbiter (
+  wb_arbiter wb_arbiter (
     .alu_ready_i        (alu_instr_finishes),
     .alu_is_instr_wb_i  (alu_is_instr_wbalu),
     .mem_ready_i        (wb_valid_from_mem),
@@ -599,10 +577,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 `endif
   );
 
-  register_file #(
-    .REGISTER_WIDTH (REGISTER_WIDTH),
-    .DATA_WIDTH     (DATA_WIDTH)
-  ) future_file (
+  register_file future_file (
     .clk_i          (clk_i),
     .rst_i          (rst_i),
     .wr_en_i        (wb_reg_wr_en & !flush),
@@ -617,10 +592,7 @@ logic [CACHE_LINE_BYTES*8-1:0] mem_wdata;
 `endif
   );
 
-  register_file #(
-    .REGISTER_WIDTH (REGISTER_WIDTH),
-    .DATA_WIDTH     (DATA_WIDTH)
-   ) architectural_file (
+  register_file architectural_file (
     .clk_i        (clk_i),
     .rst_i        (rst_i),
     .wr_en_i      (rob_instr_commit_valid & rob_instr_commit_is_wb),

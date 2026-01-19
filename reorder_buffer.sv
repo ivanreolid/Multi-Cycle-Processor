@@ -1,10 +1,5 @@
 module reorder_buffer import params_pkg::*; #(
-  parameter int REGISTER_WIDTH  = params_pkg::REGISTER_WIDTH,
-  parameter int ROB_ENTRIES     = params_pkg::ROB_ENTRIES,
-  parameter int ROB_ENTRY_WIDTH = params_pkg::ROB_ENTRY_WIDTH,
-  parameter int CSR_ADDR_WIDTH  = params_pkg::CSR_ADDR_WIDTH,
-  parameter int ADDR_WIDTH      = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH      = params_pkg::DATA_WIDTH
+  parameter int ROB_ENTRIES     = params_pkg::ROB_ENTRIES
 )(
   input  logic clk_i,
   input  logic rst_i,
@@ -15,14 +10,14 @@ module reorder_buffer import params_pkg::*; #(
   input  logic instr_complete_excpt_i,
   input  logic instr_complete_valid_i,
   input  logic instr_excp_valid_i,
-  input  logic [REGISTER_WIDTH-1:0] new_instr_reg_id_i,
-  input  logic [CSR_ADDR_WIDTH-1:0] new_instr_csr_addr_i,
-  input  logic [ROB_ENTRY_WIDTH-1:0] instr_complete_idx_i,
-  input  logic [ADDR_WIDTH-1:0] new_instr_pc_i,
-  input  logic [ADDR_WIDTH-1:0] instr_excp_tval_i,
-  input  logic [ADDR_WIDTH-1:0] instr_complete_excpt_tval_i,
-  input  logic [DATA_WIDTH-1:0] new_instr_csr_data_i,
-  input  logic [DATA_WIDTH-1:0] instr_complete_data_i,
+  input  reg_id_t new_instr_reg_id_i,
+  input  csr_addr_t new_instr_csr_addr_i,
+  input  rob_idx_t instr_complete_idx_i,
+  input  vaddr_t new_instr_pc_i,
+  input  vaddr_t instr_excp_tval_i,
+  input  vaddr_t instr_complete_excpt_tval_i,
+  input  data_t new_instr_csr_data_i,
+  input  data_t instr_complete_data_i,
   input  var excpt_cause_t instr_excp_cause_i,
   input  var excpt_cause_t instr_complete_excpt_cause_i
 `ifndef SYNTHESIS
@@ -35,14 +30,14 @@ module reorder_buffer import params_pkg::*; #(
   output logic instr_commit_is_wb_o,
   output logic instr_commit_is_csr_wb_o,
   output logic instr_commit_is_mret_o,
-  output logic [REGISTER_WIDTH-1:0] instr_commit_reg_id_o,
-  output logic [CSR_ADDR_WIDTH-1:0] instr_commit_csr_addr_o,
-  output logic [ROB_ENTRY_WIDTH-1:0] new_instr_idx_o,
-  output logic [DATA_WIDTH-1:0] excp_pc_o,
-  output logic [DATA_WIDTH-1:0] excp_tval_o,
-  output logic [DATA_WIDTH-1:0] instr_commit_data_o,
-  output logic [DATA_WIDTH-1:0] instr_commit_csr_data_o,
-  output logic [ADDR_WIDTH-1:0] instr_commit_pc_o,
+  output reg_id_t instr_commit_reg_id_o,
+  output csr_addr_t instr_commit_csr_addr_o,
+  output rob_idx_t new_instr_idx_o,
+  output data_t excp_pc_o,
+  output data_t excp_tval_o,
+  output data_t instr_commit_data_o,
+  output data_t instr_commit_csr_data_o,
+  output vaddr_t instr_commit_pc_o,
   output var excpt_cause_t excp_cause_o
 `ifndef SYNTHESIS
   , output var instruction_t instr_commit_o
@@ -50,17 +45,17 @@ module reorder_buffer import params_pkg::*; #(
 );
 
   typedef struct packed {
-    logic [DATA_WIDTH-1:0] data;
-    logic [DATA_WIDTH-1:0] csr_data;
-    logic [REGISTER_WIDTH-1:0] reg_id;
-    logic [CSR_ADDR_WIDTH-1:0] csr_addr;
+    data_t data;
+    data_t csr_data;
+    reg_id_t reg_id;
+    csr_addr_t csr_addr;
     logic wb;
     logic csr_wb;
     logic mret;
     logic excp;
     logic valid;
-    logic [ADDR_WIDTH-1:0] pc;
-    logic [ADDR_WIDTH-1:0] excp_tval;
+    vaddr_t pc;
+    vaddr_t excp_tval;
     excpt_cause_t excp_cause;
 `ifndef SYNTHESIS
     instruction_t instr;
@@ -69,10 +64,10 @@ module reorder_buffer import params_pkg::*; #(
 
   rob_data_t [ROB_ENTRIES] rob_q, rob_d;
 
-  logic [ADDR_WIDTH-1:0] instr_commit_pc_d;
+  vaddr_t instr_commit_pc_d;
 
-  logic [ROB_ENTRY_WIDTH-1:0] head_q, head_d;
-  logic [ROB_ENTRY_WIDTH-1:0] tail_d, tail_q;
+  rob_idx_t head_q, head_d;
+  rob_idx_t tail_d, tail_q;
 
   always_comb begin : rob_update
     rob_d                    = rob_q;
