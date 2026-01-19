@@ -152,15 +152,16 @@ module fetch_stage import params_pkg::*; #(
     dec_instr_o  = instruction_t'('0);
     req_access_size_o = WORD;
 
-    if (flush_i) begin
+    if (flush_i || alu_branch_taken_i || is_jump_i) begin
       buffer_wr_en = 1'b1;
-      pc_buffer_d  = next_pc_flush_i;
-      pc_d         = next_pc_flush_i;
       state_d      = state == MEM_WAIT ? FLUSH : MEM_REQ;
-    end else if (alu_branch_taken_i || is_jump_i) begin
-      cache_state_reset = 1'b1;
-      pc_d              = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
-      state_d           = MEM_REQ;
+      if (flush_i) begin
+        pc_buffer_d  = next_pc_flush_i;
+        pc_d         = next_pc_flush_i;
+      end else begin
+        pc_d        = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
+        pc_buffer_d = alu_branch_taken_i ? pc_branch_offset_i : jump_address_i;
+      end
     end else begin
       case (state)
         IDLE: begin
