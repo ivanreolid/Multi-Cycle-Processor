@@ -149,8 +149,11 @@ module tb;
       model_mem[i] = 8'b0;
     end
     //$readmemh("buffer_sum.mem", model_mem);
+    //$readmemh("buffer_sum_no_vm.mem", model_mem);
     //$readmemh("mem_copy.mem", model_mem);
+    //$readmemh("mem_copy_no_vm.mem", model_mem);
     $readmemh("matrix_multiply.mem", model_mem);
+    //$readmemh("matrix_multiply_no_vm.mem", model_mem);
   endfunction
 
   task automatic execute_and_compare();
@@ -175,6 +178,7 @@ module tb;
     ++program_instructions_executed;
 
     // buffer_sum='h74, mem_copy='h78, matrix_multiply='hf8
+    // buffer_sum_no_vm='h1054, mem_copy_no_vm='h1058, matrix_multiply_no_vm='h10d8
     if (model_pc == 'hf8) begin
       finish = 1;
       wait (done == 1'b1);

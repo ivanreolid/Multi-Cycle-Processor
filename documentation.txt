@@ -45,6 +45,7 @@ Matrix multiply
   - Instructions executed = 29.689.746
   - CPI = 12.58
 
+
 With both caches
 
 Buffer sum
@@ -62,6 +63,7 @@ Matrix multiply (20 iterations)
   - Instructions = 120318
   - CPI = 5.179
 
+
 Future file + Architectural file + ROB
 
 Buffer sum
@@ -78,6 +80,25 @@ Matrix multiply (20 iterations)
   - Total cycles = 586192
   - Instructions = 120318
   - CPI = 4.872
+
+
+Store buffer
+
+Buffer sum
+  - Total cycles = 3505
+  - Instructions = 1675
+  - CPI = 2.094
+
+Mem copy
+  - Total cycles = 3840
+  - Instructions = 1803
+  - CPI = 2.131
+
+Matrix multiply (20 iterations)
+  - Total cycles = 603748
+  - Instructions = 120254
+  - CPI = 5.021
+
 
 Virtual memory
 

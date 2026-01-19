@@ -201,8 +201,11 @@ module mem import params_pkg::*; #(
       mem[i] = 8'b0;
     end
     //$readmemh("buffer_sum.mem", mem);
+    //$readmemh("buffer_sum_no_vm.mem", mem);
     //$readmemh("mem_copy.mem", mem);
+    //$readmemh("mem_copy_no_vm.mem", mem);
     $readmemh("matrix_multiply.mem", mem);
+    //$readmemh("matrix_multiply_no_vm.mem", mem);
   end
 
 endmodule
