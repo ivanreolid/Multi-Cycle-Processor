@@ -79,3 +79,26 @@ Matrix multiply (20 iterations)
   - Instructions = 120318
   - CPI = 4.872
 
+Virtual memory
+
+Buffer sum
+  - Total cycles = 4765
+  - Total instructions = 1808
+  - Program instructions = 1686
+  - Total CPI = 2.637
+  - Program CPI = 2.828
+
+Mem copy
+  - Total cycles = 5184
+  - Total instructions = 1903
+  - Program instructions = 1814
+  - Total CPI = 2.726
+  - Program CPI = 2.859
+
+Matrix multiply (40 iterations)
+  - Total cycles = 4522990
+  - Total instructions = 928883
+  - Program instructions = 928629
+  - Total CPI = 4.869
+  - Program CPI = 4.871
+

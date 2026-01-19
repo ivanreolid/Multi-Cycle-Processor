@@ -1,9 +1,10 @@
 `timescale 1ns / 1ps
 
 module data_cache import params_pkg::*; #(
-    parameter int ADDR_WIDTH = 32,
-    parameter int LINE_BYTES = 16,
-    parameter int N_LINES    = 4
+    parameter int ADDR_WIDTH  = params_pkg::ADDR_WIDTH,
+    parameter int PADDR_WIDTH = params_pkg::PADDR_WIDTH,
+    parameter int LINE_BYTES  = params_pkg::CACHE_LINE_BYTES,
+    parameter int N_LINES     = params_pkg::DCACHE_N_LINES
 ) (
     input  logic                      clk,
     input  logic                      rstn,
@@ -11,9 +12,9 @@ module data_cache import params_pkg::*; #(
     // CPU
     input  logic                      cpu_req,    // CPU request
     input  logic                      cpu_wr,     // 1=store, 0=load
-    input  logic [ADDR_WIDTH-1:0]     cpu_addr,    // Byte address
+    input  logic [PADDR_WIDTH-1:0]    cpu_addr,    // Byte address
     input  logic [31:0]               cpu_wdata, // Write data
-    input  logic [3:0]                cpu_wstrb,  // Byte write strobes 
+    input  logic [3:0]                cpu_wstrb,  // Byte write strobes
     input  logic [1:0]                cpu_size,   // 00=byte, 01=half, 10=word
     output logic                      cpu_ready,     // Cache ready for new req
     output logic [31:0]               cpu_rdata,  // Read data
@@ -23,7 +24,7 @@ module data_cache import params_pkg::*; #(
     // Memory
     output logic                      mem_req,    // Memory request valid
     output logic                      mem_we,     // 1=write, 0=read
-    output logic [ADDR_WIDTH-1:0]     mem_addr,   // Line aligned address
+    output logic [PADDR_WIDTH-1:0]    mem_addr,   // Line aligned address
     output logic [LINE_BYTES*8-1:0]   mem_wdata,  // Full line write data
     input  logic                      mem_gnt,    // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid, // Memory read valid
@@ -36,7 +37,7 @@ module data_cache import params_pkg::*; #(
 
     localparam OFFSET_BITS    = $clog2(LINE_BYTES);
     localparam IDX_BITS       = $clog2(N_LINES);
-    localparam TAG_BITS       = ADDR_WIDTH - OFFSET_BITS - IDX_BITS;
+    localparam TAG_BITS       = PADDR_WIDTH - OFFSET_BITS - IDX_BITS;
     localparam WORDS_PER_LINE = LINE_BYTES / 4;
     localparam WORD_OFF_BITS  = $clog2(WORDS_PER_LINE);
 
@@ -64,7 +65,7 @@ module data_cache import params_pkg::*; #(
     typedef struct packed {
         logic                   valid;
         logic                   wr;
-        logic [ADDR_WIDTH-1:0]  addr;
+        logic [PADDR_WIDTH-1:0]  addr;
         logic [31:0]            wdata;
         logic [3:0]             wstrb;
         logic [1:0]             size;
@@ -74,15 +75,15 @@ module data_cache import params_pkg::*; #(
 
     // Current request address breakdown
     wire [IDX_BITS-1:0]      curr_index     = cpu_addr[OFFSET_BITS +: IDX_BITS];
-    wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
+    wire [TAG_BITS-1:0]      curr_tag       = cpu_addr[PADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] curr_word_off  = cpu_addr[OFFSET_BITS-1:2];
     wire [1:0]               curr_byte_off  = cpu_addr[1:0];
 
     wire [IDX_BITS-1:0]      pend_index     = pending.addr[OFFSET_BITS +: IDX_BITS];
-    wire [TAG_BITS-1:0]      pend_tag       = pending.addr[ADDR_WIDTH-1 -: TAG_BITS];
+    wire [TAG_BITS-1:0]      pend_tag       = pending.addr[PADDR_WIDTH-1 -: TAG_BITS];
     wire [WORD_OFF_BITS-1:0] pend_word_off  = pending.addr[OFFSET_BITS-1:2];
     wire [1:0]               pend_byte_off  = pending.addr[1:0];
-    wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[ADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
+    wire [ADDR_WIDTH-1:0]    pend_line_addr = {pending.addr[PADDR_WIDTH-1:OFFSET_BITS], {OFFSET_BITS{1'b0}}};
 
     assign curr_cache_hit      = valid_array[curr_index] && (tag_array[curr_index] == curr_tag);
     wire curr_need_writeback = valid_array[curr_index] && dirty_array[curr_index];
@@ -95,7 +96,7 @@ module data_cache import params_pkg::*; #(
 
     logic                      mem_req_r;
     logic                      mem_we_r;
-    logic [ADDR_WIDTH-1:0]     mem_addr_r;
+    logic [PADDR_WIDTH-1:0]     mem_addr_r;
     logic [LINE_BYTES*8-1:0]   mem_wdata_r;
 
 
@@ -189,7 +190,7 @@ module data_cache import params_pkg::*; #(
         end
     endfunction
 
-    function automatic [ADDR_WIDTH-1:0] evicted_addr(
+    function automatic [PADDR_WIDTH-1:0] evicted_addr(
         input [IDX_BITS-1:0] idx
     );
         return {tag_array[idx], idx, {OFFSET_BITS{1'b0}}};

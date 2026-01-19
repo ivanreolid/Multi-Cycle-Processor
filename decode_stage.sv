@@ -3,6 +3,7 @@ import params_pkg::*;
 module decode_stage #(
   parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
   parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
+  parameter int CSR_ADDR_WIDTH = params_pkg::CSR_ADDR_WIDTH,
   parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
   parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH
@@ -10,6 +11,7 @@ module decode_stage #(
   input  logic valid_i,
   input  logic is_jump_i,
   input  logic branch_taken_i,
+  input  logic alu_stage_is_wb_i,
   input  logic mem_stage_valid_i,
   input  logic wb_reg_wr_en_i,
   input  logic mem_stage_reg_wr_en_i,
@@ -18,6 +20,7 @@ module decode_stage #(
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
   input  logic ex5_valid_i,
+  input  logic [REGISTER_WIDTH-1:0] alu_stage_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] mem_stage_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
   input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
@@ -27,22 +30,29 @@ module decode_stage #(
   input  logic [REGISTER_WIDTH-1:0] ex5_wr_reg_i,
   input  logic [DATA_WIDTH-1:0] rs1_data_i,
   input  logic [DATA_WIDTH-1:0] rs2_data_i,
+  input  logic [DATA_WIDTH-1:0] alu_stage_result_i,
   input  logic [DATA_WIDTH-1:0] mem_stage_result_i,
   input  logic [DATA_WIDTH-1:0] ex5_result_i,
   input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
+  input  logic [DATA_WIDTH-1:0] csr_data_i,
   input  var   instruction_t instruction_i,
   output logic alu_valid_o,
   output logic ex_valid_o,
   output logic instr_is_wb_o,
+  output logic instr_is_csr_wb_o,
+  output logic instr_is_mret_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
   output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
   output logic [REGISTER_WIDTH-1:0] wr_reg_o,
+  output logic [CSR_ADDR_WIDTH-1:0] csr_addr_o,
   output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
   output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
   output var   hazard_ctrl_t hazard_signals_o
 );
 
   logic valid_instruction;
+
+  system_funct3_t system_funct3;
 
   always_comb begin : decode_instruction
     hazard_signals_o.rs1             = instruction_i.rs1;
@@ -52,6 +62,8 @@ module decode_stage #(
     hazard_signals_o.is_mul          = 1'b0;
 
     instr_is_wb_o                    = 1'b0;
+    instr_is_csr_wb_o                = 1'b0;
+    instr_is_mret_o                  = 1'b0;
 
     case (instruction_i.opcode)
       R: begin
@@ -83,7 +95,24 @@ module decode_stage #(
       LUI, AUIPC: begin
         instr_is_wb_o                    = 1'b1;
       end
-      default;
+      SYSTEM: begin
+        case (system_funct3)
+          MACHINE: begin
+            instr_is_mret_o              = 1'b1;
+          end
+          CSRRW: begin
+            hazard_signals_o.rs1_needed  = 1'b1;
+            instr_is_wb_o                = 1'b1;
+            instr_is_csr_wb_o            = 1'b1;
+          end
+          CSRRS: begin
+            hazard_signals_o.rs1_needed  = 1'b1;
+            instr_is_wb_o                = 1'b1;
+          end
+          default:;
+        endcase
+      end
+      default:;
     endcase
   end
 
@@ -112,6 +141,8 @@ module decode_stage #(
   end
 
   always_comb begin : bypass_computation
+    logic is_bypass_alu_rs1;
+    logic is_bypass_alu_rs2;
     logic is_bypass_wb_rs1;
     logic is_bypass_wb_rs2;
     logic is_bypass_mem_rs1;
@@ -119,24 +150,39 @@ module decode_stage #(
     logic is_bypass_ex5_rs1;
     logic is_bypass_ex5_rs2;
 
-    is_bypass_mem_rs1 = hazard_signals_o.rs1_needed && mem_stage_valid_i &&
+    logic alu_dst_nz, mem_dst_nz, ex5_dst_nz, wb_dst_nz;
+
+    alu_dst_nz = (alu_stage_wr_reg_i != '0);
+    mem_dst_nz = (mem_stage_wr_reg_i != '0);
+    ex5_dst_nz = (ex5_wr_reg_i != '0);
+    wb_dst_nz  = (wb_wr_reg_i != '0);
+
+    is_bypass_alu_rs1 = hazard_signals_o.rs1_needed && alu_stage_is_wb_i &&
+                        alu_dst_nz && (instruction_i.rs1 == alu_stage_wr_reg_i);
+    is_bypass_alu_rs2 = hazard_signals_o.rs2_needed && alu_stage_is_wb_i &&
+                        alu_dst_nz && (instruction_i.rs2 == alu_stage_wr_reg_i);
+
+    is_bypass_mem_rs1 = hazard_signals_o.rs1_needed && mem_stage_valid_i && mem_dst_nz &&
                         mem_stage_reg_wr_en_i && (instruction_i.rs1 == mem_stage_wr_reg_i);
-    is_bypass_mem_rs2 = hazard_signals_o.rs2_needed && mem_stage_valid_i &&
-                        (mem_stage_reg_wr_en_i && instruction_i.rs2 == mem_stage_wr_reg_i);
+    is_bypass_mem_rs2 = hazard_signals_o.rs2_needed && mem_stage_valid_i && mem_dst_nz &&
+                        mem_stage_reg_wr_en_i && (instruction_i.rs2 == mem_stage_wr_reg_i);
 
     is_bypass_ex5_rs1 = hazard_signals_o.rs1_needed && ex5_valid_i    &&
-                        (instruction_i.rs1 == ex5_wr_reg_i);
+                        ex5_dst_nz && (instruction_i.rs1 == ex5_wr_reg_i);
     is_bypass_ex5_rs2 = hazard_signals_o.rs2_needed && ex5_valid_i    &&
-                        (instruction_i.rs2 == ex5_wr_reg_i);
+                        ex5_dst_nz && (instruction_i.rs2 == ex5_wr_reg_i);
+
     is_bypass_wb_rs1  = hazard_signals_o.rs1_needed && wb_reg_wr_en_i &&
-                        (instruction_i.rs1 == wb_wr_reg_i);
+                        wb_dst_nz && (instruction_i.rs1 == wb_wr_reg_i);
     is_bypass_wb_rs2  = hazard_signals_o.rs2_needed && wb_reg_wr_en_i &&
-                        (instruction_i.rs2 == wb_wr_reg_i);
+                        wb_dst_nz && (instruction_i.rs2 == wb_wr_reg_i);
 
     alu_rs1_data_o = rs1_data_i;
     alu_rs2_data_o = rs2_data_i;
 
-    if (is_bypass_mem_rs1) begin
+    if (is_bypass_alu_rs1) begin
+      alu_rs1_data_o = alu_stage_result_i;
+    end else if (is_bypass_mem_rs1) begin
       alu_rs1_data_o = mem_stage_result_i;
     end else if (is_bypass_ex5_rs1) begin
       alu_rs1_data_o = ex5_result_i;
@@ -144,19 +190,28 @@ module decode_stage #(
       alu_rs1_data_o = wb_data_to_reg_i;
     end
 
-    if (is_bypass_mem_rs2) begin
+    if (is_bypass_alu_rs2) begin
+      alu_rs2_data_o = alu_stage_result_i;
+    end else if (is_bypass_mem_rs2) begin
       alu_rs2_data_o = mem_stage_result_i;
     end else if (is_bypass_ex5_rs2) begin
       alu_rs2_data_o = ex5_result_i;
     end else if (is_bypass_wb_rs2) begin
       alu_rs2_data_o = wb_data_to_reg_i;
     end
+
+    if (instruction_i.opcode == SYSTEM && system_funct3 == CSRRS) begin
+      alu_rs1_data_o = csr_data_i;
+    end
   end
 
   assign valid_instruction = valid_i & ~is_jump_i & ~branch_taken_i;
 
+  assign system_funct3 = system_funct3_t'(instruction_i.funct3);
+
   assign alu_valid_o          = ~hazard_signals_o.is_mul & valid_instruction;
   assign ex_valid_o           = hazard_signals_o.is_mul & valid_instruction;
   assign wr_reg_o             = instruction_i.rd;
+  assign csr_addr_o           = instruction_i[31:20];
 
 endmodule : decode_stage
