@@ -82,11 +82,11 @@ Matrix multiply (20 iterations)
 Virtual memory
 
 Buffer sum
-  - Total cycles = 4765
-  - Total instructions = 1808
+  - Total cycles = 4528
+  - Total instructions = 1775
   - Program instructions = 1686
-  - Total CPI = 2.637
-  - Program CPI = 2.828
+  - Total CPI = 2.552
+  - Program CPI = 2.687
 
 Mem copy
   - Total cycles = 5184
@@ -95,10 +95,10 @@ Mem copy
   - Total CPI = 2.726
   - Program CPI = 2.859
 
-Matrix multiply (40 iterations)
-  - Total cycles = 4522990
-  - Total instructions = 928883
-  - Program instructions = 928629
-  - Total CPI = 4.869
-  - Program CPI = 4.871
+Matrix multiply (20 iterations)
+  - Total cycles = 608008
+  - Total instructions = 120420
+  - Program instructions = 120265
+  - Total CPI = 5.049
+  - Program CPI = 5.056
 

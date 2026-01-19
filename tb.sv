@@ -172,8 +172,8 @@ module tb;
     ++instructions_executed;
     ++program_instructions_executed;
 
-    // buffer_sum='h74, mem_copy='h78, matrix_multiply='h100
-    if (model_pc == 'h100) begin
+    // buffer_sum='h74, mem_copy='h78, matrix_multiply='hf8
+    if (model_pc == 'hf8) begin
       finish = 1;
       wait (done == 1'b1);
         compare_memories();

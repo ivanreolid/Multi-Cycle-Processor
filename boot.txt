@@ -1,0 +1,20 @@
+boot:
+    bne x0, x1, main
+    li sp, 0x1ff8
+    li x4, 0x2000
+    csrrw x0, mtvec, x4
+
+    li x1, 1
+    li x3, 0x1000
+    
+    jal x5, enable_vm
+
+...
+
+enable_vm:
+    csrrw x0, satp, x3
+
+...
+
+init_va:
+    jal x4, -0x2000
