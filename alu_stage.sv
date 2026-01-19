@@ -4,27 +4,25 @@ import params_pkg::*;
 
 module alu_stage #(
   parameter int SHAMT_WIDTH     = params_pkg::SHAMT_WIDTH,
-  parameter int DATA_WIDTH      = params_pkg::DATA_WIDTH,
-  parameter int OPCODE_WIDTH    = params_pkg::OPCODE_WIDTH,
-  parameter int REGISTER_WIDTH  = params_pkg::REGISTER_WIDTH
+  parameter int OPCODE_WIDTH    = params_pkg::OPCODE_WIDTH
 )(
   input  logic valid_i,
   input  logic mem_stall_i,
   input  logic [SHAMT_WIDTH-1:0] shamt_i,
-  input  logic [DATA_WIDTH-1:0] data_a_i,
-  input  logic [DATA_WIDTH-1:0] data_b_i,
-  input  logic [ADDR_WIDTH-1:0] pc_i,
-  input  logic [DATA_WIDTH-1:0] offset_sign_extend_i,
-  input  var instruction_t instruction_i,
+  input  data_t data_a_i,
+  input  data_t data_b_i,
+  input  vaddr_t pc_i,
+  input  data_t offset_sign_extend_i,
+  input  instruction_t instruction_i,
   output logic mem_valid_o,
   output logic mem_reg_wr_en_o,
   output logic is_instr_wbalu_o,
   output logic instr_finishes_o,
-  output logic [ADDR_WIDTH-1:0] pc_branch_offset_o,
-  output logic [ADDR_WIDTH-1:0] jump_address_o,
-  output logic [DATA_WIDTH-1:0] mem_alu_result_o,
-  output logic [DATA_WIDTH-1:0] mem_rs2_data_o,
-  output logic [DATA_WIDTH-1:0] data_to_reg_o,
+  output vaddr_t pc_branch_offset_o,
+  output vaddr_t jump_address_o,
+  output data_t mem_alu_result_o,
+  output data_t mem_rs2_data_o,
+  output data_t data_to_reg_o,
   output logic mem_is_load_o,
   output logic mem_is_store_o,
   output logic branch_taken_o,
@@ -35,7 +33,7 @@ module alu_stage #(
 `endif
 );
 
-  logic [DATA_WIDTH-1:0] alu_data_a, alu_data_b;
+  data_t alu_data_a, alu_data_b;
 
   logic is_zero, is_less;
 
@@ -128,8 +126,7 @@ module alu_stage #(
   assign jump_address_o     = pc_i + offset_sign_extend_i;
 
   alu #(
-    .OPCODE_WIDTH (OPCODE_WIDTH),
-    .DATA_WIDTH   (DATA_WIDTH  )
+    .OPCODE_WIDTH (OPCODE_WIDTH)
   ) alu (
     .opcode_i  (instruction_i.opcode),
     .funct3_i  (instruction_i.funct3),

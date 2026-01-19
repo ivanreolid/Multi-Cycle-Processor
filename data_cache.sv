@@ -2,7 +2,6 @@
 
 module data_cache import params_pkg::*; #(
     parameter int ADDR_WIDTH  = params_pkg::ADDR_WIDTH,
-    parameter int PADDR_WIDTH = params_pkg::PADDR_WIDTH,
     parameter int LINE_BYTES  = params_pkg::CACHE_LINE_BYTES,
     parameter int N_LINES     = params_pkg::DCACHE_N_LINES
 ) (
@@ -12,23 +11,23 @@ module data_cache import params_pkg::*; #(
     // CPU
     input  logic                      cpu_req,    // CPU request
     input  logic                      cpu_wr,     // 1=store, 0=load
-    input  logic [PADDR_WIDTH-1:0]    cpu_addr,    // Byte address
-    input  logic [31:0]               cpu_wdata, // Write data
+    input  paddr_t                    cpu_addr,    // Byte address
+    input  data_t                     cpu_wdata, // Write data
     input  logic [3:0]                cpu_wstrb,  // Byte write strobes
     input  logic [1:0]                cpu_size,   // 00=byte, 01=half, 10=word
     output logic                      cpu_ready,     // Cache ready for new req
-    output logic [31:0]               cpu_rdata,  // Read data
+    output data_t                     cpu_rdata,  // Read data
     output logic                      cpu_rvalid,   // Read data valid
     output logic                      curr_cache_hit,
 
     // Memory
     output logic                      mem_req,    // Memory request valid
     output logic                      mem_we,     // 1=write, 0=read
-    output logic [PADDR_WIDTH-1:0]    mem_addr,   // Line aligned address
-    output logic [LINE_BYTES*8-1:0]   mem_wdata,  // Full line write data
+    output paddr_t                    mem_addr,   // Line aligned address
+    output cacheline_t                mem_wdata,  // Full line write data
     input  logic                      mem_gnt,    // Request granted (accepted by arbiter)
     input  logic                      mem_rvalid, // Memory read valid
-    input  logic [LINE_BYTES*8-1:0]   mem_rdata,   // Full line read data
+    input  cacheline_t                mem_rdata,   // Full line read data
 
     input  logic finish,   // flush request
     output logic done,      // flush completed
@@ -60,13 +59,13 @@ module data_cache import params_pkg::*; #(
     logic [TAG_BITS-1:0]        tag_array   [N_LINES];
     logic                       valid_array [N_LINES];
     logic                       dirty_array [N_LINES];
-    logic [LINE_BYTES*8-1:0]    data_array  [N_LINES];
+    cacheline_t                 data_array  [N_LINES];
 
     typedef struct packed {
         logic                   valid;
         logic                   wr;
-        logic [PADDR_WIDTH-1:0]  addr;
-        logic [31:0]            wdata;
+        paddr_t                 addr;
+        data_t                  wdata;
         logic [3:0]             wstrb;
         logic [1:0]             size;
     } pending_req_t;
@@ -96,8 +95,8 @@ module data_cache import params_pkg::*; #(
 
     logic                      mem_req_r;
     logic                      mem_we_r;
-    logic [PADDR_WIDTH-1:0]     mem_addr_r;
-    logic [LINE_BYTES*8-1:0]   mem_wdata_r;
+    paddr_t                    mem_addr_r;
+    cacheline_t                mem_wdata_r;
 
 
     assign mem_req   = mem_req_r;
@@ -111,8 +110,8 @@ module data_cache import params_pkg::*; #(
         input [1:0]               byte_off,
         input [1:0]               size
     );
-        logic [31:0] word_data;
-        logic [31:0] result;
+        data_t word_data;
+        data_t result;
         begin
             word_data = line_data[(word_idx*32) +: 32];
 
@@ -148,7 +147,7 @@ module data_cache import params_pkg::*; #(
         input [3:0]               wstrb
     );
         integer byte_idx;
-        logic [LINE_BYTES*8-1:0] new_line;
+        cacheline_t new_line;
         begin
             new_line = old_line;
             for (byte_idx = 0; byte_idx < 4; byte_idx = byte_idx + 1) begin
@@ -197,8 +196,8 @@ module data_cache import params_pkg::*; #(
     endfunction
 
 
-    logic [31:0] load_hit_rdata;
-    logic        load_hit_valid;
+    data_t load_hit_rdata;
+    logic  load_hit_valid;
 
     assign load_hit_valid =
     cpu_req && !cpu_wr && curr_cache_hit && (state == S_IDLE);
@@ -212,7 +211,7 @@ module data_cache import params_pkg::*; #(
         );
 
     logic                      cpu_ready_r;
-    logic [31:0]               cpu_rdata_r;
+    data_t                     cpu_rdata_r;
     logic                      cpu_rvalid_r;
 
     assign cpu_rvalid   = load_hit_valid | cpu_rvalid_r;

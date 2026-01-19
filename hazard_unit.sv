@@ -1,8 +1,6 @@
 import params_pkg::*;
 
-module hazard_unit #(
-  parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH
-)(
+module hazard_unit (
   input  logic rob_is_full_i,
   input  logic dec_valid_i,
   input  logic alu_valid_i,
@@ -20,13 +18,13 @@ module hazard_unit #(
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
   input  logic ex5_valid_i,
-  input  logic [REGISTER_WIDTH-1:0] alu_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] mem_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
-  input  var   hazard_ctrl_t hazard_signals_i,
+  input  reg_id_t alu_wr_reg_i,
+  input  reg_id_t mem_wr_reg_i,
+  input  reg_id_t ex1_wr_reg_i,
+  input  reg_id_t ex2_wr_reg_i,
+  input  reg_id_t ex3_wr_reg_i,
+  input  reg_id_t ex4_wr_reg_i,
+  input  hazard_ctrl_t hazard_signals_i,
   output logic stall_ex5_o,
   output logic stall_ex4_o,
   output logic stall_ex3_o,
@@ -40,7 +38,7 @@ module hazard_unit #(
 );
 
   logic rs1_needed, rs2_needed;
-  logic [REGISTER_WIDTH-1:0] rs1, rs2;
+  reg_id_t rs1, rs2;
 
   logic alu_raw_hazard_rs1, alu_raw_hazard_rs2;
   logic ex_raw_hazard_rs1, ex_raw_hazard_rs2;
@@ -63,7 +61,7 @@ module hazard_unit #(
       alu_raw_hazard_rs2 = hazard_signals_i.rs2_needed & (alu_wr_reg_i == hazard_signals_i.rs2);
     end
 
-    if (dec_valid_i && hazard_signals_i.rs1_needed && hazard_signals_i.rs1 != '0) begin
+    if (dec_valid_i && hazard_signals_i.rs1_needed && hazard_signals_i.rs1 != X0) begin
       if ( (ex1_valid_i && ex1_wr_reg_i == hazard_signals_i.rs1) ||
            (ex2_valid_i && ex2_wr_reg_i == hazard_signals_i.rs1) ||
            (ex3_valid_i && ex3_wr_reg_i == hazard_signals_i.rs1) ||
@@ -72,7 +70,7 @@ module hazard_unit #(
       end
     end
 
-    if (dec_valid_i && hazard_signals_i.rs2_needed && hazard_signals_i.rs2 != '0) begin
+    if (dec_valid_i && hazard_signals_i.rs2_needed && hazard_signals_i.rs2 != X0) begin
       if ( (ex1_valid_i && ex1_wr_reg_i == hazard_signals_i.rs2) ||
            (ex2_valid_i && ex2_wr_reg_i == hazard_signals_i.rs2) ||
            (ex3_valid_i && ex3_wr_reg_i == hazard_signals_i.rs2) ||

@@ -1,8 +1,4 @@
-module mem_arbiter import params_pkg::*; #(
-  parameter int ADDR_WIDTH  = 32,
-  parameter int PADDR_WIDTH = 20,
-  parameter int DATA_WIDTH  = 128
-)(
+module mem_arbiter import params_pkg::*; (
   input  logic clk,
   input  logic rst,
 
@@ -10,9 +6,9 @@ module mem_arbiter import params_pkg::*; #(
   // I-CACHE INTERFACE
   // ======================
   input  logic                   icache_req,
-  input  logic [PADDR_WIDTH-1:0] icache_addr,
+  input  paddr_t                 icache_addr,
   output logic                   icache_gnt,
-  output logic [DATA_WIDTH-1:0]  icache_rdata,
+  output cacheline_t             icache_rdata,
   output logic                   icache_rvalid,
 
   // ======================
@@ -20,10 +16,10 @@ module mem_arbiter import params_pkg::*; #(
   // ======================
   input  logic                  dcache_req,
   input  logic                  dcache_we,
-  input  logic [PADDR_WIDTH-1:0]  dcache_addr,
-  input  logic [DATA_WIDTH-1:0]  dcache_wdata,
+  input  paddr_t                dcache_addr,
+  input  cacheline_t            dcache_wdata,
   output logic                  dcache_gnt,
-  output logic [DATA_WIDTH-1:0]  dcache_rdata,
+  output cacheline_t dcache_rdata,
   output logic                  dcache_rvalid,
 
   // ======================
@@ -31,9 +27,9 @@ module mem_arbiter import params_pkg::*; #(
   // ======================
   output logic                   mem_req,
   output logic                   mem_we,
-  output logic [PADDR_WIDTH-1:0] mem_addr,
-  output logic [DATA_WIDTH-1:0]  mem_wdata,
-  input  logic [DATA_WIDTH-1:0]  mem_rdata,
+  output paddr_t                 mem_addr,
+  output cacheline_t             mem_wdata,
+  input  cacheline_t             mem_rdata,
   input  logic                   mem_rvalid
   );
 

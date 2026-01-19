@@ -1,18 +1,16 @@
 module ptw import params_pkg::*; #(
-  parameter int VADDR_WIDTH    = params_pkg::VADDR_WIDTH,
-  parameter int PADDR_WIDTH    = params_pkg::PADDR_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH
+  parameter int PADDR_WIDTH    = params_pkg::PADDR_WIDTH
 )(
   input  logic req_i,
   input  logic ppn_is_present_i,
-  input  logic [VADDR_WIDTH-1:0] vaddr_i,
-  input  logic [DATA_WIDTH-1:0] satp_data_i,
+  input  vaddr_t vaddr_i,
+  input  data_t satp_data_i,
   output logic valid_o,
   output logic error_o,
-  output logic [PADDR_WIDTH-1:0] paddr_o
+  output paddr_t paddr_o
 );
 
-  logic [VADDR_WIDTH-1:0] sum_result;
+  vaddr_t sum_result;
 
   assign sum_result = vaddr_i + {12'b0, satp_data_i[19:0]};
   assign paddr_o    = sum_result[PADDR_WIDTH-1:0];

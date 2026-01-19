@@ -2,10 +2,6 @@ import params_pkg::*;
 
 module decode_stage #(
   parameter int SHAMT_WIDTH    = params_pkg::SHAMT_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
-  parameter int CSR_ADDR_WIDTH = params_pkg::CSR_ADDR_WIDTH,
-  parameter int ADDR_WIDTH     = params_pkg::ADDR_WIDTH,
-  parameter int REGISTER_WIDTH = params_pkg::REGISTER_WIDTH,
   parameter int OPCODE_WIDTH   = params_pkg::OPCODE_WIDTH
 )(
   input  logic valid_i,
@@ -20,33 +16,33 @@ module decode_stage #(
   input  logic ex3_valid_i,
   input  logic ex4_valid_i,
   input  logic ex5_valid_i,
-  input  logic [REGISTER_WIDTH-1:0] alu_stage_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] mem_stage_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] wb_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex1_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex2_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex3_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex4_wr_reg_i,
-  input  logic [REGISTER_WIDTH-1:0] ex5_wr_reg_i,
-  input  logic [DATA_WIDTH-1:0] rs1_data_i,
-  input  logic [DATA_WIDTH-1:0] rs2_data_i,
-  input  logic [DATA_WIDTH-1:0] alu_stage_result_i,
-  input  logic [DATA_WIDTH-1:0] mem_stage_result_i,
-  input  logic [DATA_WIDTH-1:0] ex5_result_i,
-  input  logic [DATA_WIDTH-1:0] wb_data_to_reg_i,
-  input  logic [DATA_WIDTH-1:0] csr_data_i,
-  input  var   instruction_t instruction_i,
+  input  reg_id_t alu_stage_wr_reg_i,
+  input  reg_id_t mem_stage_wr_reg_i,
+  input  reg_id_t wb_wr_reg_i,
+  input  reg_id_t ex1_wr_reg_i,
+  input  reg_id_t ex2_wr_reg_i,
+  input  reg_id_t ex3_wr_reg_i,
+  input  reg_id_t ex4_wr_reg_i,
+  input  reg_id_t ex5_wr_reg_i,
+  input  data_t rs1_data_i,
+  input  data_t rs2_data_i,
+  input  data_t alu_stage_result_i,
+  input  data_t mem_stage_result_i,
+  input  data_t ex5_result_i,
+  input  data_t wb_data_to_reg_i,
+  input  data_t csr_data_i,
+  input  instruction_t instruction_i,
   output logic alu_valid_o,
   output logic ex_valid_o,
   output logic instr_is_wb_o,
   output logic instr_is_csr_wb_o,
   output logic instr_is_mret_o,
   output logic [SHAMT_WIDTH-1:0] shamt_o,
-  output logic [DATA_WIDTH-1:0] offset_sign_extend_o,
-  output logic [REGISTER_WIDTH-1:0] wr_reg_o,
-  output logic [CSR_ADDR_WIDTH-1:0] csr_addr_o,
-  output logic [DATA_WIDTH-1:0] alu_rs1_data_o,
-  output logic [DATA_WIDTH-1:0] alu_rs2_data_o,
+  output data_t offset_sign_extend_o,
+  output reg_id_t wr_reg_o,
+  output csr_addr_t csr_addr_o,
+  output data_t alu_rs1_data_o,
+  output data_t alu_rs2_data_o,
   output var   hazard_ctrl_t hazard_signals_o
 );
 
@@ -152,10 +148,10 @@ module decode_stage #(
 
     logic alu_dst_nz, mem_dst_nz, ex5_dst_nz, wb_dst_nz;
 
-    alu_dst_nz = (alu_stage_wr_reg_i != '0);
-    mem_dst_nz = (mem_stage_wr_reg_i != '0);
-    ex5_dst_nz = (ex5_wr_reg_i != '0);
-    wb_dst_nz  = (wb_wr_reg_i != '0);
+    alu_dst_nz = (alu_stage_wr_reg_i != X0);
+    mem_dst_nz = (mem_stage_wr_reg_i != X0);
+    ex5_dst_nz = (ex5_wr_reg_i != X0);
+    wb_dst_nz  = (wb_wr_reg_i != X0);
 
     is_bypass_alu_rs1 = hazard_signals_o.rs1_needed && alu_stage_is_wb_i &&
                         alu_dst_nz && (instruction_i.rs1 == alu_stage_wr_reg_i);

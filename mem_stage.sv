@@ -3,12 +3,9 @@
 import params_pkg::*;
 
 module mem_stage #(
-  parameter int PADDR_WIDTH      = params_pkg::PADDR_WIDTH,
   parameter int MEM_SIZE         = params_pkg::MEM_SIZE,
   parameter int ADDR_WIDTH       = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH       = params_pkg::DATA_WIDTH,
   parameter int PPN_WIDTH        = params_pkg::PPN_WIDTH,
-  parameter int REGISTER_WIDTH   = params_pkg::REGISTER_WIDTH,
   parameter int CACHE_LINE_BYTES = 16,
   parameter int DCACHE_N_LINES   = 4
 )(
@@ -18,13 +15,13 @@ module mem_stage #(
   input  logic trap_bypass_mmu_i,
   input  logic flush_i,
   input  logic ppn_is_present_i,
-  input  logic [DATA_WIDTH-1:0] satp_data_i,
-  input  logic [DATA_WIDTH-1:0] alu_result_i,
-  input  logic [DATA_WIDTH-1:0] rs2_data_i,
-  input  logic [REGISTER_WIDTH-1:0] wr_reg_i,
+  input  data_t satp_data_i,
+  input  data_t alu_result_i,
+  input  data_t rs2_data_i,
+  input  reg_id_t wr_reg_i,
 
   // Memory interface - cache line width
-  input  logic [CACHE_LINE_BYTES*8-1:0] mem_line_data_i,
+  input  cacheline_t mem_line_data_i,
   input  logic mem_rvalid_i,
   input  logic mem_gnt_i,
   input  logic valid_i,
@@ -33,7 +30,7 @@ module mem_stage #(
   input  logic reg_wr_en_i,
   input  access_size_t access_size_i,
 `ifndef SYNTHESIS
-  input  logic [ADDR_WIDTH-1:0] debug_pc_i,
+  input  vaddr_t debug_pc_i,
   input  var instruction_t debug_instr_i,
 `endif
   output logic present_table_req_o,
@@ -43,19 +40,19 @@ module mem_stage #(
   output logic rd_req_valid_o,
   output logic wr_req_valid_o,
   output logic stall_o,
-  output logic [REGISTER_WIDTH-1:0] wb_wr_reg_o,
+  output reg_id_t wb_wr_reg_o,
   output logic [PPN_WIDTH-1:0] present_table_ppn_o,
-  output logic [DATA_WIDTH-1:0] wb_data_from_mem_o,
-  output logic [ADDR_WIDTH-1:0] wb_excpt_tval_o,
-  output logic [PADDR_WIDTH-1:0] mem_req_address_o,
-  output logic [CACHE_LINE_BYTES*8-1:0] wr_line_data_o,
+  output data_t wb_data_from_mem_o,
+  output vaddr_t wb_excpt_tval_o,
+  output paddr_t mem_req_address_o,
+  output cacheline_t wr_line_data_o,
   output var access_size_t req_access_size_o,
   output var excpt_cause_t wb_excpt_cause_o,
   input  logic finish,   // flush request
   output logic done,     // flush completed
   input write_done_o,   //mem finished writing
 `ifndef SYNTHESIS
-  output logic [ADDR_WIDTH-1:0] debug_wb_pc_o,
+  output vaddr_t debug_wb_pc_o,
   output var instruction_t debug_wb_instr_o
 `endif
 );
@@ -68,7 +65,7 @@ module mem_stage #(
   } state_t;
 
   state_t state, state_d;
-  logic [PADDR_WIDTH-1:0] paddr;
+  paddr_t paddr;
 
   // Cache signals
   logic cache_req;
@@ -92,7 +89,7 @@ module mem_stage #(
   logic dptw_req;
   logic dptw_valid;
   logic dptw_error;
-  logic [PADDR_WIDTH-1:0] dptw_paddr;
+  paddr_t dptw_paddr;
 
   assign cache_size = (access_size_i == BYTE) ? 2'b00 :
                       (access_size_i == HALF) ? 2'b01 : 2'b10;

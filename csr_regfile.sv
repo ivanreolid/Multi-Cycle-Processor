@@ -1,7 +1,5 @@
 module csr_regfile import params_pkg::*; #(
   parameter int PPN_WIDTH      = params_pkg::PPN_WIDTH,
-  parameter int DATA_WIDTH     = params_pkg::DATA_WIDTH,
-  parameter int CSR_ADDR_WIDTH = params_pkg::CSR_ADDR_WIDTH,
   parameter int CSR_SATP       = params_pkg::CSR_SATP
 )(
   input  logic clk_i,
@@ -10,30 +8,30 @@ module csr_regfile import params_pkg::*; #(
   input  logic csr_instr_we_i,
   input  logic fetch_present_req_i,
   input  logic mem_present_req_i,
-  input  logic [CSR_ADDR_WIDTH-1:0] rd_addr_i,
-  input  logic [CSR_ADDR_WIDTH-1:0] csr_wraddr_i,
+  input  csr_addr_t rd_addr_i,
+  input  csr_addr_t csr_wraddr_i,
   input  logic [PPN_WIDTH-1:0] fetch_present_ppn_i,
   input  logic [PPN_WIDTH-1:0] mem_present_ppn_i,
-  input  logic [DATA_WIDTH-1:0] csr_wrdata_i,
-  input  logic [DATA_WIDTH-1:0] excpt_mepc_i,
-  input  logic [DATA_WIDTH-1:0] excpt_mtval_i,
+  input  data_t csr_wrdata_i,
+  input  data_t excpt_mepc_i,
+  input  data_t excpt_mtval_i,
   input  var excpt_cause_t excpt_mcause_i,
   output logic fetch_ppn_is_present_o,
   output logic mem_ppn_is_present_o,
-  output logic [DATA_WIDTH-1:0] data_o,
-  output logic [DATA_WIDTH-1:0] satp_o,
-  output logic [DATA_WIDTH-1:0] mtvec_o,
-  output logic [DATA_WIDTH-1:0] mepc_o
+  output data_t data_o,
+  output data_t satp_o,
+  output data_t mtvec_o,
+  output data_t mepc_o
 `ifndef SYNTHESIS
-  , output logic [DATA_WIDTH-1:0] debug_satp_o
+  , output data_t debug_satp_o
 `endif
 );
 
-  logic [DATA_WIDTH-1:0] satp;
+  data_t satp;
 
-  logic [DATA_WIDTH-1:0] mepc;
-  logic [DATA_WIDTH-1:0] mtval;
-  logic [DATA_WIDTH-1:0] mtvec;
+  data_t mepc;
+  data_t mtval;
+  data_t mtvec;
   excpt_cause_t mcause;
 
   logic present [256];

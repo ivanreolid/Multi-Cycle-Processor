@@ -3,9 +3,6 @@
 `include "instr_cache.sv"
 
 module fetch_stage import params_pkg::*; #(
-  parameter int PADDR_WIDTH       = params_pkg::PADDR_WIDTH,
-  parameter int ADDR_WIDTH        = params_pkg::ADDR_WIDTH,
-  parameter int DATA_WIDTH        = params_pkg::DATA_WIDTH,
   parameter int PPN_WIDTH         = params_pkg::PPN_WIDTH,
   parameter int MEM_SIZE          = params_pkg::MEM_SIZE,
   parameter int CACHE_LINE_BYTES  = params_pkg::CACHE_LINE_BYTES
@@ -21,10 +18,10 @@ module fetch_stage import params_pkg::*; #(
   input  logic is_jump_i,
   input  logic dec_stall_i,
   input  logic mem_stall_i,
-  input  logic [DATA_WIDTH-1:0] satp_data_i,
-  input  logic [ADDR_WIDTH-1:0] next_pc_flush_i,
-  input  logic [ADDR_WIDTH-1:0] pc_branch_offset_i,
-  input  logic [ADDR_WIDTH-1:0] jump_address_i,
+  input  data_t satp_data_i,
+  input  vaddr_t next_pc_flush_i,
+  input  vaddr_t pc_branch_offset_i,
+  input  vaddr_t jump_address_i,
 
   // Memory interface (Cache to Memory)
   input  logic instr_valid_i,
@@ -32,7 +29,7 @@ module fetch_stage import params_pkg::*; #(
   output logic present_table_req_o,
   output logic rd_req_valid_o,
   output logic [PPN_WIDTH-1:0] present_table_ppn_o,
-  output logic [PADDR_WIDTH-1:0] mem_req_addr_o,
+  output paddr_t mem_req_addr_o,
   output access_size_t req_access_size_o,
 
   // Memory arbiter grant signal
@@ -41,7 +38,7 @@ module fetch_stage import params_pkg::*; #(
   // Decode stage outputs
   output logic dec_valid_o,
   output logic dec_excpt_o,
-  output logic [ADDR_WIDTH-1:0] dec_pc_o,
+  output vaddr_t dec_pc_o,
   output var excpt_cause_t dec_excpt_cause_o,
   output var instruction_t dec_instr_o
 );
@@ -55,13 +52,13 @@ module fetch_stage import params_pkg::*; #(
   } state_t;
 
   state_t state, state_d;
-  logic [ADDR_WIDTH-1:0] pc, pc_d;
-  logic [PADDR_WIDTH-1:0] paddr;
+  vaddr_t pc, pc_d;
+  paddr_t paddr;
 
   // Stall Buffer
   logic buffer_wr_en;
   logic error_buffer, error_buffer_d;
-  logic [ADDR_WIDTH-1:0] pc_buffer, pc_buffer_d;
+  vaddr_t pc_buffer, pc_buffer_d;
   excpt_cause_t error_cause_buffer, error_cause_buffer_d;
   instruction_t instr_buffer;
 
@@ -76,7 +73,7 @@ module fetch_stage import params_pkg::*; #(
   logic iptw_req;
   logic iptw_valid;
   logic iptw_error;
-  logic [PADDR_WIDTH-1:0] iptw_paddr;
+  paddr_t iptw_paddr;
 
   // Cache signals
   logic cache_state_reset;
