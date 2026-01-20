@@ -73,8 +73,8 @@ module mem_stage #(
   logic cache_wr;
   logic cache_ready;
   logic cache_rvalid;
-  logic [31:0] cache_rdata;
-  logic [31:0] cache_wdata;
+  data_t cache_rdata;
+  data_t cache_wdata;
   logic [3:0] cache_wstrb;
   logic [1:0] cache_size;
 
